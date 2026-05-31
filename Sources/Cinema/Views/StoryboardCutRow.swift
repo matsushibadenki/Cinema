@@ -1,10 +1,17 @@
 import AppKit
 import SwiftUI
+import UniformTypeIdentifiers
+
+private enum StoryboardTextPadding {
+    static let horizontal: CGFloat = 4
+    static let vertical: CGFloat = 3
+}
 
 struct StoryboardCutRow: View {
     @Binding var cut: StoryboardCut
     @State private var splitDragStartRatio: Double?
 
+    var imageData: Data?
     var image: NSImage?
     var screenAspectRatio: CGFloat
     var showsGeneratePlaceholder: Bool
@@ -33,6 +40,7 @@ struct StoryboardCutRow: View {
                     .frame(width: StoryboardPageLayout.cutImageGap, height: StoryboardPageLayout.rowHeight)
 
                 StoryboardScreenFrame(
+                    imageData: imageData,
                     image: image,
                     aspectRatio: screenAspectRatio,
                     showsGeneratePlaceholder: showsGeneratePlaceholder,
@@ -41,9 +49,13 @@ struct StoryboardCutRow: View {
                 )
                 .frame(width: imageColumnWidth, height: StoryboardPageLayout.rowHeight)
 
+                Rectangle()
+                    .fill(Color.black)
+                    .frame(width: StoryboardPageLayout.tableLineWidth, height: StoryboardPageLayout.rowHeight)
+
                 textColumn
                     .background(Color.white)
-                    .frame(width: textColumnWidth, height: StoryboardPageLayout.rowHeight)
+                    .frame(width: max(textColumnWidth - StoryboardPageLayout.tableLineWidth, 1), height: StoryboardPageLayout.rowHeight)
 
                 TextField("", text: $cut.duration)
                     .font(.system(size: 10, design: .serif))
@@ -78,11 +90,10 @@ struct StoryboardCutRow: View {
                     .frame(height: dividerHeight)
                     .gesture(splitGesture(totalHeight: editableHeight))
 
-                AutoSizingStoryboardTextEditor(
-                    text: $cut.action,
-                    placeholder: "ト書き",
-                    baseFontSize: textBaseFontSize,
-                    minimumFontSize: 7
+                DialogueSheetEditor(
+                    lines: $cut.dialogueLines,
+                    speakerRatio: $cut.dialogueSpeakerRatio,
+                    baseFontSize: textBaseFontSize
                 )
                 .frame(height: actionHeight)
 
@@ -193,9 +204,186 @@ private struct SplitDragHandle: View {
     }
 }
 
+private struct DialogueSheetEditor: View {
+    @Binding var lines: [DialogueLine]
+    @Binding var speakerRatio: Double
+
+    var baseFontSize: CGFloat
+
+    private let rowHeight: CGFloat = 18
+    private let splitHandleWidth: CGFloat = 5
+    private let buttonWidth: CGFloat = 20
+
+    private var fontSize: CGFloat {
+        max(baseFontSize - 1, 8)
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            GeometryReader { proxy in
+                let speakerWidth = speakerWidth(totalWidth: proxy.size.width)
+
+                ScrollView {
+                    VStack(spacing: 0) {
+                        ForEach(Array($lines.enumerated()), id: \.element.id) { index, $line in
+                            DialogueSheetRow(
+                                line: $line,
+                                speakerRatio: $speakerRatio,
+                                fontSize: fontSize,
+                                rowHeight: rowHeight,
+                                speakerWidth: speakerWidth,
+                                splitHandleWidth: splitHandleWidth,
+                                canDelete: lines.count > 1,
+                                showsAddButton: index == lines.count - 1,
+                                add: addLine,
+                                delete: { deleteLine(id: line.id) }
+                            )
+                        }
+                    }
+                    .frame(width: proxy.size.width, alignment: .leading)
+                    .frame(minHeight: proxy.size.height, alignment: .top)
+                }
+                .scrollIndicators(.never)
+            }
+        }
+        .background(Color.white)
+        .onAppear(perform: ensureLine)
+    }
+
+    private func ensureLine() {
+        if lines.isEmpty {
+            lines.append(DialogueLine())
+        }
+    }
+
+    private func addLine() {
+        lines.append(DialogueLine())
+    }
+
+    private func deleteLine(id: DialogueLine.ID) {
+        guard lines.count > 1 else { return }
+        lines.removeAll { $0.id == id }
+    }
+
+    private func speakerWidth(totalWidth: CGFloat) -> CGFloat {
+        let availableWidth = max(totalWidth - buttonWidth - splitHandleWidth, 1)
+        let minimumSpeakerWidth: CGFloat = 36
+        let maximumSpeakerWidth = max(minimumSpeakerWidth, availableWidth - 60)
+        return min(max(availableWidth * CGFloat(clampedSpeakerRatio(speakerRatio)), minimumSpeakerWidth), maximumSpeakerWidth)
+    }
+
+    private func clampedSpeakerRatio(_ ratio: Double) -> Double {
+        min(max(ratio, 0.16), 0.55)
+    }
+}
+
+private struct DialogueSheetRow: View {
+    @Binding var line: DialogueLine
+    @Binding var speakerRatio: Double
+    @State private var speakerDragStartRatio: Double?
+
+    var fontSize: CGFloat
+    var rowHeight: CGFloat
+    var speakerWidth: CGFloat
+    var splitHandleWidth: CGFloat
+    var canDelete: Bool
+    var showsAddButton: Bool
+    var add: () -> Void
+    var delete: () -> Void
+
+    var body: some View {
+        GeometryReader { proxy in
+            HStack(spacing: 0) {
+                TextField("", text: $line.speaker)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: fontSize))
+                    .foregroundStyle(.black)
+                    .padding(.horizontal, StoryboardTextPadding.horizontal)
+                    .frame(width: speakerWidth, height: rowHeight)
+
+                DialogueColumnSplitHandle()
+                    .frame(width: splitHandleWidth, height: rowHeight)
+                    .gesture(splitGesture(totalWidth: proxy.size.width))
+
+                TextField("", text: $line.dialogue, axis: .vertical)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: fontSize))
+                    .foregroundStyle(.black)
+                    .lineLimit(1...2)
+                    .padding(.horizontal, StoryboardTextPadding.horizontal)
+                    .frame(width: max(proxy.size.width - speakerWidth - splitHandleWidth - 20, 1), height: rowHeight)
+
+                Button(action: showsAddButton ? add : delete) {
+                    Image(systemName: showsAddButton ? "plus" : "minus")
+                }
+                .buttonStyle(.borderless)
+                .controlSize(.small)
+                .frame(width: 20, height: rowHeight)
+                .opacity(showsAddButton || canDelete ? 0.7 : 0.25)
+                .disabled(!showsAddButton && !canDelete)
+                .help(showsAddButton ? "会話行を追加" : "会話行を削除")
+            }
+        }
+        .frame(height: rowHeight)
+        .background(Color.white)
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(Color.black.opacity(0.2))
+                .frame(height: 0.5)
+        }
+    }
+
+    private func splitGesture(totalWidth: CGFloat) -> some Gesture {
+        DragGesture(minimumDistance: 0)
+            .onChanged { value in
+                if speakerDragStartRatio == nil {
+                    speakerDragStartRatio = speakerRatio
+                }
+
+                let availableWidth = max(totalWidth - 20 - splitHandleWidth, 1)
+                let startRatio = speakerDragStartRatio ?? speakerRatio
+                speakerRatio = clampedSpeakerRatio(startRatio + Double(value.translation.width / availableWidth))
+            }
+            .onEnded { _ in
+                speakerRatio = clampedSpeakerRatio(speakerRatio)
+                speakerDragStartRatio = nil
+            }
+    }
+
+    private func clampedSpeakerRatio(_ ratio: Double) -> Double {
+        min(max(ratio, 0.16), 0.55)
+    }
+}
+
+private struct DialogueColumnSplitHandle: View {
+    @State private var isHovering = false
+
+    var body: some View {
+        Rectangle()
+            .fill(Color.clear)
+            .overlay {
+                Rectangle()
+                    .fill(Color.black.opacity(0.14))
+                    .frame(width: 1)
+            }
+            .contentShape(Rectangle())
+            .onHover { hovering in
+                guard hovering != isHovering else { return }
+                isHovering = hovering
+                if hovering {
+                    NSCursor.resizeLeftRight.push()
+                } else {
+                    NSCursor.pop()
+                }
+            }
+            .help("ドラッグして名前と会話の幅を調整")
+    }
+}
+
 private struct StoryboardScreenFrame: View {
     private let horizontalPadding: CGFloat = 5
 
+    var imageData: Data?
     var image: NSImage?
     var aspectRatio: CGFloat
     var showsGeneratePlaceholder: Bool
@@ -247,6 +435,29 @@ private struct StoryboardScreenFrame: View {
                         .clipShape(RoundedRectangle(cornerRadius: 8))
                 }
             }
+            .contextMenu {
+                if let imageData {
+                    Button("画像をダウンロード...") {
+                        saveImage(data: imageData)
+                    }
+                }
+            }
+        }
+    }
+
+    private func saveImage(data: Data) {
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.png]
+        panel.nameFieldStringValue = "storyboard-image.png"
+        panel.canCreateDirectories = true
+
+        panel.begin { response in
+            guard response == .OK, let url = panel.url else { return }
+            do {
+                try data.write(to: url)
+            } catch {
+                NSSound.beep()
+            }
         }
     }
 
@@ -275,7 +486,8 @@ struct EmptyCutRow: View {
                 Rectangle().fill(.white).frame(width: StoryboardPageLayout.sideColumnWidth, height: StoryboardPageLayout.rowHeight)
                 Rectangle().fill(.white).frame(width: StoryboardPageLayout.cutImageGap, height: StoryboardPageLayout.rowHeight)
                 Rectangle().fill(screenBackgroundColor).frame(width: imageColumnWidth, height: StoryboardPageLayout.rowHeight)
-                Rectangle().fill(.white).frame(width: textColumnWidth, height: StoryboardPageLayout.rowHeight)
+                Rectangle().fill(.black).frame(width: StoryboardPageLayout.tableLineWidth, height: StoryboardPageLayout.rowHeight)
+                Rectangle().fill(.white).frame(width: max(textColumnWidth - StoryboardPageLayout.tableLineWidth, 1), height: StoryboardPageLayout.rowHeight)
                 Rectangle().fill(.white).frame(width: StoryboardPageLayout.sideColumnWidth, height: StoryboardPageLayout.rowHeight)
             }
 
@@ -312,15 +524,15 @@ private struct AutoSizingStoryboardTextEditor: View {
             .foregroundStyle(.black)
             .lineSpacing(fontSize <= 8 ? 0 : 1)
             .scrollContentBackground(.hidden)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 5)
+            .padding(.horizontal, StoryboardTextPadding.horizontal)
+            .padding(.vertical, StoryboardTextPadding.vertical)
             .overlay(alignment: .topLeading) {
                 if text.isEmpty {
                     Text(placeholder)
                         .font(.system(size: 11))
                         .foregroundStyle(.gray)
-                        .padding(.leading, 12)
-                        .padding(.top, 10)
+                        .padding(.leading, StoryboardTextPadding.horizontal + 4)
+                        .padding(.top, StoryboardTextPadding.vertical + 5)
                 }
             }
     }

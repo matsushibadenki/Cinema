@@ -1,11 +1,30 @@
 import SwiftUI
 
+private enum DocumentDisplayMode: String, CaseIterable, Identifiable {
+    case storyboard
+    case script
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .storyboard:
+            return "絵コンテ"
+        case .script:
+            return "台本"
+        }
+    }
+}
+
 struct ContentView: View {
     @Binding var document: StoryboardDocument
 
     @AppStorage("geminiAPIKey") private var geminiAPIKey = ""
     @AppStorage("geminiModelName") private var geminiModelName = "nano-banana-2"
     @AppStorage("geminiSystemPrompt") private var geminiSystemPrompt = ""
+    @AppStorage("imageGenerationProvider") private var imageGenerationProvider = "gemini"
+    @AppStorage("openAIAPIKey") private var openAIAPIKey = ""
+    @AppStorage("openAIModelName") private var openAIModelName = "gpt-image-1"
     @AppStorage("screenAspectRatio") private var screenAspectRatioRawValue = ScreenAspectRatio.television169.rawValue
     @AppStorage("showsGeneratePlaceholder") private var showsGeneratePlaceholder = true
     @AppStorage("showsCutActionControls") private var showsCutActionControls = true
@@ -18,6 +37,7 @@ struct ContentView: View {
     @State private var generatingCutID: StoryboardCut.ID?
     @State private var zoomScale: CGFloat = 1.0
     @State private var pinchStartZoomScale: CGFloat?
+    @State private var displayMode: DocumentDisplayMode = .storyboard
 
     private let cutsPerPage = 5
     private let minimumZoomScale: CGFloat = 0.5
@@ -31,19 +51,25 @@ struct ContentView: View {
                 documentPrompt: $document.project.documentPrompt,
                 cuts: document.project.cuts,
                 pageIndex: $pageIndex,
-                pageCount: pageCount,
+                pageCount: currentPageCount,
                 addCut: addCutAtEnd,
                 deleteCut: deleteCut,
                 deletePage: deletePage,
                 jumpToCut: jumpToCut
             )
         } detail: {
-            VStack(spacing: 0) {
-                toolbar
-                ScrollView([.horizontal, .vertical]) {
-                    zoomablePage
+            HStack(spacing: 0) {
+                VStack(spacing: 0) {
+                    toolbar
+                    ScrollView([.horizontal, .vertical]) {
+                        zoomablePage
+                    }
+                    .background(Color(nsColor: .underPageBackgroundColor))
                 }
-                .background(Color(nsColor: .underPageBackgroundColor))
+
+                Divider()
+
+                ReferenceSidebarView(document: $document)
             }
         }
         .navigationTitle(document.project.title)
@@ -51,7 +77,10 @@ struct ContentView: View {
             PrintService.printPage(document: document, pageIndex: pageIndex)
         }
         .onChange(of: document.project.cuts.count) { _, _ in
-            pageIndex = min(pageIndex, max(pageCount - 1, 0))
+            pageIndex = min(pageIndex, max(currentPageCount - 1, 0))
+        }
+        .onChange(of: displayMode) { _, _ in
+            pageIndex = min(pageIndex, max(currentPageCount - 1, 0))
         }
     }
 
@@ -59,8 +88,50 @@ struct ContentView: View {
         max(1, Int(ceil(Double(document.project.cuts.count) / Double(cutsPerPage))))
     }
 
+    private var scriptPageCount: Int {
+        ScriptPageView.pageCount(for: document.project.cuts)
+    }
+
+    private var currentPageCount: Int {
+        switch displayMode {
+        case .storyboard:
+            return pageCount
+        case .script:
+            return scriptPageCount
+        }
+    }
+
+    private var currentPageSize: CGSize {
+        switch displayMode {
+        case .storyboard:
+            return StoryboardPageLayout.pageSize
+        case .script:
+            return ScriptPageLayout.pageSize
+        }
+    }
+
     private var zoomablePage: some View {
         ZStack(alignment: .topLeading) {
+            currentPage
+                .frame(width: currentPageSize.width, height: currentPageSize.height)
+            .background(Color(nsColor: .textBackgroundColor))
+            .clipShape(RoundedRectangle(cornerRadius: 4))
+            .shadow(color: .black.opacity(0.22), radius: 18, y: 8)
+            .scaleEffect(zoomScale, anchor: .topLeading)
+        }
+        .frame(
+            width: currentPageSize.width * zoomScale,
+            height: currentPageSize.height * zoomScale,
+            alignment: .topLeading
+        )
+        .padding(32)
+        .gesture(zoomGesture)
+    }
+
+    @ViewBuilder
+    private var currentPage: some View {
+        switch displayMode {
+        case .storyboard:
             StoryboardPageView(
                 document: $document,
                 pageIndex: pageIndex,
@@ -76,19 +147,9 @@ struct ContentView: View {
             .screenBackgroundBrightness(CGFloat(screenBackgroundBrightness))
             .storyboardTextColumnWidth(CGFloat(storyboardTextColumnWidth))
             .storyboardTextBaseFontSize(CGFloat(storyboardTextBaseFontSize))
-            .frame(width: StoryboardPageLayout.pageSize.width, height: StoryboardPageLayout.pageSize.height)
-            .background(Color(nsColor: .textBackgroundColor))
-            .clipShape(RoundedRectangle(cornerRadius: 4))
-            .shadow(color: .black.opacity(0.22), radius: 18, y: 8)
-            .scaleEffect(zoomScale, anchor: .topLeading)
+        case .script:
+            ScriptPageView(cuts: document.project.cuts, pageIndex: pageIndex)
         }
-        .frame(
-            width: StoryboardPageLayout.pageSize.width * zoomScale,
-            height: StoryboardPageLayout.pageSize.height * zoomScale,
-            alignment: .topLeading
-        )
-        .padding(32)
-        .gesture(zoomGesture)
     }
 
     private var zoomGesture: some Gesture {
@@ -116,16 +177,24 @@ struct ContentView: View {
             }
             .disabled(pageIndex == 0)
 
-            Text("\(pageIndex + 1) / \(pageCount)")
+            Text("\(pageIndex + 1) / \(currentPageCount)")
                 .font(.headline.monospacedDigit())
                 .frame(minWidth: 72)
 
             Button {
-                pageIndex = min(pageIndex + 1, pageCount - 1)
+                pageIndex = min(pageIndex + 1, currentPageCount - 1)
             } label: {
                 Label("次ページ", systemImage: "chevron.right")
             }
-            .disabled(pageIndex >= pageCount - 1)
+            .disabled(pageIndex >= currentPageCount - 1)
+
+            Picker("", selection: $displayMode) {
+                ForEach(DocumentDisplayMode.allCases) { mode in
+                    Text(mode.label).tag(mode)
+                }
+            }
+            .pickerStyle(.segmented)
+            .frame(width: 150)
 
             Divider()
                 .frame(height: 22)
@@ -164,12 +233,14 @@ struct ContentView: View {
             } label: {
                 Label("カット追加", systemImage: "plus")
             }
+            .disabled(displayMode == .script)
 
             Button {
                 PrintService.printPage(document: document, pageIndex: pageIndex)
             } label: {
                 Label("プリント", systemImage: "printer")
             }
+            .disabled(displayMode == .script)
 
             Spacer()
 
@@ -249,9 +320,8 @@ struct ContentView: View {
     private func generateImage(for cutID: StoryboardCut.ID) {
         guard let index = document.project.cuts.firstIndex(where: { $0.id == cutID }) else { return }
         let cut = document.project.cuts[index]
-        let prompt = [cut.situation, cut.action, cut.generationPrompt]
-            .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
-            .joined(separator: "\n")
+        let prompt = cutPrompt(for: cut)
+        let aspectRatio = ScreenAspectRatio.value(for: screenAspectRatioRawValue).ratio
 
         guard !prompt.isEmpty else {
             generationStatus = "内容かト書きを入力してください"
@@ -263,15 +333,29 @@ struct ContentView: View {
 
         Task {
             do {
-                let service = GeminiImageService(apiKey: geminiAPIKey, model: geminiModelName)
-                let data = try await service.generateStoryboardImage(
-                    systemPrompt: geminiSystemPrompt,
-                    documentPrompt: document.project.documentPrompt,
-                    cutPrompt: prompt
-                )
+                let data: Data
+                if imageGenerationProvider == "openai" {
+                    let service = OpenAIImageService(apiKey: openAIAPIKey, model: openAIModelName)
+                    data = try await service.generateStoryboardImage(
+                        systemPrompt: geminiSystemPrompt,
+                        documentPrompt: document.project.documentPrompt,
+                        cutPrompt: prompt,
+                        aspectRatio: aspectRatio
+                    )
+                } else {
+                    let service = GeminiImageService(apiKey: geminiAPIKey, model: geminiModelName)
+                    data = try await service.generateStoryboardImage(
+                        systemPrompt: geminiSystemPrompt,
+                        documentPrompt: document.project.documentPrompt,
+                        cutPrompt: prompt,
+                        aspectRatio: aspectRatio,
+                        referenceImages: referenceImagesForGeneration()
+                    )
+                }
+                let fittedData = ImageHelpers.pngDataByCropping(data, toAspectRatio: aspectRatio)
                 await MainActor.run {
                     let fileName = "Images/\(cutID.uuidString).png"
-                    document.imageData[fileName] = data
+                    document.imageData[fileName] = fittedData
                     if let updateIndex = document.project.cuts.firstIndex(where: { $0.id == cutID }) {
                         document.project.cuts[updateIndex].imageFileName = fileName
                     }
@@ -284,6 +368,58 @@ struct ContentView: View {
                     generatingCutID = nil
                 }
             }
+        }
+    }
+
+    private func cutPrompt(for cut: StoryboardCut) -> String {
+        [
+            labeledPrompt("Scene content", cut.situation),
+            labeledPrompt("Names and dialogue", dialoguePrompt(for: cut)),
+            labeledPrompt("Additional cut direction", cut.generationPrompt)
+        ]
+        .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+        .joined(separator: "\n\n")
+    }
+
+    private func labeledPrompt(_ label: String, _ value: String) -> String {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return "" }
+        return "\(label):\n\(trimmed)"
+    }
+
+    private func dialoguePrompt(for cut: StoryboardCut) -> String {
+        let dialogue = cut.dialogueLines
+            .map { line -> String in
+                let speaker = line.speaker.trimmingCharacters(in: .whitespacesAndNewlines)
+                let text = line.dialogue.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !speaker.isEmpty || !text.isEmpty else { return "" }
+                return speaker.isEmpty ? text : "\(speaker): \(text)"
+            }
+            .filter { !$0.isEmpty }
+            .joined(separator: "\n")
+
+        if !dialogue.isEmpty {
+            return dialogue
+        }
+
+        return cut.action
+    }
+
+    private func referenceImagesForGeneration() -> [GeminiReferenceImage] {
+        document.project.referenceImages.compactMap { reference in
+            guard let data = document.imageData[reference.imageFileName] else { return nil }
+            return GeminiReferenceImage(mimeType: mimeType(for: reference.imageFileName), data: data)
+        }
+    }
+
+    private func mimeType(for fileName: String) -> String {
+        switch URL(fileURLWithPath: fileName).pathExtension.lowercased() {
+        case "jpg", "jpeg":
+            return "image/jpeg"
+        case "webp":
+            return "image/webp"
+        default:
+            return "image/png"
         }
     }
 }

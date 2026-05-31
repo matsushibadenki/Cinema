@@ -54,31 +54,33 @@ struct SidebarView: View {
                     }
                 }
 
-                Section("カット") {
-                    ForEach(cuts) { cut in
-                        HStack {
-                            Image(systemName: cut.imageFileName == nil ? "rectangle" : "photo")
-                                .foregroundStyle(.secondary)
-                            VStack(alignment: .leading) {
-                                Text("Cut \(cut.cutNumber)")
-                                if !cut.situation.isEmpty {
-                                    Text(cut.situation)
-                                        .foregroundStyle(.secondary)
-                                        .lineLimit(1)
+                ForEach(cutSections) { section in
+                    Section(section.title) {
+                        ForEach(section.cuts) { cut in
+                            HStack {
+                                Image(systemName: cut.imageFileName == nil ? "rectangle" : "photo")
+                                    .foregroundStyle(.secondary)
+                                VStack(alignment: .leading) {
+                                    Text("Cut \(cut.cutNumber)")
+                                    if !cut.situation.isEmpty {
+                                        Text(cut.situation)
+                                            .foregroundStyle(.secondary)
+                                            .lineLimit(1)
+                                    }
                                 }
                             }
-                        }
-                        .contentShape(Rectangle())
-                        .onTapGesture {
-                            jumpToCut(cut.id)
-                        }
-                        .contextMenu {
-                            Button("このカットへ移動") {
+                            .contentShape(Rectangle())
+                            .onTapGesture {
                                 jumpToCut(cut.id)
                             }
+                            .contextMenu {
+                                Button("このカットへ移動") {
+                                    jumpToCut(cut.id)
+                                }
 
-                            Button("このカットを削除", role: .destructive) {
-                                deleteCut(cut.id)
+                                Button("このカットを削除", role: .destructive) {
+                                    deleteCut(cut.id)
+                                }
                             }
                         }
                     }
@@ -96,4 +98,34 @@ struct SidebarView: View {
         }
         .frame(minWidth: 220)
     }
+
+    private var cutSections: [CutSidebarSection] {
+        var sections: [CutSidebarSection] = []
+        var currentTitle = "サブタイトルなし"
+        var currentCuts: [StoryboardCut] = []
+
+        for cut in cuts {
+            let subtitle = cut.subtitle.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !subtitle.isEmpty {
+                if !currentCuts.isEmpty {
+                    sections.append(CutSidebarSection(title: currentTitle, cuts: currentCuts))
+                    currentCuts = []
+                }
+                currentTitle = subtitle
+            }
+            currentCuts.append(cut)
+        }
+
+        if !currentCuts.isEmpty {
+            sections.append(CutSidebarSection(title: currentTitle, cuts: currentCuts))
+        }
+
+        return sections
+    }
+}
+
+private struct CutSidebarSection: Identifiable {
+    let id = UUID()
+    var title: String
+    var cuts: [StoryboardCut]
 }

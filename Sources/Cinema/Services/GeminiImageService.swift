@@ -27,7 +27,9 @@ struct GeminiImageService {
     func generateStoryboardImage(
         systemPrompt: String,
         documentPrompt: String,
-        cutPrompt: String
+        cutPrompt: String,
+        aspectRatio: CGFloat,
+        referenceImages: [GeminiReferenceImage]
     ) async throws -> Data {
         guard !apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             throw ServiceError.missingAPIKey
@@ -41,15 +43,19 @@ struct GeminiImageService {
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        let parts = [GeminiPart(text: composedPrompt(
+            systemPrompt: systemPrompt,
+            documentPrompt: documentPrompt,
+            cutPrompt: cutPrompt,
+            aspectRatio: aspectRatio,
+            hasReferenceImages: !referenceImages.isEmpty
+        ))] + referenceImages.map {
+            GeminiPart(inlineData: GeminiInlineData(mimeType: $0.mimeType, data: $0.data.base64EncodedString()))
+        }
+
         request.httpBody = try JSONEncoder().encode(GeminiGenerateRequest(
             contents: [
-                GeminiContent(parts: [
-                    GeminiPart(text: composedPrompt(
-                        systemPrompt: systemPrompt,
-                        documentPrompt: documentPrompt,
-                        cutPrompt: cutPrompt
-                    ))
-                ])
+                GeminiContent(parts: parts)
             ],
             generationConfig: GeminiGenerationConfig(responseModalities: ["IMAGE"])
         ))
@@ -72,10 +78,11 @@ struct GeminiImageService {
         throw ServiceError.imageNotFound
     }
 
-    private func composedPrompt(systemPrompt: String, documentPrompt: String, cutPrompt: String) -> String {
+    private func composedPrompt(systemPrompt: String, documentPrompt: String, cutPrompt: String, aspectRatio: CGFloat, hasReferenceImages: Bool) -> String {
         let fallbackSystemPrompt = """
         Create a clean monochrome storyboard panel in a hand-drawn pencil style.
-        Use cinematic composition, clear subject silhouettes, and no text inside the image.
+        Compose the image as a cinematic scene environment based on the written situation and dialogue.
+        Show clear character placement, location, mood, and action. Do not render any text, captions, speech bubbles, or UI elements inside the image.
         """
 
         return [
@@ -85,12 +92,22 @@ struct GeminiImageService {
             "Document-specific direction:",
             documentPrompt.trimmingCharacters(in: .whitespacesAndNewlines),
             "",
-            "Cut description:",
-            cutPrompt
+            hasReferenceImages ? "Use the attached reference photos for character, object, costume, location, and visual design consistency. Do not copy text from references." : "",
+            "",
+            "Scene content, staging, names, and dialogue:",
+            cutPrompt,
+            "",
+            "Frame aspect ratio:",
+            String(format: "%.2f:1", Double(aspectRatio))
         ]
         .filter { !$0.isEmpty }
         .joined(separator: "\n")
     }
+}
+
+struct GeminiReferenceImage {
+    var mimeType: String
+    var data: Data
 }
 
 private struct GeminiGenerateRequest: Encodable {

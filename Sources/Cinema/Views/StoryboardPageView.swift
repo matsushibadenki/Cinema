@@ -8,6 +8,7 @@ enum StoryboardPageLayout {
     static let footerHeight: CGFloat = 24
     static let sideColumnWidth: CGFloat = 32
     static let cutImageGap: CGFloat = 3
+    static let tableLineWidth: CGFloat = 0.8
     static let tableWidth: CGFloat = pageSize.width - (pageMargin * 2)
     static let adjustableColumnSpace: CGFloat = tableWidth - (sideColumnWidth * 2) - cutImageGap
     static let mainColumnWidth: CGFloat = adjustableColumnSpace / 2
@@ -73,9 +74,31 @@ struct StoryboardPageView: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
 
+            TextField("サブタイトル", text: pageSubtitle)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(.black)
+                .textFieldStyle(.plain)
+                .lineLimit(1)
+                .frame(maxWidth: 210)
+                .padding(.leading, 8)
+
             Spacer()
         }
         .frame(height: StoryboardPageLayout.titleHeight)
+    }
+
+    private var pageSubtitle: Binding<String> {
+        Binding {
+            guard document.project.cuts.indices.contains(pageStartIndex) else { return "" }
+            return document.project.cuts[pageStartIndex].subtitle
+        } set: { newValue in
+            guard document.project.cuts.indices.contains(pageStartIndex) else { return }
+            document.project.cuts[pageStartIndex].subtitle = newValue
+        }
+    }
+
+    private var pageStartIndex: Int {
+        min(pageIndex * cutsPerPage, max(document.project.cuts.count - 1, 0))
     }
 
     private var clampedTextColumnWidth: CGFloat {
@@ -91,10 +114,12 @@ struct StoryboardPageView: View {
             VStack(spacing: 0) {
                 header
 
-                ForEach(pageCuts) { $cut in
+                ForEach(Array(pageCuts.indices), id: \.self) { index in
+                    let cut = pageCuts[index]
                     StoryboardCutRow(
-                        cut: $cut,
-                        image: ImageHelpers.nsImage(from: cut.imageFileName.flatMap { document.imageData[$0] }),
+                        cut: cut,
+                        imageData: cut.wrappedValue.imageFileName.flatMap { document.imageData[$0] },
+                        image: ImageHelpers.nsImage(from: cut.wrappedValue.imageFileName.flatMap { document.imageData[$0] }),
                         screenAspectRatio: screenAspectRatio,
                         showsGeneratePlaceholder: showsGeneratePlaceholder,
                         showsCutActionControls: showsCutActionControls,
@@ -102,14 +127,14 @@ struct StoryboardPageView: View {
                         imageColumnWidth: imageColumnWidth,
                         textColumnWidth: clampedTextColumnWidth,
                         textBaseFontSize: textBaseFontSize,
-                        isGenerating: generatingCutID == cut.id,
-                        generate: { generate(cut.id) },
-                        addAfter: { addAfter(cut.id) },
-                        delete: { delete(cut.id) }
+                        isGenerating: generatingCutID == cut.wrappedValue.id,
+                        generate: { generate(cut.wrappedValue.id) },
+                        addAfter: { addAfter(cut.wrappedValue.id) },
+                        delete: { delete(cut.wrappedValue.id) }
                     )
                 }
 
-                ForEach(0..<max(0, cutsPerPage - pageCuts.count), id: \.self) { _ in
+                ForEach(0..<max(0, cutsPerPage - pageCuts.count), id: \.self) { emptyIndex in
                     EmptyCutRow(
                         imageColumnWidth: imageColumnWidth,
                         textColumnWidth: clampedTextColumnWidth,
@@ -232,30 +257,46 @@ struct StoryboardTableGrid: View {
     var imageColumnWidth: CGFloat
     var textColumnWidth: CGFloat
     var color: Color = .black
-    var lineWidth: CGFloat = 0.8
+    var lineWidth: CGFloat = StoryboardPageLayout.tableLineWidth
 
     var body: some View {
         GeometryReader { proxy in
             Path { path in
+                let bottomY = max(proxy.size.height - (lineWidth / 2), 0)
+                let cutColumnEnd = StoryboardPageLayout.sideColumnWidth
+                let screenColumnStart = cutColumnEnd + StoryboardPageLayout.cutImageGap
+                let screenColumnEnd = screenColumnStart + imageColumnWidth
+                let textColumnEnd = screenColumnEnd + textColumnWidth
                 let columns = [
                     CGFloat(0),
-                    StoryboardPageLayout.sideColumnWidth,
-                    StoryboardPageLayout.sideColumnWidth + StoryboardPageLayout.cutImageGap,
-                    StoryboardPageLayout.sideColumnWidth + StoryboardPageLayout.cutImageGap + imageColumnWidth + textColumnWidth,
+                    cutColumnEnd,
+                    screenColumnStart,
+                    textColumnEnd,
                     proxy.size.width
                 ]
 
                 for x in columns {
                     path.move(to: CGPoint(x: x, y: 0))
-                    path.addLine(to: CGPoint(x: x, y: proxy.size.height))
+                    path.addLine(to: CGPoint(x: x, y: bottomY))
                 }
+
+                path.move(to: CGPoint(x: screenColumnEnd, y: 0))
+                path.addLine(to: CGPoint(x: screenColumnEnd, y: StoryboardPageLayout.headerHeight))
 
                 let horizontalLines = (0...5).map { StoryboardPageLayout.headerHeight + (CGFloat($0) * StoryboardPageLayout.rowHeight) }
                 let allHorizontalLines = [CGFloat(0)] + horizontalLines
                 for y in allHorizontalLines {
+                    if abs(y - proxy.size.height) < 0.5 {
+                        path.move(to: CGPoint(x: 0, y: bottomY))
+                        path.addLine(to: CGPoint(x: cutColumnEnd, y: bottomY))
+                        path.move(to: CGPoint(x: screenColumnStart, y: bottomY))
+                        path.addLine(to: CGPoint(x: proxy.size.width, y: bottomY))
+                        continue
+                    }
+
                     path.move(to: CGPoint(x: 0, y: y))
-                    path.addLine(to: CGPoint(x: StoryboardPageLayout.sideColumnWidth, y: y))
-                    path.move(to: CGPoint(x: StoryboardPageLayout.sideColumnWidth + StoryboardPageLayout.cutImageGap, y: y))
+                    path.addLine(to: CGPoint(x: cutColumnEnd, y: y))
+                    path.move(to: CGPoint(x: screenColumnStart, y: y))
                     path.addLine(to: CGPoint(x: proxy.size.width, y: y))
                 }
             }
