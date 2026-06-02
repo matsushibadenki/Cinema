@@ -1,4 +1,6 @@
+import AppKit
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct SidebarView: View {
     @Binding var title: String
@@ -7,9 +9,29 @@ struct SidebarView: View {
     @Binding var pageIndex: Int
     var pageCount: Int
     var addCut: () -> Void
+    var addSubtitle: () -> Void
+    var addCutAbove: (StoryboardCut.ID) -> Void
+    var addCutBelow: (StoryboardCut.ID) -> Void
     var deleteCut: (StoryboardCut.ID) -> Void
     var deletePage: (Int) -> Void
     var jumpToCut: (StoryboardCut.ID) -> Void
+    var moveCuts: (IndexSet, Int, [StoryboardCut.ID]) -> Void
+    var moveCutBefore: (StoryboardCut.ID, StoryboardCut.ID) -> Void
+    var updateCutName: (StoryboardCut.ID, String) -> Void
+    var sceneVideos: [SceneVideo]
+    @Binding var selectedVideoSceneTitle: String?
+    @Binding var selectedVideoCutIDs: Set<StoryboardCut.ID>
+    var generatingSceneTitle: String?
+    var generateSceneVideo: (String) -> Void
+    var saveSceneVideo: (SceneVideo) -> Void
+    var aiEstimatedTokensUsed: Int
+    var aiEstimatedCostUSD: Double
+    var aiCostLimitEnabled: Bool
+    var aiCostLimitUSD: Double
+    var isAICostLimitExceeded: Bool
+
+    @State private var draggedCutID: StoryboardCut.ID?
+    @State private var hoveredDropTargetID: StoryboardCut.ID?
 
     private let cutsPerPage = 5
 
@@ -20,30 +42,13 @@ struct SidebarView: View {
                 .padding(.horizontal, 12)
                 .padding(.top, 12)
 
-            DisclosureGroup {
-                TextEditor(text: $documentPrompt)
-                    .font(.system(size: 12))
-                    .scrollContentBackground(.hidden)
-                    .frame(minHeight: 96)
-                    .padding(6)
-                    .background(Color(nsColor: .textBackgroundColor))
-                    .clipShape(RoundedRectangle(cornerRadius: 6))
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 6)
-                            .stroke(.separator, lineWidth: 0.5)
-                    }
-            } label: {
-                Label("ドキュメントプロンプト", systemImage: "doc.text")
-                    .font(.headline)
-            }
-            .padding(.horizontal, 12)
+            aiPanel
 
             List(selection: $pageIndex) {
                 Section("ページ") {
                     ForEach(0..<pageCount, id: \.self) { index in
-                        let first = index * cutsPerPage + 1
-                        let last = min((index + 1) * cutsPerPage, cuts.count)
-                        Text("Page \(index + 1)  /  Cut \(first)-\(last)")
+                        let summary = pageSummaries.indices.contains(index) ? pageSummaries[index] : "Page \(index + 1)"
+                        Text(summary)
                             .tag(index)
                             .contextMenu {
                                 Button("このページを削除", role: .destructive) {
@@ -56,27 +61,54 @@ struct SidebarView: View {
 
                 ForEach(cutSections) { section in
                     Section(section.title) {
+                        SceneSelectionRow(
+                            title: section.title,
+                            cutCount: section.cuts.count,
+                            isSelected: selectedVideoSceneTitle == section.title,
+                            isGenerating: generatingSceneTitle == section.title,
+                            hasVideo: sceneVideos.contains(where: { $0.title == section.title }),
+                            select: { selectedVideoSceneTitle = section.title }
+                        )
+
                         ForEach(section.cuts) { cut in
-                            HStack {
-                                Image(systemName: cut.imageFileName == nil ? "rectangle" : "photo")
-                                    .foregroundStyle(.secondary)
-                                VStack(alignment: .leading) {
-                                    Text("Cut \(cut.cutNumber)")
-                                    if !cut.situation.isEmpty {
-                                        Text(cut.situation)
-                                            .foregroundStyle(.secondary)
-                                            .lineLimit(1)
-                                    }
+                            CutSidebarRow(
+                                cut: cut,
+                                title: cutTitle(for: cut),
+                                cutName: cutNameBinding(for: cut.id),
+                                isVideoSceneSelected: selectedVideoSceneTitle == section.title,
+                                isCutSelectedForVideo: cutSelectionBinding(for: cut.id),
+                                isDragged: draggedCutID == cut.id,
+                                isDropTarget: hoveredDropTargetID == cut.id,
+                                startDrag: {
+                                    draggedCutID = cut.id
+                                    return NSItemProvider(object: cut.id.uuidString as NSString)
                                 }
-                            }
-                            .contentShape(Rectangle())
-                            .onTapGesture {
-                                jumpToCut(cut.id)
-                            }
+                            )
+                            .onDrop(
+                                of: [UTType.text],
+                                delegate: CutDropDelegate(
+                                    targetID: cut.id,
+                                    draggedCutID: $draggedCutID,
+                                    hoveredDropTargetID: $hoveredDropTargetID,
+                                    moveCutBefore: moveCutBefore
+                                )
+                            )
                             .contextMenu {
                                 Button("このカットへ移動") {
                                     jumpToCut(cut.id)
                                 }
+
+                                Divider()
+
+                                Button("この上にカットを追加") {
+                                    addCutAbove(cut.id)
+                                }
+
+                                Button("この下にカットを追加") {
+                                    addCutBelow(cut.id)
+                                }
+
+                                Divider()
 
                                 Button("このカットを削除", role: .destructive) {
                                     deleteCut(cut.id)
@@ -88,20 +120,183 @@ struct SidebarView: View {
             }
             .listStyle(.sidebar)
 
-            Button {
-                addCut()
-            } label: {
-                Label("カットを追加", systemImage: "plus")
+            VStack(spacing: 8) {
+                Button {
+                    addSubtitle()
+                } label: {
+                    Label("ブロックを追加", systemImage: "text.badge.plus")
+                }
+                .buttonStyle(.bordered)
+
+                Button {
+                    addCut()
+                } label: {
+                    Label("カットを追加", systemImage: "plus")
+                }
+                .buttonStyle(.borderedProminent)
             }
-            .buttonStyle(.borderedProminent)
+            .frame(maxWidth: .infinity, alignment: .leading)
             .padding([.horizontal, .bottom], 12)
         }
         .frame(minWidth: 220)
     }
 
+    private var aiPanel: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label("AI", systemImage: "sparkles")
+                .font(.headline)
+
+            if isAICostLimitExceeded {
+                Label("推定料金が上限を超えています", systemImage: "exclamationmark.triangle.fill")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.red)
+            }
+
+            DisclosureGroup {
+                TextEditor(text: $documentPrompt)
+                    .font(.system(size: 12))
+                    .scrollContentBackground(.hidden)
+                    .frame(minHeight: 76)
+                    .padding(6)
+                    .background(Color(nsColor: .textBackgroundColor))
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 6)
+                            .stroke(.separator, lineWidth: 0.5)
+                    }
+            } label: {
+                Label("ドキュメントプロンプト", systemImage: "doc.text")
+                    .font(.subheadline.weight(.semibold))
+            }
+
+            DisclosureGroup {
+                videoSelectionPanel
+            } label: {
+                Label("動画化", systemImage: "film.stack")
+                    .font(.subheadline.weight(.semibold))
+            }
+
+            VStack(alignment: .leading, spacing: 4) {
+                HStack {
+                    Text("推定トークン")
+                    Spacer()
+                    Text("\(aiEstimatedTokensUsed)")
+                        .monospacedDigit()
+                }
+
+                HStack {
+                    Text("推定料金")
+                    Spacer()
+                    Text(estimatedCostText)
+                        .monospacedDigit()
+                }
+
+                if aiCostLimitEnabled {
+                    HStack {
+                        Text("上限")
+                        Spacer()
+                        Text(costText(aiCostLimitUSD))
+                            .monospacedDigit()
+                    }
+                }
+            }
+            .font(.caption)
+            .foregroundStyle(isAICostLimitExceeded ? .red : .secondary)
+        }
+        .padding(12)
+        .background(isAICostLimitExceeded ? Color.red.opacity(0.13) : Color(nsColor: .controlBackgroundColor))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .overlay {
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(isAICostLimitExceeded ? Color.red.opacity(0.65) : Color.accentColor.opacity(0.28), lineWidth: 1)
+        }
+        .padding(.horizontal, 12)
+    }
+
+    private var selectedSection: CutSidebarSection? {
+        guard let selectedVideoSceneTitle else { return nil }
+        return cutSections.first { $0.title == selectedVideoSceneTitle }
+    }
+
+    private var videoSelectionPanel: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if let selectedSection {
+                Text(selectedSection.title)
+                    .font(.subheadline.weight(.semibold))
+                    .lineLimit(1)
+
+                let selectedCuts = selectedSection.cuts.filter { selectedVideoCutIDs.contains($0.id) }
+
+                Text("対象: Cut \(selectedCuts.map(\.cutNumber).map(String.init).joined(separator: ", "))")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+
+                HStack {
+                    Button {
+                        generateSceneVideo(selectedSection.title)
+                    } label: {
+                        Label(
+                            generatingSceneTitle == selectedSection.title ? "生成中..." : "選択シーンを動画作成",
+                            systemImage: "video.badge.sparkles"
+                        )
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(generatingSceneTitle != nil)
+
+                    if let video = sceneVideos.first(where: { $0.title == selectedSection.title }) {
+                        Button {
+                            saveSceneVideo(video)
+                        } label: {
+                            Image(systemName: "square.and.arrow.down")
+                        }
+                        .buttonStyle(.bordered)
+                        .help("生成動画を保存")
+                    }
+                }
+            } else {
+                Text("シーンを選択してください")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(12)
+        .background(Color(nsColor: .textBackgroundColor))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .overlay {
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(Color.accentColor.opacity(0.35), lineWidth: 1)
+        }
+    }
+
+    private var estimatedCostText: String {
+        costText(aiEstimatedCostUSD)
+    }
+
+    private func costText(_ value: Double) -> String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .currency
+        formatter.currencyCode = "USD"
+        formatter.minimumFractionDigits = 4
+        formatter.maximumFractionDigits = 4
+        return formatter.string(from: NSNumber(value: value)) ?? "$0.0000"
+    }
+
+    private func cutSelectionBinding(for cutID: StoryboardCut.ID) -> Binding<Bool> {
+        Binding {
+            selectedVideoCutIDs.contains(cutID)
+        } set: { isSelected in
+            if isSelected {
+                selectedVideoCutIDs.insert(cutID)
+            } else {
+                selectedVideoCutIDs.remove(cutID)
+            }
+        }
+    }
+
     private var cutSections: [CutSidebarSection] {
         var sections: [CutSidebarSection] = []
-        var currentTitle = "サブタイトルなし"
+        var currentTitle = "ブロックなし"
         var currentCuts: [StoryboardCut] = []
 
         for cut in cuts {
@@ -122,10 +317,259 @@ struct SidebarView: View {
 
         return sections
     }
+
+    private var pageSummaries: [String] {
+        StoryboardPageView.pageCutIDs(for: cuts, cutsPerPage: cutsPerPage).enumerated().map { index, ids in
+            let pageCuts = ids.compactMap { id in cuts.first(where: { $0.id == id }) }
+            let numbers = pageCuts.map(\.cutNumber)
+            let rangeText: String
+            if let first = numbers.first, let last = numbers.last {
+                rangeText = first == last ? "Cut \(first)" : "Cut \(first)-\(last)"
+            } else {
+                rangeText = "空き"
+            }
+            let sceneTitle = pageCuts.first?.subtitle.trimmingCharacters(in: .whitespacesAndNewlines)
+            if let sceneTitle, !sceneTitle.isEmpty {
+                return "Page \(index + 1)  /  \(sceneTitle)  /  \(rangeText)"
+            }
+            return "Page \(index + 1)  /  \(rangeText)"
+        }
+    }
+
+    private func cutTitle(for cut: StoryboardCut) -> String {
+        let name = cut.cutName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else { return "Cut \(cut.cutNumber)" }
+        return "Cut \(cut.cutNumber)"
+    }
+
+    private func cutNameBinding(for cutID: StoryboardCut.ID) -> Binding<String> {
+        Binding(
+            get: {
+                cuts.first(where: { $0.id == cutID })?.cutName ?? ""
+            },
+            set: { newValue in
+                updateCutName(cutID, newValue)
+            }
+        )
+    }
 }
 
 private struct CutSidebarSection: Identifiable {
     let id = UUID()
     var title: String
     var cuts: [StoryboardCut]
+}
+
+private struct CutSidebarRow: View {
+    var cut: StoryboardCut
+    var title: String
+    @Binding var cutName: String
+    var isVideoSceneSelected: Bool
+    @Binding var isCutSelectedForVideo: Bool
+    var isDragged: Bool
+    var isDropTarget: Bool
+    var startDrag: () -> NSItemProvider
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 7) {
+            Image(systemName: "line.3.horizontal")
+                .font(.caption)
+                .foregroundStyle(isDragged ? Color.accentColor : Color.secondary.opacity(0.45))
+                .help("ドラッグしてカットを並べ替え")
+                .onDrag(startDrag)
+
+            if isVideoSceneSelected {
+                Toggle("", isOn: $isCutSelectedForVideo)
+                    .toggleStyle(.checkbox)
+                    .labelsHidden()
+                    .help("このカットを動画化に含める")
+            }
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .font(.caption.weight(.semibold))
+
+                EditableCutNameField(text: $cutName)
+                    .frame(maxWidth: .infinity, minHeight: 18, alignment: .leading)
+                if !cut.situation.isEmpty {
+                    Text(cut.situation)
+                        .foregroundStyle(.secondary)
+                        .font(.caption2)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.horizontal, 6)
+        .padding(.vertical, 4)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(rowBackground)
+        .overlay(alignment: .top) {
+            if isDropTarget {
+                Rectangle()
+                    .fill(Color.accentColor)
+                    .frame(height: 2)
+            }
+        }
+        .overlay {
+            if isDropTarget {
+                RoundedRectangle(cornerRadius: 5)
+                    .stroke(Color.accentColor.opacity(0.7), lineWidth: 1)
+            }
+        }
+        .opacity(isDragged ? 0.65 : 1)
+    }
+
+    @ViewBuilder
+    private var rowBackground: some View {
+        if isDropTarget {
+            RoundedRectangle(cornerRadius: 5)
+                .fill(Color.accentColor.opacity(0.22))
+        } else if isDragged {
+            RoundedRectangle(cornerRadius: 5)
+                .fill(Color.secondary.opacity(0.14))
+        } else if isVideoSceneSelected {
+            RoundedRectangle(cornerRadius: 5)
+                .fill(Color.accentColor.opacity(0.12))
+        }
+    }
+}
+
+private struct EditableCutNameField: NSViewRepresentable {
+    @Binding var text: String
+
+    func makeNSView(context: Context) -> EditableCutNameNSTextField {
+        let field = EditableCutNameNSTextField(frame: .zero)
+        field.isEditable = true
+        field.isSelectable = true
+        field.isBezeled = false
+        field.isBordered = false
+        field.drawsBackground = false
+        field.font = .systemFont(ofSize: 10, weight: .regular)
+        field.delegate = context.coordinator
+        field.focusRingType = .none
+        field.usesSingleLineMode = true
+        field.lineBreakMode = .byTruncatingTail
+        field.placeholderString = "カット名"
+        field.stringValue = text
+        return field
+    }
+
+    func updateNSView(_ nsView: EditableCutNameNSTextField, context: Context) {
+        guard !context.coordinator.isEditing else { return }
+        if nsView.stringValue != text {
+            nsView.stringValue = text
+        }
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(text: $text)
+    }
+
+    final class Coordinator: NSObject, NSTextFieldDelegate {
+        var text: Binding<String>
+        var isEditing = false
+
+        init(text: Binding<String>) {
+            self.text = text
+        }
+
+        func controlTextDidBeginEditing(_ obj: Notification) {
+            isEditing = true
+        }
+
+        func controlTextDidEndEditing(_ obj: Notification) {
+            isEditing = false
+            controlTextDidChange(obj)
+        }
+
+        func controlTextDidChange(_ obj: Notification) {
+            guard let field = obj.object as? NSTextField else { return }
+            text.wrappedValue = field.stringValue
+        }
+    }
+}
+
+private final class EditableCutNameNSTextField: NSTextField {
+    override var acceptsFirstResponder: Bool { true }
+}
+
+private struct CutDropDelegate: DropDelegate {
+    var targetID: StoryboardCut.ID
+    @Binding var draggedCutID: StoryboardCut.ID?
+    @Binding var hoveredDropTargetID: StoryboardCut.ID?
+    var moveCutBefore: (StoryboardCut.ID, StoryboardCut.ID) -> Void
+
+    func validateDrop(info: DropInfo) -> Bool {
+        info.hasItemsConforming(to: [UTType.text])
+    }
+
+    func dropEntered(info: DropInfo) {
+        guard let draggedCutID, draggedCutID != targetID else { return }
+        hoveredDropTargetID = targetID
+        moveCutBefore(draggedCutID, targetID)
+    }
+
+    func dropExited(info: DropInfo) {
+        if hoveredDropTargetID == targetID {
+            hoveredDropTargetID = nil
+        }
+    }
+
+    func performDrop(info: DropInfo) -> Bool {
+        draggedCutID = nil
+        hoveredDropTargetID = nil
+        return true
+    }
+
+    func dropUpdated(info: DropInfo) -> DropProposal? {
+        DropProposal(operation: .move)
+    }
+}
+
+private struct SceneSelectionRow: View {
+    var title: String
+    var cutCount: Int
+    var isSelected: Bool
+    var isGenerating: Bool
+    var hasVideo: Bool
+    var select: () -> Void
+
+    var body: some View {
+        Button(action: select) {
+            HStack(spacing: 8) {
+                Image(systemName: isSelected ? "largecircle.fill.circle" : "circle")
+                    .foregroundStyle(isSelected ? Color.accentColor : .secondary)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(.subheadline.weight(.semibold))
+                        .lineLimit(1)
+                    Text("\(cutCount)カットを動画化")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+
+                if isGenerating {
+                    ProgressView()
+                        .controlSize(.small)
+                } else if hasVideo {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundStyle(.green)
+                }
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
+            .background {
+                RoundedRectangle(cornerRadius: 7)
+                    .fill(isSelected ? Color.accentColor.opacity(0.18) : Color.clear)
+            }
+        }
+        .buttonStyle(.plain)
+    }
 }

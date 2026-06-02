@@ -16,6 +16,7 @@ struct PrintablePageView: View {
             document: .constant(document),
             pageIndex: pageIndex,
             cutsPerPage: 5,
+            pageCutIDs: pageCutIDs,
             generatingCutID: nil,
             generate: { _ in },
             addAfter: { _ in },
@@ -23,9 +24,16 @@ struct PrintablePageView: View {
         )
         .screenAspectRatio(ScreenAspectRatio.value(for: screenAspectRatioRawValue).ratio)
         .showsGeneratePlaceholder(showsGeneratePlaceholder)
-        .showsCutActionControls(showsCutActionControls)
+        .showsCutActionControls(false)
         .screenBackgroundBrightness(CGFloat(screenBackgroundBrightness))
         .storyboardTextColumnWidth(CGFloat(storyboardTextColumnWidth))
         .storyboardTextBaseFontSize(CGFloat(storyboardTextBaseFontSize))
+        .printingStoryboard(true)
+    }
+
+    private var pageCutIDs: [StoryboardCut.ID] {
+        let pages = StoryboardPageView.pageCutIDs(for: document.project.cuts, cutsPerPage: 5)
+        guard pages.indices.contains(pageIndex) else { return [] }
+        return pages[pageIndex]
     }
 }

@@ -3,29 +3,43 @@ import SwiftUI
 
 struct SettingsView: View {
     private enum SettingsTab: Hashable {
-        case gemini
+        case ai
+        case prompt
         case display
     }
 
     @AppStorage("geminiAPIKey") private var geminiAPIKey = ""
     @AppStorage("geminiModelName") private var geminiModelName = "nano-banana-2"
+    @AppStorage("geminiVideoModelName") private var geminiVideoModelName = "veo-3.1-generate-preview"
     @AppStorage("geminiSystemPrompt") private var geminiSystemPrompt = ""
     @AppStorage("imageGenerationProvider") private var imageGenerationProvider = "gemini"
+    @AppStorage("videoGenerationProvider") private var videoGenerationProvider = "gemini"
     @AppStorage("openAIAPIKey") private var openAIAPIKey = ""
-    @AppStorage("openAIModelName") private var openAIModelName = "gpt-image-1"
+    @AppStorage("openAIModelName") private var openAIModelName = "gpt-image-2"
+    @AppStorage("openAIVideoModelName") private var openAIVideoModelName = "sora-2"
     @AppStorage("screenAspectRatio") private var screenAspectRatioRawValue = ScreenAspectRatio.television169.rawValue
     @AppStorage("showsGeneratePlaceholder") private var showsGeneratePlaceholder = true
     @AppStorage("screenBackgroundBrightness") private var screenBackgroundBrightness = 0.0
     @AppStorage("storyboardTextColumnWidth") private var storyboardTextColumnWidth = Double(StoryboardPageLayout.mainColumnWidth)
     @AppStorage("storyboardTextBaseFontSize") private var storyboardTextBaseFontSize = 11.0
+    @AppStorage("scriptSpeakerFontSize") private var scriptSpeakerFontSize = Double(ScriptPageLayout.speakerFontSize)
+    @AppStorage("scriptBodyFontSize") private var scriptBodyFontSize = Double(ScriptPageLayout.bodyFontSize)
+    @AppStorage("scriptBodyLineAdvance") private var scriptBodyLineAdvance = Double(ScriptPageLayout.bodyLineAdvance)
+    @AppStorage("scriptContentLabelFontSize") private var scriptContentLabelFontSize = 10.0
+    @AppStorage("scriptSceneFontSize") private var scriptSceneFontSize = 11.5
+    @AppStorage("aiCostLimitEnabled") private var aiCostLimitEnabled = false
+    @AppStorage("aiCostLimitUSD") private var aiCostLimitUSD = 10.0
+    @AppStorage("aiEstimatedCostUSD") private var aiEstimatedCostUSD = 0.0
 
-    @State private var selection: SettingsTab = .gemini
+    @State private var selection: SettingsTab = .ai
 
     var body: some View {
         NavigationSplitView {
             List(selection: $selection) {
-                Label("AI画像生成", systemImage: "sparkles")
-                    .tag(SettingsTab.gemini)
+                Label("AI生成", systemImage: "sparkles")
+                    .tag(SettingsTab.ai)
+                Label("生成プロンプト", systemImage: "text.quote")
+                    .tag(SettingsTab.prompt)
                 Label("画面表示", systemImage: "rectangle.inset.filled")
                     .tag(SettingsTab.display)
             }
@@ -33,58 +47,113 @@ struct SettingsView: View {
             .frame(minWidth: 160)
         } detail: {
             switch selection {
-            case .gemini:
-                geminiSettings
+            case .ai:
+                aiSettings
+            case .prompt:
+                promptSettings
             case .display:
                 displaySettings
             }
         }
-        .frame(minWidth: 620, minHeight: 360)
+        .frame(minHeight: 360)
         .background(SettingsWindowConfigurator())
     }
 
-    private var geminiSettings: some View {
+    private var aiSettings: some View {
         SettingsDetailScrollView {
             SettingsSection("画像生成サービス") {
                 Picker("Provider", selection: $imageGenerationProvider) {
-                    Text("Gemini").tag("gemini")
-                    Text("OpenAI").tag("openai")
+                    ForEach(AIImageGenerationProvider.allCases) { provider in
+                        Text(provider.label).tag(provider.rawValue)
+                    }
                 }
                 .pickerStyle(.segmented)
             }
 
-            SettingsSection("Gemini Image Generation") {
+            SettingsSection("動画生成サービス") {
+                Picker("Provider", selection: $videoGenerationProvider) {
+                    ForEach(AIVideoGenerationProvider.allCases) { provider in
+                        Text(provider.label).tag(provider.rawValue)
+                    }
+                }
+                .pickerStyle(.segmented)
+            }
+
+            SettingsSection("Gemini") {
                 SettingsFieldRow("API Key") {
-                    SecureField("", text: $geminiAPIKey)
-                        .textFieldStyle(.roundedBorder)
+                    APIKeyField(
+                        text: $geminiAPIKey,
+                        linkTitle: "Google AI Studioで取得",
+                        linkURL: URL(string: "https://aistudio.google.com/app/apikey")!
+                    )
                 }
 
-                SettingsFieldRow("Model") {
+                SettingsFieldRow("Image Model") {
                     TextField("", text: $geminiModelName)
                         .textFieldStyle(.roundedBorder)
                 }
 
-                Text("既定値は nano-banana-2 です。Google側の正式モデル名が異なる場合はここで変更できます。")
+                SettingsFieldRow("Video Model") {
+                    TextField("", text: $geminiVideoModelName)
+                        .textFieldStyle(.roundedBorder)
+                }
+
+                Text("画像と動画で別のモデル名を指定できます。Google側の正式モデル名が異なる場合はここで変更できます。")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
 
-            SettingsSection("OpenAI Image Generation") {
+            SettingsSection("OpenAI") {
                 SettingsFieldRow("API Key") {
-                    SecureField("", text: $openAIAPIKey)
-                        .textFieldStyle(.roundedBorder)
+                    APIKeyField(
+                        text: $openAIAPIKey,
+                        linkTitle: "OpenAI Platformで取得",
+                        linkURL: URL(string: "https://platform.openai.com/api-keys")!
+                    )
                 }
 
-                SettingsFieldRow("Model") {
+                SettingsFieldRow("Image Model") {
                     TextField("", text: $openAIModelName)
                         .textFieldStyle(.roundedBorder)
                 }
 
-                Text("既定値は gpt-image-1 です。OpenAIのGPT Image系モデル名をここで変更できます。")
+                SettingsFieldRow("Video Model") {
+                    TextField("", text: $openAIVideoModelName)
+                        .textFieldStyle(.roundedBorder)
+                }
+
+                Text("画像と動画で別のモデル名を指定できます。Soraなど動画モデル名もここで変更できます。")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
 
+            SettingsSection("利用料金リミッター") {
+                Toggle("推定料金の上限を有効にする", isOn: $aiCostLimitEnabled)
+
+                SettingsFieldRow("上限 USD") {
+                    TextField("", value: $aiCostLimitUSD, format: .number.precision(.fractionLength(2)))
+                        .textFieldStyle(.roundedBorder)
+                        .disabled(!aiCostLimitEnabled)
+                }
+
+                HStack {
+                    Text("現在の推定料金")
+                    Spacer()
+                    Text(costText(aiEstimatedCostUSD))
+                        .monospacedDigit()
+                }
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+
+                Text("上限を超えるとドキュメント側のAI枠が赤く警告され、追加の画像/動画生成は止めます。")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private var promptSettings: some View {
+        SettingsDetailScrollView {
             SettingsSection("画像生成システムプロンプト") {
                 TextEditor(text: $geminiSystemPrompt)
                     .font(.system(size: 12))
@@ -103,6 +172,15 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
             }
         }
+    }
+
+    private func costText(_ value: Double) -> String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .currency
+        formatter.currencyCode = "USD"
+        formatter.minimumFractionDigits = 4
+        formatter.maximumFractionDigits = 4
+        return formatter.string(from: NSNumber(value: value)) ?? "$0.0000"
     }
 
     private var displaySettings: some View {
@@ -180,6 +258,57 @@ struct SettingsView: View {
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
+
+            SettingsSection("台本表示") {
+                SettingsSliderRow(
+                    title: "話者名",
+                    value: $scriptSpeakerFontSize,
+                    range: 8...18,
+                    step: 0.5,
+                    suffix: "pt"
+                )
+
+                SettingsSliderRow(
+                    title: "本文",
+                    value: $scriptBodyFontSize,
+                    range: 8...18,
+                    step: 0.5,
+                    suffix: "pt"
+                )
+
+                SettingsSliderRow(
+                    title: "本文の行間",
+                    value: $scriptBodyLineAdvance,
+                    range: 14...28,
+                    step: 0.5,
+                    suffix: "pt"
+                )
+
+                SettingsSliderRow(
+                    title: "内容",
+                    value: $scriptContentLabelFontSize,
+                    range: 7...16,
+                    step: 0.5,
+                    suffix: "pt"
+                )
+
+                SettingsSliderRow(
+                    title: "シーン名",
+                    value: $scriptSceneFontSize,
+                    range: 8...18,
+                    step: 0.5,
+                    suffix: "pt"
+                )
+
+                Button("標準に戻す") {
+                    scriptSpeakerFontSize = Double(ScriptPageLayout.speakerFontSize)
+                    scriptBodyFontSize = Double(ScriptPageLayout.bodyFontSize)
+                    scriptBodyLineAdvance = Double(ScriptPageLayout.bodyLineAdvance)
+                    scriptContentLabelFontSize = 10.0
+                    scriptSceneFontSize = 11.5
+                }
+                .buttonStyle(.bordered)
+            }
         }
     }
 }
@@ -193,11 +322,10 @@ private struct SettingsDetailScrollView<Content: View>: View {
                 content
             }
             .padding(20)
-            .frame(maxWidth: 560, alignment: .leading)
-            .frame(maxWidth: .infinity, alignment: .topLeading)
+            .frame(width: 520, alignment: .leading)
         }
         .background(Color(nsColor: .windowBackgroundColor))
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .frame(maxHeight: .infinity, alignment: .topLeading)
     }
 }
 
@@ -220,7 +348,7 @@ private struct SettingsSection<Content: View>: View {
                 content
             }
             .padding(14)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(width: 492, alignment: .leading)
             .background(Color(nsColor: .textBackgroundColor))
             .clipShape(RoundedRectangle(cornerRadius: 8))
             .overlay {
@@ -228,6 +356,28 @@ private struct SettingsSection<Content: View>: View {
                     .stroke(Color(nsColor: .separatorColor).opacity(0.65), lineWidth: 0.8)
             }
             .shadow(color: .black.opacity(0.06), radius: 6, x: 0, y: 2)
+        }
+    }
+}
+
+private struct SettingsSliderRow: View {
+    var title: String
+    @Binding var value: Double
+    var range: ClosedRange<Double>
+    var step: Double
+    var suffix: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text(title)
+                Spacer()
+                Text("\(value, specifier: "%.1f") \(suffix)")
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+            }
+
+            Slider(value: $value, in: range, step: step)
         }
     }
 }
@@ -250,7 +400,7 @@ private struct SettingsWindowConfigurator: NSViewRepresentable {
     private func configure(window: NSWindow?) {
         guard let window else { return }
         window.styleMask.insert(.resizable)
-        window.minSize = NSSize(width: 620, height: 360)
+        window.minSize = NSSize(width: 520, height: 360)
     }
 }
 
@@ -268,6 +418,27 @@ private struct SettingsFieldRow<Content: View>: View {
             Text(label)
                 .frame(width: 130, alignment: .leading)
             content
+        }
+    }
+}
+
+private struct APIKeyField: View {
+    @Binding var text: String
+    var linkTitle: String
+    var linkURL: URL
+
+    var body: some View {
+        HStack(spacing: 8) {
+            SecureField("", text: $text)
+                .textFieldStyle(.roundedBorder)
+
+            Link(destination: linkURL) {
+                Label(linkTitle, systemImage: "key")
+                    .labelStyle(.titleAndIcon)
+                    .font(.caption)
+            }
+            .buttonStyle(.link)
+            .fixedSize()
         }
     }
 }

@@ -128,7 +128,7 @@ private struct GeminiPart: Codable {
     var inlineData: GeminiInlineData?
 }
 
-private struct GeminiInlineData: Codable {
+struct GeminiInlineData: Codable {
     var mimeType: String
     var data: String
 }

@@ -32,4 +32,25 @@ enum ImageHelpers {
         let bitmap = NSBitmapImageRep(cgImage: cropped)
         return bitmap.representation(using: .png, properties: [:]) ?? data
     }
+
+    static func pngDataByResizing(_ data: Data, width: Int, height: Int) -> Data {
+        guard width > 0,
+              height > 0,
+              let image = NSImage(data: data) else {
+            return data
+        }
+
+        let size = NSSize(width: width, height: height)
+        let resized = NSImage(size: size)
+        resized.lockFocus()
+        image.draw(in: NSRect(origin: .zero, size: size), from: .zero, operation: .copy, fraction: 1.0)
+        resized.unlockFocus()
+
+        guard let tiffData = resized.tiffRepresentation,
+              let bitmap = NSBitmapImageRep(data: tiffData) else {
+            return data
+        }
+
+        return bitmap.representation(using: .png, properties: [:]) ?? data
+    }
 }

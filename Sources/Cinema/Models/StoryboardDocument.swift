@@ -8,10 +8,12 @@ struct StoryboardDocument: FileDocument {
 
     var project: StoryboardProject
     var imageData: [String: Data]
+    var videoData: [String: Data]
 
-    init(project: StoryboardProject = StoryboardProject(), imageData: [String: Data] = [:]) {
+    init(project: StoryboardProject = StoryboardProject(), imageData: [String: Data] = [:], videoData: [String: Data] = [:]) {
         self.project = project
         self.imageData = imageData
+        self.videoData = videoData
     }
 
     init(configuration: ReadConfiguration) throws {
@@ -26,9 +28,14 @@ struct StoryboardDocument: FileDocument {
 
         project = try JSONDecoder().decode(StoryboardProject.self, from: jsonData)
         imageData = [:]
+        videoData = [:]
 
         if let imageWrapper = wrappers["Images"] {
-            imageData = StoryboardDocument.readImageData(from: imageWrapper, prefix: "Images")
+            imageData = StoryboardDocument.readData(from: imageWrapper, prefix: "Images")
+        }
+
+        if let videoWrapper = wrappers["Videos"] {
+            videoData = StoryboardDocument.readData(from: videoWrapper, prefix: "Videos")
         }
     }
 
@@ -46,6 +53,10 @@ struct StoryboardDocument: FileDocument {
         imageDirectory.preferredFilename = "Images"
         root.addFileWrapper(imageDirectory)
 
+        let videoDirectory = StoryboardDocument.makeDirectory(from: videoData, rootFolderName: "Videos")
+        videoDirectory.preferredFilename = "Videos"
+        root.addFileWrapper(videoDirectory)
+
         return root
     }
 
@@ -55,25 +66,29 @@ struct StoryboardDocument: FileDocument {
         }
     }
 
-    private static func readImageData(from wrapper: FileWrapper, prefix: String) -> [String: Data] {
+    private static func readData(from wrapper: FileWrapper, prefix: String) -> [String: Data] {
         var dataByPath: [String: Data] = [:]
         for (name, child) in wrapper.fileWrappers ?? [:] {
             let path = "\(prefix)/\(name)"
             if let data = child.regularFileContents {
                 dataByPath[path] = data
             } else if child.isDirectory {
-                dataByPath.merge(readImageData(from: child, prefix: path)) { current, _ in current }
+                dataByPath.merge(readData(from: child, prefix: path)) { current, _ in current }
             }
         }
         return dataByPath
     }
 
     private static func makeImageDirectory(from imageData: [String: Data]) -> FileWrapper {
+        makeDirectory(from: imageData, rootFolderName: "Images")
+    }
+
+    private static func makeDirectory(from fileData: [String: Data], rootFolderName: String) -> FileWrapper {
         var rootWrappers: [String: FileWrapper] = [:]
 
-        for (fileName, data) in imageData {
+        for (fileName, data) in fileData {
             var components = fileName.split(separator: "/").map(String.init)
-            if components.first == "Images" {
+            if components.first == rootFolderName {
                 components.removeFirst()
             }
             guard let leafName = components.popLast() else { continue }
