@@ -1,3 +1,7 @@
+// file:///Users/Shared/Program/Xcode/Cinema/Sources/Cinema/Services/GeminiImageService.swift
+// GeminiImageService.swift
+// Gemini APIを利用してテキストプロンプトおよび参照画像からコンテ画像を生成するサービス
+
 import Foundation
 
 struct GeminiImageService {
@@ -25,8 +29,7 @@ struct GeminiImageService {
     var model: String
 
     func generateStoryboardImage(
-        systemPrompt: String,
-        documentPrompt: String,
+        drawingPrompt: String,
         cutPrompt: String,
         aspectRatio: CGFloat,
         referenceImages: [GeminiReferenceImage]
@@ -44,8 +47,7 @@ struct GeminiImageService {
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         let parts = [GeminiPart(text: composedPrompt(
-            systemPrompt: systemPrompt,
-            documentPrompt: documentPrompt,
+            drawingPrompt: drawingPrompt,
             cutPrompt: cutPrompt,
             aspectRatio: aspectRatio,
             hasReferenceImages: !referenceImages.isEmpty
@@ -78,19 +80,21 @@ struct GeminiImageService {
         throw ServiceError.imageNotFound
     }
 
-    private func composedPrompt(systemPrompt: String, documentPrompt: String, cutPrompt: String, aspectRatio: CGFloat, hasReferenceImages: Bool) -> String {
-        let fallbackSystemPrompt = """
-        Create a clean monochrome storyboard panel in a hand-drawn pencil style.
-        Compose the image as a cinematic scene environment based on the written situation and dialogue.
+    private func composedPrompt(drawingPrompt: String, cutPrompt: String, aspectRatio: CGFloat, hasReferenceImages: Bool) -> String {
+        let basePrompt = """
+        Create a realistic cinematic film still or a clear, natural storyboard image.
+        Compose the image as a photorealistic, authentic scene environment based on the written situation and dialogue.
+        Use the drawing settings to choose the visual style, color, lighting, camera, and texture.
+        Avoid any CGI, 3D render, digital painting look, or artificial AI look. Render with natural lighting, organic textures, and realistic skin details.
         Show clear character placement, location, mood, and action. Do not render any text, captions, speech bubbles, or UI elements inside the image.
         """
 
         return [
-            "Global image direction:",
-            systemPrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? fallbackSystemPrompt : systemPrompt,
+            "Base image direction:",
+            basePrompt,
             "",
-            "Document-specific direction:",
-            documentPrompt.trimmingCharacters(in: .whitespacesAndNewlines),
+            "Drawing settings:",
+            drawingPrompt.trimmingCharacters(in: .whitespacesAndNewlines),
             "",
             hasReferenceImages ? "Use the attached reference photos for character, object, costume, location, and visual design consistency. Do not copy text from references." : "",
             "",
@@ -103,7 +107,34 @@ struct GeminiImageService {
         .filter { !$0.isEmpty }
         .joined(separator: "\n")
     }
+
+    static func fetchAvailableModels(apiKey: String) async throws -> [String] {
+        guard !apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return []
+        }
+
+        guard let url = URL(string: "https://generativelanguage.googleapis.com/v1beta/models?key=\(apiKey)") else {
+            throw ServiceError.invalidURL
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        if let httpResponse = response as? HTTPURLResponse, !(200..<300).contains(httpResponse.statusCode) {
+            let message = String(data: data, encoding: .utf8) ?? "Gemini API models request failed."
+            throw ServiceError.requestFailed(message)
+        }
+
+        let decoded = try JSONDecoder().decode(GeminiModelListResponse.self, from: data)
+        let modelNames = (decoded.models ?? []).map { model in
+            model.name.replacingOccurrences(of: "models/", with: "")
+        }
+        return modelNames
+    }
 }
+
 
 struct GeminiReferenceImage {
     var mimeType: String
@@ -140,3 +171,11 @@ private struct GeminiGenerateResponse: Decodable {
 private struct GeminiCandidate: Decodable {
     var content: GeminiContent
 }
+
+private struct GeminiModelListResponse: Decodable {
+    struct Model: Decodable {
+        let name: String
+    }
+    let models: [Model]?
+}
+

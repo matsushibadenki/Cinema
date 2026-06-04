@@ -1,17 +1,19 @@
+// file:///Users/Shared/Program/Xcode/Cinema/Sources/Cinema/Views/SettingsView.swift
+// SettingsView.swift
+// アプリケーションの設定項目（AI生成の設定、画面表示の設定など）を表示・管理するビュー
+
 import AppKit
 import SwiftUI
 
 struct SettingsView: View {
     private enum SettingsTab: Hashable {
         case ai
-        case prompt
         case display
     }
 
     @AppStorage("geminiAPIKey") private var geminiAPIKey = ""
-    @AppStorage("geminiModelName") private var geminiModelName = "nano-banana-2"
+    @AppStorage("geminiModelName") private var geminiModelName = "gemini-2.5-flash-image"
     @AppStorage("geminiVideoModelName") private var geminiVideoModelName = "veo-3.1-generate-preview"
-    @AppStorage("geminiSystemPrompt") private var geminiSystemPrompt = ""
     @AppStorage("imageGenerationProvider") private var imageGenerationProvider = "gemini"
     @AppStorage("videoGenerationProvider") private var videoGenerationProvider = "gemini"
     @AppStorage("openAIAPIKey") private var openAIAPIKey = ""
@@ -33,30 +35,142 @@ struct SettingsView: View {
 
     @State private var selection: SettingsTab = .ai
 
+    private let geminiImagePresets = ["gemini-2.5-flash-image", "imagen-3.0-generate-002"]
+    private let geminiVideoPresets = ["veo-3.1-generate-preview"]
+    private let openAIImagePresets = ["dall-e-3", "dall-e-2", "gpt-image-2"]
+    private let openAIVideoPresets = ["sora-2", "sora-1"]
+
+    @State private var geminiImageSelection: String = "custom"
+    @State private var geminiVideoSelection: String = "custom"
+    @State private var openAIImageSelection: String = "custom"
+    @State private var openAIVideoSelection: String = "custom"
+
+    @State private var geminiFetchedModels: [String] = []
+    @State private var openAIFetchedModels: [String] = []
+    @State private var isFetchingGemini = false
+    @State private var isFetchingOpenAI = false
+    @State private var geminiFetchError: String? = nil
+    @State private var openAIFetchError: String? = nil
+
+    private func initializeSelections() {
+        if geminiImagePresets.contains(geminiModelName) {
+            geminiImageSelection = geminiModelName
+        } else if geminiFetchedModels.contains(geminiModelName) {
+            geminiImageSelection = geminiModelName
+        } else {
+            geminiImageSelection = "custom"
+        }
+
+        if geminiVideoPresets.contains(geminiVideoModelName) {
+            geminiVideoSelection = geminiVideoModelName
+        } else if geminiFetchedModels.contains(geminiVideoModelName) {
+            geminiVideoSelection = geminiVideoModelName
+        } else {
+            geminiVideoSelection = "custom"
+        }
+
+        if openAIImagePresets.contains(openAIModelName) {
+            openAIImageSelection = openAIModelName
+        } else if openAIFetchedModels.contains(openAIModelName) {
+            openAIImageSelection = openAIModelName
+        } else {
+            openAIImageSelection = "custom"
+        }
+
+        if openAIVideoPresets.contains(openAIVideoModelName) {
+            openAIVideoSelection = openAIVideoModelName
+        } else if openAIFetchedModels.contains(openAIVideoModelName) {
+            openAIVideoSelection = openAIVideoModelName
+        } else {
+            openAIVideoSelection = "custom"
+        }
+    }
+
     var body: some View {
         NavigationSplitView {
             List(selection: $selection) {
                 Label("AI生成", systemImage: "sparkles")
                     .tag(SettingsTab.ai)
-                Label("生成プロンプト", systemImage: "text.quote")
-                    .tag(SettingsTab.prompt)
                 Label("画面表示", systemImage: "rectangle.inset.filled")
                     .tag(SettingsTab.display)
             }
             .listStyle(.sidebar)
-            .frame(minWidth: 160)
+            .navigationSplitViewColumnWidth(200)
         } detail: {
             switch selection {
             case .ai:
                 aiSettings
-            case .prompt:
-                promptSettings
             case .display:
                 displaySettings
             }
         }
-        .frame(minHeight: 360)
+        .frame(minWidth: 700, maxWidth: 700, minHeight: 360, maxHeight: .infinity)
         .background(SettingsWindowConfigurator())
+        .onAppear {
+            initializeSelections()
+            Task {
+                await fetchGeminiModels()
+                await fetchOpenAIModels()
+            }
+        }
+        .onChange(of: geminiImageSelection) { _, newValue in
+            if newValue != "custom" {
+                geminiModelName = newValue
+            }
+        }
+        .onChange(of: geminiVideoSelection) { _, newValue in
+            if newValue != "custom" {
+                geminiVideoModelName = newValue
+            }
+        }
+        .onChange(of: openAIImageSelection) { _, newValue in
+            if newValue != "custom" {
+                openAIModelName = newValue
+            }
+        }
+        .onChange(of: openAIVideoSelection) { _, newValue in
+            if newValue != "custom" {
+                openAIVideoModelName = newValue
+            }
+        }
+        .onChange(of: geminiModelName) { _, newValue in
+            if geminiImagePresets.contains(newValue) || geminiFetchedModels.contains(newValue) {
+                geminiImageSelection = newValue
+            } else {
+                geminiImageSelection = "custom"
+            }
+        }
+        .onChange(of: geminiVideoModelName) { _, newValue in
+            if geminiVideoPresets.contains(newValue) || geminiFetchedModels.contains(newValue) {
+                geminiVideoSelection = newValue
+            } else {
+                geminiVideoSelection = "custom"
+            }
+        }
+        .onChange(of: openAIModelName) { _, newValue in
+            if openAIImagePresets.contains(newValue) || openAIFetchedModels.contains(newValue) {
+                openAIImageSelection = newValue
+            } else {
+                openAIImageSelection = "custom"
+            }
+        }
+        .onChange(of: openAIVideoModelName) { _, newValue in
+            if openAIVideoPresets.contains(newValue) || openAIFetchedModels.contains(newValue) {
+                openAIVideoSelection = newValue
+            } else {
+                openAIVideoSelection = "custom"
+            }
+        }
+        .onChange(of: geminiAPIKey) { _, _ in
+            Task {
+                await fetchGeminiModels()
+            }
+        }
+        .onChange(of: openAIAPIKey) { _, _ in
+            Task {
+                await fetchOpenAIModels()
+            }
+        }
     }
 
     private var aiSettings: some View {
@@ -81,21 +195,107 @@ struct SettingsView: View {
 
             SettingsSection("Gemini") {
                 SettingsFieldRow("API Key") {
-                    APIKeyField(
-                        text: $geminiAPIKey,
-                        linkTitle: "Google AI Studioで取得",
-                        linkURL: URL(string: "https://aistudio.google.com/app/apikey")!
-                    )
+                    VStack(alignment: .leading, spacing: 6) {
+                        APIKeyField(
+                            text: $geminiAPIKey,
+                            linkTitle: "Google AI Studioで取得",
+                            linkURL: URL(string: "https://aistudio.google.com/app/apikey")!
+                        )
+                        
+                        HStack(spacing: 8) {
+                            if isFetchingGemini {
+                                ProgressView()
+                                    .controlSize(.small)
+                                Text("モデル一覧を取得中...")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            } else {
+                                Button(action: {
+                                    Task {
+                                        await fetchGeminiModels()
+                                    }
+                                }) {
+                                    Label("モデル一覧を更新", systemImage: "arrow.clockwise")
+                                        .font(.caption)
+                                }
+                                .buttonStyle(.borderless)
+                                .disabled(geminiAPIKey.isEmpty)
+
+                                if let error = geminiFetchError {
+                                    Text("取得エラー: \(error)")
+                                        .font(.caption)
+                                        .foregroundStyle(.red)
+                                        .lineLimit(1)
+                                } else if !geminiFetchedModels.isEmpty {
+                                    Text("取得完了 (\(geminiFetchedModels.count)個のモデル)")
+                                        .font(.caption)
+                                        .foregroundStyle(.green)
+                                }
+                            }
+                        }
+                    }
                 }
 
                 SettingsFieldRow("Image Model") {
-                    TextField("", text: $geminiModelName)
-                        .textFieldStyle(.roundedBorder)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Picker("", selection: $geminiImageSelection) {
+                            Section(header: Text("推奨モデル")) {
+                                ForEach(geminiImagePresets, id: \.self) { preset in
+                                    Text(preset).tag(preset)
+                                }
+                            }
+                            
+                            let fetchedList = geminiFetchedModels.filter { ($0.contains("imagen") || $0.contains("gemini") || $0.contains("flash")) && !geminiImagePresets.contains($0) }
+                            if !fetchedList.isEmpty {
+                                Section(header: Text("取得されたモデル")) {
+                                    ForEach(fetchedList, id: \.self) { model in
+                                        Text(model).tag(model)
+                                    }
+                                }
+                            }
+                            
+                            Section {
+                                Text("その他 (直接入力)").tag("custom")
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        
+                        if geminiImageSelection == "custom" {
+                            TextField("モデル名を直接入力", text: $geminiModelName)
+                                .textFieldStyle(.roundedBorder)
+                        }
+                    }
                 }
 
                 SettingsFieldRow("Video Model") {
-                    TextField("", text: $geminiVideoModelName)
-                        .textFieldStyle(.roundedBorder)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Picker("", selection: $geminiVideoSelection) {
+                            Section(header: Text("推奨モデル")) {
+                                ForEach(geminiVideoPresets, id: \.self) { preset in
+                                    Text(preset).tag(preset)
+                                }
+                            }
+                            
+                            let fetchedList = geminiFetchedModels.filter { ($0.contains("veo") || $0.contains("generate")) && !geminiVideoPresets.contains($0) }
+                            if !fetchedList.isEmpty {
+                                Section(header: Text("取得されたモデル")) {
+                                    ForEach(fetchedList, id: \.self) { model in
+                                        Text(model).tag(model)
+                                    }
+                                }
+                            }
+                            
+                            Section {
+                                Text("その他 (直接入力)").tag("custom")
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        
+                        if geminiVideoSelection == "custom" {
+                            TextField("モデル名を直接入力", text: $geminiVideoModelName)
+                                .textFieldStyle(.roundedBorder)
+                        }
+                    }
                 }
 
                 Text("画像と動画で別のモデル名を指定できます。Google側の正式モデル名が異なる場合はここで変更できます。")
@@ -105,21 +305,107 @@ struct SettingsView: View {
 
             SettingsSection("OpenAI") {
                 SettingsFieldRow("API Key") {
-                    APIKeyField(
-                        text: $openAIAPIKey,
-                        linkTitle: "OpenAI Platformで取得",
-                        linkURL: URL(string: "https://platform.openai.com/api-keys")!
-                    )
+                    VStack(alignment: .leading, spacing: 6) {
+                        APIKeyField(
+                            text: $openAIAPIKey,
+                            linkTitle: "OpenAI Platformで取得",
+                            linkURL: URL(string: "https://platform.openai.com/api-keys")!
+                        )
+                        
+                        HStack(spacing: 8) {
+                            if isFetchingOpenAI {
+                                ProgressView()
+                                    .controlSize(.small)
+                                Text("モデル一覧を取得中...")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            } else {
+                                Button(action: {
+                                    Task {
+                                        await fetchOpenAIModels()
+                                    }
+                                }) {
+                                    Label("モデル一覧を更新", systemImage: "arrow.clockwise")
+                                        .font(.caption)
+                                }
+                                .buttonStyle(.borderless)
+                                .disabled(openAIAPIKey.isEmpty)
+
+                                if let error = openAIFetchError {
+                                    Text("取得エラー: \(error)")
+                                        .font(.caption)
+                                        .foregroundStyle(.red)
+                                        .lineLimit(1)
+                                } else if !openAIFetchedModels.isEmpty {
+                                    Text("取得完了 (\(openAIFetchedModels.count)個のモデル)")
+                                        .font(.caption)
+                                        .foregroundStyle(.green)
+                                }
+                            }
+                        }
+                    }
                 }
 
                 SettingsFieldRow("Image Model") {
-                    TextField("", text: $openAIModelName)
-                        .textFieldStyle(.roundedBorder)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Picker("", selection: $openAIImageSelection) {
+                            Section(header: Text("推奨モデル")) {
+                                ForEach(openAIImagePresets, id: \.self) { preset in
+                                    Text(preset).tag(preset)
+                                }
+                            }
+                            
+                            let fetchedList = openAIFetchedModels.filter { ($0.contains("dall") || $0.contains("gpt")) && !openAIImagePresets.contains($0) }
+                            if !fetchedList.isEmpty {
+                                Section(header: Text("取得されたモデル")) {
+                                    ForEach(fetchedList, id: \.self) { model in
+                                        Text(model).tag(model)
+                                    }
+                                }
+                            }
+                            
+                            Section {
+                                Text("その他 (直接入力)").tag("custom")
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        
+                        if openAIImageSelection == "custom" {
+                            TextField("モデル名を直接入力", text: $openAIModelName)
+                                .textFieldStyle(.roundedBorder)
+                        }
+                    }
                 }
 
                 SettingsFieldRow("Video Model") {
-                    TextField("", text: $openAIVideoModelName)
-                        .textFieldStyle(.roundedBorder)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Picker("", selection: $openAIVideoSelection) {
+                            Section(header: Text("推奨モデル")) {
+                                ForEach(openAIVideoPresets, id: \.self) { preset in
+                                    Text(preset).tag(preset)
+                                }
+                            }
+                            
+                            let fetchedList = openAIFetchedModels.filter { $0.contains("sora") && !openAIVideoPresets.contains($0) }
+                            if !fetchedList.isEmpty {
+                                Section(header: Text("取得されたモデル")) {
+                                    ForEach(fetchedList, id: \.self) { model in
+                                        Text(model).tag(model)
+                                    }
+                                }
+                            }
+                            
+                            Section {
+                                Text("その他 (直接入力)").tag("custom")
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        
+                        if openAIVideoSelection == "custom" {
+                            TextField("モデル名を直接入力", text: $openAIVideoModelName)
+                                .textFieldStyle(.roundedBorder)
+                        }
+                    }
                 }
 
                 Text("画像と動画で別のモデル名を指定できます。Soraなど動画モデル名もここで変更できます。")
@@ -152,28 +438,6 @@ struct SettingsView: View {
         }
     }
 
-    private var promptSettings: some View {
-        SettingsDetailScrollView {
-            SettingsSection("画像生成システムプロンプト") {
-                TextEditor(text: $geminiSystemPrompt)
-                    .font(.system(size: 12))
-                    .frame(minHeight: 120)
-                    .scrollContentBackground(.hidden)
-                    .padding(8)
-                    .background(Color(nsColor: .textBackgroundColor))
-                    .clipShape(RoundedRectangle(cornerRadius: 6))
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 6)
-                            .stroke(.separator, lineWidth: 0.5)
-                    }
-
-                Text("アプリ全体の画像生成方針を記入します。空の場合は標準の絵コンテ向け方針を使います。")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            }
-        }
-    }
-
     private func costText(_ value: Double) -> String {
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
@@ -181,6 +445,66 @@ struct SettingsView: View {
         formatter.minimumFractionDigits = 4
         formatter.maximumFractionDigits = 4
         return formatter.string(from: NSNumber(value: value)) ?? "$0.0000"
+    }
+
+    private func fetchGeminiModels() async {
+        guard !geminiAPIKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            geminiFetchedModels = []
+            geminiFetchError = nil
+            return
+        }
+
+        isFetchingGemini = true
+        geminiFetchError = nil
+
+        do {
+            let models = try await GeminiImageService.fetchAvailableModels(apiKey: geminiAPIKey)
+            await MainActor.run {
+                self.geminiFetchedModels = models
+                self.isFetchingGemini = false
+                if geminiModelName != "custom" && !geminiImagePresets.contains(geminiModelName) && models.contains(geminiModelName) {
+                    geminiImageSelection = geminiModelName
+                }
+                if geminiVideoModelName != "custom" && !geminiVideoPresets.contains(geminiVideoModelName) && models.contains(geminiVideoModelName) {
+                    geminiVideoSelection = geminiVideoModelName
+                }
+            }
+        } catch {
+            await MainActor.run {
+                self.geminiFetchError = error.localizedDescription
+                self.isFetchingGemini = false
+            }
+        }
+    }
+
+    private func fetchOpenAIModels() async {
+        guard !openAIAPIKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            openAIFetchedModels = []
+            openAIFetchError = nil
+            return
+        }
+
+        isFetchingOpenAI = true
+        openAIFetchError = nil
+
+        do {
+            let models = try await OpenAIImageService.fetchAvailableModels(apiKey: openAIAPIKey)
+            await MainActor.run {
+                self.openAIFetchedModels = models
+                self.isFetchingOpenAI = false
+                if openAIModelName != "custom" && !openAIImagePresets.contains(openAIModelName) && models.contains(openAIModelName) {
+                    openAIImageSelection = openAIModelName
+                }
+                if openAIVideoModelName != "custom" && !openAIVideoPresets.contains(openAIVideoModelName) && models.contains(openAIVideoModelName) {
+                    openAIVideoSelection = openAIVideoModelName
+                }
+            }
+        } catch {
+            await MainActor.run {
+                self.openAIFetchError = error.localizedDescription
+                self.isFetchingOpenAI = false
+            }
+        }
     }
 
     private var displaySettings: some View {
@@ -229,7 +553,7 @@ struct SettingsView: View {
                 }
             }
 
-            SettingsSection("内容 / ト書き") {
+            SettingsSection("内容 / セリフ") {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack {
                         Text("幅")
@@ -254,7 +578,7 @@ struct SettingsView: View {
                 }
                 .pickerStyle(.menu)
 
-                Text("内容 / ト書きの幅を広げると、その分だけ画面欄が狭くなります。文字量が多い場合は選択サイズから自動で縮小します。")
+                Text("内容 / セリフの幅を広げると、その分だけ画面欄が狭くなります。文字量が多い場合は選択サイズから自動で縮小します。")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
@@ -322,7 +646,7 @@ private struct SettingsDetailScrollView<Content: View>: View {
                 content
             }
             .padding(20)
-            .frame(width: 520, alignment: .leading)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .background(Color(nsColor: .windowBackgroundColor))
         .frame(maxHeight: .infinity, alignment: .topLeading)
@@ -348,7 +672,7 @@ private struct SettingsSection<Content: View>: View {
                 content
             }
             .padding(14)
-            .frame(width: 492, alignment: .leading)
+            .frame(maxWidth: .infinity, alignment: .leading)
             .background(Color(nsColor: .textBackgroundColor))
             .clipShape(RoundedRectangle(cornerRadius: 8))
             .overlay {
@@ -357,6 +681,7 @@ private struct SettingsSection<Content: View>: View {
             }
             .shadow(color: .black.opacity(0.06), radius: 6, x: 0, y: 2)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
@@ -383,24 +708,44 @@ private struct SettingsSliderRow: View {
 }
 
 private struct SettingsWindowConfigurator: NSViewRepresentable {
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
+
     func makeNSView(context: Context) -> NSView {
         let view = NSView()
         DispatchQueue.main.async {
-            configure(window: view.window)
+            configure(window: view.window, coordinator: context.coordinator)
         }
         return view
     }
 
     func updateNSView(_ nsView: NSView, context: Context) {
         DispatchQueue.main.async {
-            configure(window: nsView.window)
+            configure(window: nsView.window, coordinator: context.coordinator)
         }
     }
 
-    private func configure(window: NSWindow?) {
+    private func configure(window: NSWindow?, coordinator: Coordinator) {
         guard let window else { return }
         window.styleMask.insert(.resizable)
-        window.minSize = NSSize(width: 520, height: 360)
+        let fixedWidth: CGFloat = 700
+        let minSize = NSSize(width: fixedWidth, height: 360)
+        let maxSize = NSSize(width: fixedWidth, height: CGFloat.greatestFiniteMagnitude)
+        coordinator.fixedWidth = fixedWidth
+        window.delegate = coordinator
+        window.contentMinSize = minSize
+        window.contentMaxSize = maxSize
+        window.minSize = minSize
+        window.maxSize = maxSize
+    }
+
+    final class Coordinator: NSObject, NSWindowDelegate {
+        var fixedWidth: CGFloat = 700
+
+        func windowWillResize(_ sender: NSWindow, to frameSize: NSSize) -> NSSize {
+            NSSize(width: fixedWidth, height: max(frameSize.height, 360))
+        }
     }
 }
 

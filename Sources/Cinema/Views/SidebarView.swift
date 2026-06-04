@@ -1,10 +1,14 @@
+// file:///Users/Shared/Program/Xcode/Cinema/Sources/Cinema/Views/SidebarView.swift
+// SidebarView.swift
+// 絵コンテアプリのサイドバービュー。ブロック（シーン）リスト、カット一覧、AI描画・動画化設定パネルなどのナビゲーションUIを表示・管理します。
+
 import AppKit
 import SwiftUI
 import UniformTypeIdentifiers
 
 struct SidebarView: View {
     @Binding var title: String
-    @Binding var documentPrompt: String
+    @Binding var drawingSettings: DrawingSettings
     var cuts: [StoryboardCut]
     @Binding var pageIndex: Int
     var pageCount: Int
@@ -16,7 +20,7 @@ struct SidebarView: View {
     var deletePage: (Int) -> Void
     var jumpToCut: (StoryboardCut.ID) -> Void
     var moveCuts: (IndexSet, Int, [StoryboardCut.ID]) -> Void
-    var moveCutBefore: (StoryboardCut.ID, StoryboardCut.ID) -> Void
+    var moveCutRelativeToTarget: (StoryboardCut.ID, StoryboardCut.ID, CutDropPosition) -> Void
     var updateCutName: (StoryboardCut.ID, String) -> Void
     var sceneVideos: [SceneVideo]
     @Binding var selectedVideoSceneTitle: String?
@@ -24,6 +28,7 @@ struct SidebarView: View {
     var generatingSceneTitle: String?
     var generateSceneVideo: (String) -> Void
     var saveSceneVideo: (SceneVideo) -> Void
+    var exportScenePrompts: (String) -> Void
     var aiEstimatedTokensUsed: Int
     var aiEstimatedCostUSD: Double
     var aiCostLimitEnabled: Bool
@@ -31,7 +36,7 @@ struct SidebarView: View {
     var isAICostLimitExceeded: Bool
 
     @State private var draggedCutID: StoryboardCut.ID?
-    @State private var hoveredDropTargetID: StoryboardCut.ID?
+    @State private var hoveredDropTarget: HoveredCutDropTarget?
 
     private let cutsPerPage = 5
 
@@ -78,7 +83,7 @@ struct SidebarView: View {
                                 isVideoSceneSelected: selectedVideoSceneTitle == section.title,
                                 isCutSelectedForVideo: cutSelectionBinding(for: cut.id),
                                 isDragged: draggedCutID == cut.id,
-                                isDropTarget: hoveredDropTargetID == cut.id,
+                                dropTargetPosition: hoveredDropTarget?.targetID == cut.id ? hoveredDropTarget?.position : nil,
                                 startDrag: {
                                     draggedCutID = cut.id
                                     return NSItemProvider(object: cut.id.uuidString as NSString)
@@ -89,8 +94,8 @@ struct SidebarView: View {
                                 delegate: CutDropDelegate(
                                     targetID: cut.id,
                                     draggedCutID: $draggedCutID,
-                                    hoveredDropTargetID: $hoveredDropTargetID,
-                                    moveCutBefore: moveCutBefore
+                                    hoveredDropTarget: $hoveredDropTarget,
+                                    moveCutRelativeToTarget: moveCutRelativeToTarget
                                 )
                             )
                             .contextMenu {
@@ -152,21 +157,18 @@ struct SidebarView: View {
                     .foregroundStyle(.red)
             }
 
-            DisclosureGroup {
-                TextEditor(text: $documentPrompt)
-                    .font(.system(size: 12))
-                    .scrollContentBackground(.hidden)
-                    .frame(minHeight: 76)
-                    .padding(6)
-                    .background(Color(nsColor: .textBackgroundColor))
-                    .clipShape(RoundedRectangle(cornerRadius: 6))
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 6)
-                            .stroke(.separator, lineWidth: 0.5)
-                    }
-            } label: {
-                Label("ドキュメントプロンプト", systemImage: "doc.text")
+            VStack(alignment: .leading, spacing: 6) {
+                Label("描画プリセット", systemImage: "paintpalette")
                     .font(.subheadline.weight(.semibold))
+
+                Picker("描画プリセット", selection: $drawingSettings.selectedPresetID) {
+                    ForEach(drawingSettings.presets) { preset in
+                        Text(preset.name).tag(preset.id)
+                    }
+                }
+                .labelsHidden()
+                .pickerStyle(.menu)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
 
             DisclosureGroup {
@@ -232,26 +234,36 @@ struct SidebarView: View {
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
 
-                HStack {
+                VStack(spacing: 8) {
                     Button {
-                        generateSceneVideo(selectedSection.title)
+                        exportScenePrompts(selectedSection.title)
                     } label: {
-                        Label(
-                            generatingSceneTitle == selectedSection.title ? "生成中..." : "選択シーンを動画作成",
-                            systemImage: "video.badge.sparkles"
-                        )
+                        Text("プロンプト書き出し")
+                            .foregroundStyle(.white)
+                            .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.borderedProminent)
-                    .disabled(generatingSceneTitle != nil)
+                    .tint(.gray)
 
-                    if let video = sceneVideos.first(where: { $0.title == selectedSection.title }) {
+                    HStack {
                         Button {
-                            saveSceneVideo(video)
+                            generateSceneVideo(selectedSection.title)
                         } label: {
-                            Image(systemName: "square.and.arrow.down")
+                            Text(generatingSceneTitle == selectedSection.title ? "生成中..." : "選択シーンの動画作成")
+                                .frame(maxWidth: .infinity)
                         }
-                        .buttonStyle(.bordered)
-                        .help("生成動画を保存")
+                        .buttonStyle(.borderedProminent)
+                        .disabled(generatingSceneTitle != nil)
+
+                        if let video = sceneVideos.first(where: { $0.title == selectedSection.title }) {
+                            Button {
+                                saveSceneVideo(video)
+                            } label: {
+                                Image(systemName: "square.and.arrow.down")
+                            }
+                            .buttonStyle(.bordered)
+                            .help("生成動画を保存")
+                        }
                     }
                 }
             } else {
@@ -367,16 +379,12 @@ private struct CutSidebarRow: View {
     var isVideoSceneSelected: Bool
     @Binding var isCutSelectedForVideo: Bool
     var isDragged: Bool
-    var isDropTarget: Bool
+    var dropTargetPosition: CutDropPosition?
     var startDrag: () -> NSItemProvider
 
     var body: some View {
         HStack(alignment: .top, spacing: 7) {
-            Image(systemName: "line.3.horizontal")
-                .font(.caption)
-                .foregroundStyle(isDragged ? Color.accentColor : Color.secondary.opacity(0.45))
-                .help("ドラッグしてカットを並べ替え")
-                .onDrag(startDrag)
+            dragHandle
 
             if isVideoSceneSelected {
                 Toggle("", isOn: $isCutSelectedForVideo)
@@ -408,14 +416,23 @@ private struct CutSidebarRow: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(rowBackground)
         .overlay(alignment: .top) {
-            if isDropTarget {
+            if dropTargetPosition == .before {
                 Rectangle()
                     .fill(Color.accentColor)
-                    .frame(height: 2)
+                    .frame(height: 3)
+                    .padding(.leading, 2)
+            }
+        }
+        .overlay(alignment: .bottom) {
+            if dropTargetPosition == .after {
+                Rectangle()
+                    .fill(Color.accentColor)
+                    .frame(height: 3)
+                    .padding(.leading, 2)
             }
         }
         .overlay {
-            if isDropTarget {
+            if dropTargetPosition != nil {
                 RoundedRectangle(cornerRadius: 5)
                     .stroke(Color.accentColor.opacity(0.7), lineWidth: 1)
             }
@@ -423,11 +440,26 @@ private struct CutSidebarRow: View {
         .opacity(isDragged ? 0.65 : 1)
     }
 
+    private var dragHandle: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 4)
+                .fill(isDragged ? Color.accentColor.opacity(0.18) : Color.secondary.opacity(0.08))
+
+            Image(systemName: "line.3.horizontal")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(isDragged ? Color.accentColor : Color.secondary.opacity(0.75))
+        }
+        .frame(width: 18, height: 28)
+        .contentShape(RoundedRectangle(cornerRadius: 4))
+        .help("ドラッグしてカットを並べ替え")
+        .onDrag(startDrag)
+    }
+
     @ViewBuilder
     private var rowBackground: some View {
-        if isDropTarget {
+        if dropTargetPosition != nil {
             RoundedRectangle(cornerRadius: 5)
-                .fill(Color.accentColor.opacity(0.22))
+                .fill(Color.accentColor.opacity(0.16))
         } else if isDragged {
             RoundedRectangle(cornerRadius: 5)
                 .fill(Color.secondary.opacity(0.14))
@@ -436,6 +468,16 @@ private struct CutSidebarRow: View {
                 .fill(Color.accentColor.opacity(0.12))
         }
     }
+}
+
+enum CutDropPosition: Equatable {
+    case before
+    case after
+}
+
+private struct HoveredCutDropTarget: Equatable {
+    var targetID: StoryboardCut.ID
+    var position: CutDropPosition
 }
 
 private struct EditableCutNameField: NSViewRepresentable {
@@ -500,8 +542,8 @@ private final class EditableCutNameNSTextField: NSTextField {
 private struct CutDropDelegate: DropDelegate {
     var targetID: StoryboardCut.ID
     @Binding var draggedCutID: StoryboardCut.ID?
-    @Binding var hoveredDropTargetID: StoryboardCut.ID?
-    var moveCutBefore: (StoryboardCut.ID, StoryboardCut.ID) -> Void
+    @Binding var hoveredDropTarget: HoveredCutDropTarget?
+    var moveCutRelativeToTarget: (StoryboardCut.ID, StoryboardCut.ID, CutDropPosition) -> Void
 
     func validateDrop(info: DropInfo) -> Bool {
         info.hasItemsConforming(to: [UTType.text])
@@ -509,24 +551,37 @@ private struct CutDropDelegate: DropDelegate {
 
     func dropEntered(info: DropInfo) {
         guard let draggedCutID, draggedCutID != targetID else { return }
-        hoveredDropTargetID = targetID
-        moveCutBefore(draggedCutID, targetID)
+        updateHoverAndMoveIfNeeded(draggedCutID: draggedCutID, info: info)
     }
 
     func dropExited(info: DropInfo) {
-        if hoveredDropTargetID == targetID {
-            hoveredDropTargetID = nil
+        if hoveredDropTarget?.targetID == targetID {
+            hoveredDropTarget = nil
         }
     }
 
     func performDrop(info: DropInfo) -> Bool {
         draggedCutID = nil
-        hoveredDropTargetID = nil
+        hoveredDropTarget = nil
         return true
     }
 
     func dropUpdated(info: DropInfo) -> DropProposal? {
-        DropProposal(operation: .move)
+        if let draggedCutID, draggedCutID != targetID {
+            updateHoverAndMoveIfNeeded(draggedCutID: draggedCutID, info: info)
+        }
+        return DropProposal(operation: .move)
+    }
+
+    private func dropPosition(for info: DropInfo) -> CutDropPosition {
+        info.location.y < 26 ? .before : .after
+    }
+
+    private func updateHoverAndMoveIfNeeded(draggedCutID: StoryboardCut.ID, info: DropInfo) {
+        let nextTarget = HoveredCutDropTarget(targetID: targetID, position: dropPosition(for: info))
+        guard hoveredDropTarget != nextTarget else { return }
+        hoveredDropTarget = nextTarget
+        moveCutRelativeToTarget(draggedCutID, targetID, nextTarget.position)
     }
 }
 
@@ -556,8 +611,8 @@ private struct SceneSelectionRow: View {
                 Spacer()
 
                 if isGenerating {
-                    ProgressView()
-                        .controlSize(.small)
+                    SidebarProgressIndicator()
+                        .frame(width: 16, height: 16)
                 } else if hasVideo {
                     Image(systemName: "checkmark.circle.fill")
                         .foregroundStyle(.green)
@@ -571,5 +626,26 @@ private struct SceneSelectionRow: View {
             }
         }
         .buttonStyle(.plain)
+    }
+}
+
+private struct SidebarProgressIndicator: NSViewRepresentable {
+    func makeNSView(context: Context) -> CompactSidebarProgressIndicator {
+        let indicator = CompactSidebarProgressIndicator(frame: .zero)
+        indicator.style = .spinning
+        indicator.controlSize = .small
+        indicator.isIndeterminate = true
+        indicator.startAnimation(nil)
+        return indicator
+    }
+
+    func updateNSView(_ nsView: CompactSidebarProgressIndicator, context: Context) {
+        nsView.startAnimation(nil)
+    }
+}
+
+private final class CompactSidebarProgressIndicator: NSProgressIndicator {
+    override var intrinsicContentSize: NSSize {
+        NSSize(width: NSView.noIntrinsicMetric, height: NSView.noIntrinsicMetric)
     }
 }

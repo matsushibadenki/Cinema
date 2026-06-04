@@ -1,3 +1,7 @@
+// file:///Users/Shared/Program/Xcode/Cinema/Sources/Cinema/Services/OpenAIImageService.swift
+// OpenAIImageService.swift
+// OpenAI DALL-E APIを利用してテキストプロンプトからコンテ画像を生成するサービス
+
 import Foundation
 
 struct OpenAIImageService {
@@ -25,8 +29,7 @@ struct OpenAIImageService {
     var model: String
 
     func generateStoryboardImage(
-        systemPrompt: String,
-        documentPrompt: String,
+        drawingPrompt: String,
         cutPrompt: String,
         aspectRatio: CGFloat
     ) async throws -> Data {
@@ -45,8 +48,7 @@ struct OpenAIImageService {
         request.httpBody = try JSONEncoder().encode(OpenAIImageRequest(
             model: model,
             prompt: composedPrompt(
-                systemPrompt: systemPrompt,
-                documentPrompt: documentPrompt,
+                drawingPrompt: drawingPrompt,
                 cutPrompt: cutPrompt,
                 aspectRatio: aspectRatio
             ),
@@ -69,19 +71,21 @@ struct OpenAIImageService {
         return image
     }
 
-    private func composedPrompt(systemPrompt: String, documentPrompt: String, cutPrompt: String, aspectRatio: CGFloat) -> String {
-        let fallbackSystemPrompt = """
-        Create a clean monochrome storyboard panel in a hand-drawn pencil style.
-        Compose the image as a cinematic scene environment based on the written situation and dialogue.
+    private func composedPrompt(drawingPrompt: String, cutPrompt: String, aspectRatio: CGFloat) -> String {
+        let basePrompt = """
+        Create a realistic cinematic film still or a clear, natural storyboard image.
+        Compose the image as a photorealistic, authentic scene environment based on the written situation and dialogue.
+        Use the drawing settings to choose the visual style, color, lighting, camera, and texture.
+        Avoid any CGI, 3D render, digital painting look, or artificial AI look. Render with natural lighting, organic textures, and realistic skin details.
         Show clear character placement, location, mood, and action. Do not render any text, captions, speech bubbles, or UI elements inside the image.
         """
 
         return [
-            "Global image direction:",
-            systemPrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? fallbackSystemPrompt : systemPrompt,
+            "Base image direction:",
+            basePrompt,
             "",
-            "Document-specific direction:",
-            documentPrompt.trimmingCharacters(in: .whitespacesAndNewlines),
+            "Drawing settings:",
+            drawingPrompt.trimmingCharacters(in: .whitespacesAndNewlines),
             "",
             "Scene content, staging, names, and dialogue:",
             cutPrompt,
@@ -96,7 +100,31 @@ struct OpenAIImageService {
     private func imageSize(for aspectRatio: CGFloat) -> String {
         aspectRatio >= 1 ? "1536x1024" : "1024x1536"
     }
+
+    static func fetchAvailableModels(apiKey: String) async throws -> [String] {
+        guard !apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return []
+        }
+
+        guard let url = URL(string: "https://api.openai.com/v1/models") else {
+            throw ServiceError.invalidURL
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        if let httpResponse = response as? HTTPURLResponse, !(200..<300).contains(httpResponse.statusCode) {
+            let message = String(data: data, encoding: .utf8) ?? "OpenAI API models request failed."
+            throw ServiceError.requestFailed(message)
+        }
+
+        let decoded = try JSONDecoder().decode(OpenAIModelListResponse.self, from: data)
+        return (decoded.data ?? []).map { $0.id }
+    }
 }
+
 
 private struct OpenAIImageRequest: Encodable {
     var model: String
@@ -116,3 +144,11 @@ private struct OpenAIImageData: Decodable {
         case b64JSON = "b64_json"
     }
 }
+
+private struct OpenAIModelListResponse: Decodable {
+    struct Model: Decodable {
+        let id: String
+    }
+    let data: [Model]?
+}
+

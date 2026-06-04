@@ -88,6 +88,7 @@ private struct ReferenceImageRow: View {
     @Binding var reference: ReferenceImage
     var image: NSImage?
     var delete: () -> Void
+    @State private var showsDetails = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -122,9 +123,92 @@ private struct ReferenceImageRow: View {
                 .buttonStyle(.borderless)
                 .help("削除")
             }
+
+            DisclosureGroup(isExpanded: $showsDetails) {
+                referenceDetailsEditor
+            } label: {
+                Label("詳細情報", systemImage: "text.badge.plus")
+                    .font(.subheadline.weight(.semibold))
+            }
         }
         .padding(8)
         .background(.regularMaterial)
         .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+
+    private var referenceDetailsEditor: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            ForEach(reference.details.indices, id: \.self) { sectionIndex in
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        TextField("セクション", text: $reference.details[sectionIndex].title)
+                            .textFieldStyle(.roundedBorder)
+                            .font(.subheadline.weight(.semibold))
+
+                        Button(role: .destructive) {
+                            reference.details.remove(at: sectionIndex)
+                        } label: {
+                            Image(systemName: "trash")
+                        }
+                        .buttonStyle(.borderless)
+                        .help("セクションを削除")
+                    }
+
+                    ForEach(reference.details[sectionIndex].fields.indices, id: \.self) { fieldIndex in
+                        VStack(alignment: .leading, spacing: 5) {
+                            HStack {
+                                TextField("項目", text: $reference.details[sectionIndex].fields[fieldIndex].key)
+                                    .textFieldStyle(.roundedBorder)
+
+                                Button(role: .destructive) {
+                                    reference.details[sectionIndex].fields.remove(at: fieldIndex)
+                                } label: {
+                                    Image(systemName: "minus.circle")
+                                }
+                                .buttonStyle(.borderless)
+                                .help("項目を削除")
+                            }
+
+                            TextEditor(text: $reference.details[sectionIndex].fields[fieldIndex].value)
+                                .font(.system(size: 12))
+                                .scrollContentBackground(.hidden)
+                                .frame(minHeight: 64)
+                                .padding(6)
+                                .background(Color(nsColor: .textBackgroundColor))
+                                .clipShape(RoundedRectangle(cornerRadius: 5))
+                                .overlay {
+                                    RoundedRectangle(cornerRadius: 5)
+                                        .stroke(Color(nsColor: .separatorColor), lineWidth: 0.5)
+                                }
+                        }
+                    }
+
+                    Button {
+                        reference.details[sectionIndex].fields.append(DrawingSettingsField(key: "Key", value: ""))
+                    } label: {
+                        Label("項目を追加", systemImage: "plus")
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                }
+                .padding(8)
+                .background(Color(nsColor: .controlBackgroundColor))
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+            }
+
+            Button {
+                reference.details.append(
+                    DrawingSettingsSection(
+                        title: "New Section",
+                        fields: [DrawingSettingsField(key: "Key", value: "")]
+                    )
+                )
+            } label: {
+                Label("セクションを追加", systemImage: "folder.badge.plus")
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+        }
+        .padding(.top, 4)
     }
 }

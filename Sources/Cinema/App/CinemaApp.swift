@@ -6,38 +6,61 @@ struct CinemaApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @AppStorage("showsCutActionControls") private var showsCutActionControls = true
     @AppStorage("storyboardTextBaseFontSize") private var storyboardTextBaseFontSize = 11.0
+    private let settingsWindowID = "settings-window"
 
     var body: some Scene {
         DocumentGroup(newDocument: StoryboardDocument()) { file in
             ContentView(document: file.$document)
         }
         .commands {
-            CommandGroup(after: .newItem) {
-                Button("現在のページをプリント...") {
-                    NotificationCenter.default.post(name: .printCurrentStoryboardPage, object: nil)
-                }
-                .keyboardShortcut("p", modifiers: [.command, .shift])
-            }
-
-            CommandMenu("絵コンテ") {
-                Toggle("ト書き下のボタンを表示", isOn: $showsCutActionControls)
-                    .keyboardShortcut("b", modifiers: [.command, .option])
-
-                Divider()
-
-                Menu("内容 / ト書きの文字サイズ") {
-                    textSizeButton("小", size: 9.0)
-                    textSizeButton("標準", size: 11.0)
-                    textSizeButton("大", size: 13.0)
-                    textSizeButton("特大", size: 15.0)
-                }
-            }
+            AppCommands(
+                showsCutActionControls: $showsCutActionControls,
+                storyboardTextBaseFontSize: $storyboardTextBaseFontSize,
+                settingsWindowID: settingsWindowID
+            )
         }
 
-        Settings {
+        Window("設定", id: settingsWindowID) {
             SettingsView()
         }
-        .windowResizability(.contentMinSize)
+        .defaultSize(width: 700, height: 700)
+    }
+}
+
+private struct AppCommands: Commands {
+    @Environment(\.openWindow) private var openWindow
+    @Binding var showsCutActionControls: Bool
+    @Binding var storyboardTextBaseFontSize: Double
+    var settingsWindowID: String
+
+    var body: some Commands {
+        CommandGroup(replacing: .appSettings) {
+            Button("設定...") {
+                openWindow(id: settingsWindowID)
+            }
+            .keyboardShortcut(",", modifiers: .command)
+        }
+
+        CommandGroup(after: .newItem) {
+            Button("現在のページをプリント...") {
+                NotificationCenter.default.post(name: .printCurrentStoryboardPage, object: nil)
+            }
+            .keyboardShortcut("p", modifiers: [.command, .shift])
+        }
+
+        CommandMenu("絵コンテ") {
+            Toggle("セリフ下のボタンを表示", isOn: $showsCutActionControls)
+                .keyboardShortcut("b", modifiers: [.command, .option])
+
+            Divider()
+
+            Menu("内容 / セリフの文字サイズ") {
+                textSizeButton("小", size: 9.0)
+                textSizeButton("標準", size: 11.0)
+                textSizeButton("大", size: 13.0)
+                textSizeButton("特大", size: 15.0)
+            }
+        }
     }
 
     private func textSizeButton(_ title: String, size: Double) -> some View {

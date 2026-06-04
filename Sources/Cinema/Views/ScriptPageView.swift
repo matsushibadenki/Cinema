@@ -1,3 +1,7 @@
+// file:///Users/Shared/Program/Xcode/Cinema/Sources/Cinema/Views/ScriptPageView.swift
+// ScriptPageView.swift
+// 絵コンテの内容から縦書きの台本用PDF/プレビューページを生成・表示するビュー
+
 import AppKit
 import SwiftUI
 
@@ -5,7 +9,7 @@ enum ScriptPageLayout {
     static let pageSize = CGSize(width: 496.06, height: 694.49)
     static let pageMargin: CGFloat = 42.52
     static let footerHeight: CGFloat = 20
-    static let subtitleSpineWidth: CGFloat = 42
+    static let subtitleSpineWidth: CGFloat = 34
     static let columnWidth: CGFloat = 34
     static let dialogueGroupMinimumWidth: CGFloat = 46
     static let bodyColumnWidth: CGFloat = 14
@@ -20,10 +24,13 @@ enum ScriptPageLayout {
     static let contentLabelWidth: CGFloat = 16
     static let topRuleInsetRatio: CGFloat = 0.25
     static let topRuleTextInset: CGFloat = 12
+    static let spineBlockHeight: CGFloat = 112
+    static let spineSequenceHeight: CGFloat = 110
+    static let spineSceneHeight: CGFloat = 92
     static let spineTitleHeight: CGFloat = 120
     static let dialogueTopOffset: CGFloat = 82
     static let bodyCharactersPerColumn = 24
-    static let narrativeCharactersPerColumn = 10
+    static let narrativeCharactersPerColumn = 8
 
     static var contentHeight: CGFloat {
         pageSize.height - (pageMargin * 2) - footerHeight
@@ -91,6 +98,11 @@ struct ScriptPageView: View {
         entries.first(where: { !$0.sceneLabel.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty })?.sceneLabel ?? ""
     }
 
+    private var displayDocumentTitle: String {
+        let title = documentTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        return title == "Untitled Storyboard" ? "" : title
+    }
+
     private var typography: ScriptTypography {
         let speakerFontSize = safeCGFloat(scriptSpeakerFontSize, fallback: ScriptPageLayout.speakerFontSize, min: 8, max: 18)
         let bodyFontSize = safeCGFloat(scriptBodyFontSize, fallback: ScriptPageLayout.bodyFontSize, min: 8, max: 18)
@@ -153,9 +165,10 @@ struct ScriptPageView: View {
                         horizontalInset: nil,
                         verticalInset: 4
                     )
-                        .frame(height: 122, alignment: .top)
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .frame(height: ScriptPageLayout.spineBlockHeight, alignment: .top)
                 } else {
-                    Spacer().frame(height: 122)
+                    Spacer().frame(height: ScriptPageLayout.spineBlockHeight)
                 }
 
                 Spacer().frame(height: 8)
@@ -167,9 +180,10 @@ struct ScriptPageView: View {
                         horizontalInset: nil,
                         verticalInset: 4
                     )
-                        .frame(height: 88, alignment: .top)
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .frame(height: ScriptPageLayout.spineSequenceHeight, alignment: .top)
                 } else {
-                    Spacer().frame(height: 88)
+                    Spacer().frame(height: ScriptPageLayout.spineSequenceHeight)
                 }
 
                 Spacer().frame(height: 8)
@@ -181,20 +195,22 @@ struct ScriptPageView: View {
                         horizontalInset: nil,
                         verticalInset: 2
                     )
-                        .frame(height: 92, alignment: .top)
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .frame(height: ScriptPageLayout.spineSceneHeight, alignment: .top)
                 } else {
-                    Spacer().frame(height: 92)
+                    Spacer().frame(height: ScriptPageLayout.spineSceneHeight)
                 }
 
                 Spacer(minLength: 0)
 
-                if !documentTitle.isEmpty {
+                if !displayDocumentTitle.isEmpty {
                     VerticalText(
-                        documentTitle,
+                        displayDocumentTitle,
                         font: ScriptPageLayout.serifFont(size: 12, weight: .regular),
                         horizontalInset: nil,
                         verticalInset: 2
                     )
+                        .frame(maxWidth: .infinity, alignment: .center)
                         .frame(height: ScriptPageLayout.spineTitleHeight, alignment: .bottom)
                 }
 
@@ -219,7 +235,7 @@ struct ScriptPageView: View {
                 HStack(alignment: .bottom, spacing: ScriptPageLayout.columnSpacing) {
                     ForEach(narrativeEntries.reversed()) { entry in
                         ScriptColumnView(entry: entry, typography: typography, showsSideLabel: false)
-                            .frame(width: ScriptPageLayout.columnWidth, height: max(topInset - 10, 1), alignment: .bottomTrailing)
+                            .frame(width: ScriptColumnView.columnWidth(for: entry, typography: typography), height: max(topInset - 10, 1), alignment: .bottomTrailing)
                             .clipped()
                     }
                 }
@@ -265,24 +281,34 @@ struct ScriptPageView: View {
         var currentSubtitle = ""
         var currentScriptHeading = ""
         var currentSceneName = ""
-        var currentSceneLabel = "シーン1"
-        var sceneNumber = 0
+        var currentSceneLabel = ""
+        var hasStartedScene = false
 
         for cut in cuts {
             let subtitle = cut.subtitle.trimmingCharacters(in: .whitespacesAndNewlines)
             let scriptHeading = cut.scriptHeading.trimmingCharacters(in: .whitespacesAndNewlines)
             let sceneName = cut.sceneName.trimmingCharacters(in: .whitespacesAndNewlines)
-            let startsNewScene = sceneNumber == 0 ||
+            let situation = cut.situation.trimmingCharacters(in: .whitespacesAndNewlines)
+            let dialogueLines = cut.dialogueLines.filter {
+                !$0.speaker.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
+                    !$0.dialogue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            }
+            let hasMetadata = !subtitle.isEmpty || !scriptHeading.isEmpty || !sceneName.isEmpty
+            let hasContent = !situation.isEmpty || !dialogueLines.isEmpty
+
+            guard hasMetadata || hasContent else { continue }
+
+            let startsNewScene = !hasStartedScene ||
                 (!subtitle.isEmpty && subtitle != currentSubtitle) ||
                 (!scriptHeading.isEmpty && scriptHeading != currentScriptHeading) ||
                 (!sceneName.isEmpty && sceneName != currentSceneName)
 
             if startsNewScene {
-                sceneNumber += 1
+                hasStartedScene = true
                 currentSubtitle = subtitle
                 currentSceneName = sceneName
-                currentSceneLabel = sceneName.isEmpty ? "シーン\(sceneNumber)" : sceneName
-                currentScriptHeading = scriptHeading.isEmpty ? currentSceneLabel : scriptHeading
+                currentSceneLabel = sceneName
+                currentScriptHeading = scriptHeading
                 entries.append(
                     ScriptEntry(
                         kind: .subtitle,
@@ -295,7 +321,6 @@ struct ScriptPageView: View {
                 )
             }
 
-            let situation = cut.situation.trimmingCharacters(in: .whitespacesAndNewlines)
             if !situation.isEmpty {
                 appendTextEntries(
                     to: &entries,
@@ -307,11 +332,6 @@ struct ScriptPageView: View {
                     text: situation,
                     charactersPerColumn: ScriptPageLayout.narrativeCharactersPerColumn
                 )
-            }
-
-            let dialogueLines = cut.dialogueLines.filter {
-                !$0.speaker.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
-                    !$0.dialogue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             }
 
             for line in dialogueLines {
@@ -406,7 +426,9 @@ private struct ScriptColumnView: View {
         switch entry.kind {
         case .dialogue:
             return dialogueGroupWidth(for: entry, typography: typography)
-        case .subtitle, .narrative, .speaker:
+        case .narrative:
+            return typography.bodyLineAdvance
+        case .subtitle, .speaker:
             return ScriptPageLayout.columnWidth
         }
     }
@@ -542,38 +564,21 @@ private struct InlineVerticalText: View {
     }
 
     var body: some View {
-        VStack(alignment: .trailing, spacing: 0) {
-            ForEach(Array(Self.verticalPresentationString(for: text).enumerated()), id: \.offset) { index, character in
-                Text(String(character))
-                    .font(.system(size: fontSize, weight: weight, design: .serif))
-                    .frame(maxWidth: .infinity, alignment: .trailing)
-                    .fixedSize(horizontal: preservesCharacterWidth, vertical: true)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .topTrailing)
-        .frame(maxHeight: .infinity, alignment: .topTrailing)
-        .clipped()
-    }
+        let nsWeight: NSFont.Weight = {
+            if weight == .bold { return .bold }
+            if weight == .semibold { return .semibold }
+            if weight == .medium { return .medium }
+            return .regular
+        }()
+        let font = ScriptPageLayout.serifFont(size: fontSize, weight: nsWeight)
 
-    private static func verticalPresentationString(for text: String) -> String {
-        text.map { character -> Character in
-            switch character {
-            case "0": return "０"
-            case "1": return "１"
-            case "2": return "２"
-            case "3": return "３"
-            case "4": return "４"
-            case "5": return "５"
-            case "6": return "６"
-            case "7": return "７"
-            case "8": return "８"
-            case "9": return "９"
-            case "-", "ー", "ｰ", "―", "−": return "丨"
-            default: return character
-            }
-        }
-        .map(String.init)
-        .joined()
+        VerticalTextRepresentable(
+            text: text,
+            font: font,
+            horizontalInset: nil,
+            verticalInset: 0
+        )
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
     }
 }
 
@@ -660,8 +665,7 @@ private final class NativeVerticalTextView: NSView {
 
         let framesetter = CTFramesetterCreateWithAttributedString(attributedString)
         let path = CGMutablePath()
-        let lineWidth = max(font.pointSize * 1.45, 18)
-        let resolvedHorizontalInset = horizontalInset ?? max((bounds.width - lineWidth) / 2, 2)
+        let resolvedHorizontalInset = horizontalInset ?? max((bounds.width - font.pointSize) / 2, 0)
         path.addRect(bounds.insetBy(dx: resolvedHorizontalInset, dy: verticalInset))
         let frameAttributes = [
             kCTFrameProgressionAttributeName: CTFrameProgression.rightToLeft.rawValue
@@ -691,8 +695,6 @@ private final class NativeVerticalTextView: NSView {
             case "7": return "７"
             case "8": return "８"
             case "9": return "９"
-            case "-", "ー", "ｰ", "―", "−":
-                return "丨"
             case " ":
                 return "\u{00A0}"
             default:

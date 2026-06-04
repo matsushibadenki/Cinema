@@ -18,13 +18,18 @@ private enum DocumentDisplayMode: String, CaseIterable, Identifiable {
     }
 }
 
+private struct GenerationErrorAlert: Identifiable {
+    let id = UUID()
+    var title: String
+    var message: String
+}
+
 struct ContentView: View {
     @Binding var document: StoryboardDocument
 
     @AppStorage("geminiAPIKey") private var geminiAPIKey = ""
-    @AppStorage("geminiModelName") private var geminiModelName = "nano-banana-2"
+    @AppStorage("geminiModelName") private var geminiModelName = "gemini-2.5-flash-image"
     @AppStorage("geminiVideoModelName") private var geminiVideoModelName = "veo-3.1-generate-preview"
-    @AppStorage("geminiSystemPrompt") private var geminiSystemPrompt = ""
     @AppStorage("imageGenerationProvider") private var imageGenerationProvider = "gemini"
     @AppStorage("videoGenerationProvider") private var videoGenerationProvider = "gemini"
     @AppStorage("openAIAPIKey") private var openAIAPIKey = ""
@@ -45,11 +50,14 @@ struct ContentView: View {
     @State private var generationStatus: String?
     @State private var generatingCutID: StoryboardCut.ID?
     @State private var generatingSceneTitle: String?
+    @State private var generationErrorAlert: GenerationErrorAlert?
     @State private var selectedVideoSceneTitle: String?
     @State private var selectedVideoCutIDs: Set<StoryboardCut.ID> = []
     @State private var zoomScale: CGFloat = 1.0
     @State private var pinchStartZoomScale: CGFloat?
     @State private var displayMode: DocumentDisplayMode = .storyboard
+    @State private var showsDrawingSettings = false
+    @State private var showsFullCanvas = false
 
     private let cutsPerPage = 5
     private let minimumZoomScale: CGFloat = 0.5
@@ -60,7 +68,7 @@ struct ContentView: View {
         NavigationSplitView {
             SidebarView(
                 title: $document.project.title,
-                documentPrompt: $document.project.documentPrompt,
+                drawingSettings: $document.project.drawingSettings,
                 cuts: document.project.cuts,
                 pageIndex: $pageIndex,
                 pageCount: currentPageCount,
@@ -72,7 +80,7 @@ struct ContentView: View {
                 deletePage: deletePage,
                 jumpToCut: jumpToCut,
                 moveCuts: moveCuts,
-                moveCutBefore: moveCutBefore,
+                moveCutRelativeToTarget: moveCutRelativeToTarget,
                 updateCutName: updateCutName,
                 sceneVideos: document.project.sceneVideos,
                 selectedVideoSceneTitle: $selectedVideoSceneTitle,
@@ -80,6 +88,7 @@ struct ContentView: View {
                 generatingSceneTitle: generatingSceneTitle,
                 generateSceneVideo: generateSceneVideo,
                 saveSceneVideo: saveSceneVideo,
+                exportScenePrompts: exportScenePrompts,
                 aiEstimatedTokensUsed: aiEstimatedTokensUsed,
                 aiEstimatedCostUSD: aiEstimatedCostUSD,
                 aiCostLimitEnabled: aiCostLimitEnabled,
@@ -90,18 +99,21 @@ struct ContentView: View {
             HStack(spacing: 0) {
                 VStack(spacing: 0) {
                     toolbar
-                    ScrollView([.horizontal, .vertical]) {
-                        zoomablePage
-                    }
-                    .background(Color(nsColor: .underPageBackgroundColor))
+                    detailCanvas
                 }
 
                 Divider()
-
                 ReferenceSidebarView(document: $document)
             }
         }
-        .navigationTitle(document.project.title)
+        .navigationTitle(documentTitle)
+        .alert(item: $generationErrorAlert) { alert in
+            Alert(
+                title: Text(alert.title),
+                message: Text(alert.message),
+                dismissButton: .default(Text("OK"))
+            )
+        }
         .onReceive(NotificationCenter.default.publisher(for: .printCurrentStoryboardPage)) { _ in
             printCurrentPage()
         }
@@ -117,6 +129,8 @@ struct ContentView: View {
             ensureSelectedVideoCuts(reset: true)
         }
         .onAppear {
+            migrateGeminiImageModelIfNeeded()
+            document.project.drawingSettings.ensureSelection()
             ensureSelectedVideoScene()
             ensureSelectedVideoCuts()
         }
@@ -130,11 +144,17 @@ struct ContentView: View {
         StoryboardPageView.pageCutIDs(for: document.project.cuts, cutsPerPage: cutsPerPage)
     }
 
+    private var documentTitle: String {
+        let title = document.project.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        return title.isEmpty ? "Cinema" : title
+    }
+
     private var scriptPageCount: Int {
         ScriptPageView.pageCount(for: document.project.cuts)
     }
 
     private var currentPageCount: Int {
+        if showsDrawingSettings { return 1 }
         switch displayMode {
         case .storyboard:
             return pageCount
@@ -160,18 +180,59 @@ struct ContentView: View {
         ZStack(alignment: .topLeading) {
             currentPage
                 .frame(width: currentPageSize.width, height: currentPageSize.height)
-            .background(Color(nsColor: .textBackgroundColor))
-            .clipShape(RoundedRectangle(cornerRadius: 4))
-            .shadow(color: .black.opacity(0.22), radius: 18, y: 8)
-            .scaleEffect(zoomScale, anchor: .topLeading)
+                .background(pageSurfaceBackground)
+                .clipShape(RoundedRectangle(cornerRadius: showsFullCanvas ? 0 : 4))
+                .shadow(color: .black.opacity(showsFullCanvas ? 0 : 0.22), radius: 18, y: 8)
+                .scaleEffect(zoomScale, anchor: .topLeading)
         }
         .frame(
             width: currentPageSize.width * zoomScale,
             height: currentPageSize.height * zoomScale,
             alignment: .topLeading
         )
-        .padding(32)
+        .padding(showsFullCanvas ? 0 : 32)
         .gesture(zoomGesture)
+    }
+
+    private var detailCanvas: some View {
+        Group {
+            if showsDrawingSettings {
+                DrawingSettingsView(settings: $document.project.drawingSettings)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(Color(nsColor: .textBackgroundColor))
+            } else if showsFullCanvas {
+                GeometryReader { proxy in
+                    ScrollView(.vertical) {
+                        fullCanvasPage(availableWidth: proxy.size.width)
+                    }
+                    .background(Color.clear)
+                }
+            } else {
+                ScrollView([.horizontal, .vertical], showsIndicators: !showsFullCanvas) {
+                    zoomablePage
+                }
+                .background(showsFullCanvas ? Color.clear : Color(nsColor: .underPageBackgroundColor))
+            }
+        }
+    }
+
+    private var pageSurfaceBackground: Color {
+        showsFullCanvas ? .clear : Color(nsColor: .textBackgroundColor)
+    }
+
+    private func fullCanvasPage(availableWidth: CGFloat) -> some View {
+        let horizontalPadding: CGFloat = 16
+        let fittedWidth = max(availableWidth - (horizontalPadding * 2), 1)
+        let scale = fittedWidth / currentPageSize.width
+        let fittedHeight = currentPageSize.height * scale
+
+        return currentPage
+            .frame(width: currentPageSize.width, height: currentPageSize.height)
+            .scaleEffect(scale, anchor: .topLeading)
+            .frame(width: fittedWidth, height: fittedHeight, alignment: .topLeading)
+            .padding(.horizontal, horizontalPadding)
+            .padding(.vertical, 16)
+            .frame(maxWidth: .infinity, alignment: .topLeading)
     }
 
     @ViewBuilder
@@ -185,6 +246,7 @@ struct ContentView: View {
                 pageCutIDs: storyboardPageCutIDs.indices.contains(pageIndex) ? storyboardPageCutIDs[pageIndex] : [],
                 generatingCutID: generatingCutID,
                 generate: generateImage,
+                importImage: importImage,
                 addAfter: addCutAfter,
                 delete: deleteCut
             )
@@ -230,6 +292,24 @@ struct ContentView: View {
                     }
                     .pickerStyle(.segmented)
                     .frame(width: 150)
+                    .onChange(of: displayMode) { _, _ in
+                        showsDrawingSettings = false
+                        showsFullCanvas = false
+                    }
+
+                    Button {
+                        showsDrawingSettings.toggle()
+                        if showsDrawingSettings {
+                            showsFullCanvas = false
+                            zoomScale = 1.0
+                            pageIndex = 0
+                        }
+                    } label: {
+                        Label("描画設定", systemImage: "paintpalette")
+                    }
+                    .buttonStyle(.bordered)
+                    .tint(showsDrawingSettings ? .accentColor : nil)
+                    .padding(.leading, 12)
                 }
 
                 Spacer(minLength: 16)
@@ -240,7 +320,7 @@ struct ContentView: View {
                     } label: {
                         Label("前ページ", systemImage: "chevron.left")
                     }
-                    .disabled(pageIndex == 0)
+                    .disabled(showsDrawingSettings || pageIndex == 0)
 
                     Text("\(pageIndex + 1) / \(currentPageCount)")
                         .font(.headline.monospacedDigit())
@@ -251,36 +331,47 @@ struct ContentView: View {
                     } label: {
                         Label("次ページ", systemImage: "chevron.right")
                     }
-                    .disabled(pageIndex >= currentPageCount - 1)
-
-                    Divider()
-                        .frame(height: 22)
+                    .disabled(showsDrawingSettings || pageIndex >= currentPageCount - 1)
 
                     Button {
-                        changeZoom(by: -zoomStep)
+                        showsFullCanvas.toggle()
                     } label: {
-                        Label("縮小", systemImage: "minus.magnifyingglass")
+                        Label("全面", systemImage: showsFullCanvas ? "rectangle.inset.filled" : "rectangle.expand.vertical")
                     }
-                    .disabled(zoomScale <= minimumZoomScale)
+                    .buttonStyle(.bordered)
+                    .tint(showsFullCanvas ? .accentColor : nil)
+                    .disabled(showsDrawingSettings)
 
-                    Text(zoomPercentageText)
-                        .font(.callout.monospacedDigit())
-                        .foregroundStyle(.secondary)
-                        .frame(width: 52)
+                    if !showsFullCanvas {
+                        Divider()
+                            .frame(height: 22)
 
-                    Button {
-                        changeZoom(by: zoomStep)
-                    } label: {
-                        Label("拡大", systemImage: "plus.magnifyingglass")
+                        Button {
+                            changeZoom(by: -zoomStep)
+                        } label: {
+                            Label("縮小", systemImage: "minus.magnifyingglass")
+                        }
+                        .disabled(showsDrawingSettings || zoomScale <= minimumZoomScale)
+
+                        Text(zoomPercentageText)
+                            .font(.callout.monospacedDigit())
+                            .foregroundStyle(.secondary)
+                            .frame(width: 52)
+
+                        Button {
+                            changeZoom(by: zoomStep)
+                        } label: {
+                            Label("拡大", systemImage: "plus.magnifyingglass")
+                        }
+                        .disabled(showsDrawingSettings || zoomScale >= maximumZoomScale)
+
+                        Button {
+                            zoomScale = 1.0
+                        } label: {
+                            Label("実寸", systemImage: "1.magnifyingglass")
+                        }
+                        .disabled(showsDrawingSettings || abs(zoomScale - 1.0) < 0.001)
                     }
-                    .disabled(zoomScale >= maximumZoomScale)
-
-                    Button {
-                        zoomScale = 1.0
-                    } label: {
-                        Label("実寸", systemImage: "1.magnifyingglass")
-                    }
-                    .disabled(abs(zoomScale - 1.0) < 0.001)
                 }
 
                 Spacer(minLength: 16)
@@ -291,6 +382,7 @@ struct ContentView: View {
                     } label: {
                         Label("プリント", systemImage: "printer")
                     }
+                    .disabled(showsDrawingSettings)
                 }
             }
 
@@ -420,13 +512,20 @@ struct ContentView: View {
         document.renumberCuts()
     }
 
-    private func moveCutBefore(_ draggedID: StoryboardCut.ID, _ targetID: StoryboardCut.ID) {
+    private func moveCutRelativeToTarget(_ draggedID: StoryboardCut.ID, _ targetID: StoryboardCut.ID, _ position: CutDropPosition) {
         guard draggedID != targetID,
               let sourceIndex = document.project.cuts.firstIndex(where: { $0.id == draggedID }),
               let targetIndex = document.project.cuts.firstIndex(where: { $0.id == targetID }) else { return }
 
         let movedCut = document.project.cuts.remove(at: sourceIndex)
-        let adjustedTargetIndex = sourceIndex < targetIndex ? targetIndex - 1 : targetIndex
+        let rawTargetIndex: Int
+        switch position {
+        case .before:
+            rawTargetIndex = targetIndex
+        case .after:
+            rawTargetIndex = targetIndex + 1
+        }
+        let adjustedTargetIndex = sourceIndex < rawTargetIndex ? rawTargetIndex - 1 : rawTargetIndex
         document.project.cuts.insert(movedCut, at: adjustedTargetIndex)
         document.renumberCuts()
         jumpToCut(draggedID)
@@ -479,7 +578,7 @@ struct ContentView: View {
 
         let prompt = sceneVideoPrompt(title: title, cuts: cuts)
         guard !prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            generationStatus = "シーンに内容かト書きを入力してください"
+            generationStatus = "シーンに内容かセリフを入力してください"
             return
         }
 
@@ -524,7 +623,8 @@ struct ContentView: View {
                 }
             } catch {
                 await MainActor.run {
-                    generationStatus = error.localizedDescription
+                    generationStatus = "動画生成に失敗しました"
+                    generationErrorAlert = GenerationErrorAlert(title: "動画生成エラー", message: formattedErrorMessage(error))
                     generatingSceneTitle = nil
                 }
             }
@@ -602,8 +702,7 @@ struct ContentView: View {
         return [
             "Create a cinematic video for the selected storyboard scene.",
             "Scene title: \(title)",
-            "Global system prompt:\n\(geminiSystemPrompt)",
-            "Document prompt:\n\(document.project.documentPrompt)",
+            "Drawing settings:\n\(drawingPromptForGeneration(references: referencesForCuts(cuts)))",
             "Use the attached storyboard images as visual references for composition, characters, locations, and continuity.",
             "Respect the cut order and timing notes. Use camera movement and scene motion to connect the cuts into one coherent short video.",
             cutDescriptions
@@ -613,9 +712,29 @@ struct ContentView: View {
     }
 
     private func sceneReferenceImages(for cuts: [StoryboardCut]) -> [GeminiReferenceImage] {
-        cuts.compactMap { cut -> GeminiReferenceImage? in
+        let linkedReferences = referencesForCuts(cuts).compactMap { reference -> GeminiReferenceImage? in
+            guard let data = document.imageData[reference.imageFileName] else { return nil }
+            return GeminiReferenceImage(mimeType: mimeType(for: reference.imageFileName), data: data)
+        }
+
+        let storyboardImages = cuts.compactMap { cut -> GeminiReferenceImage? in
             guard let fileName = cut.imageFileName, let data = document.imageData[fileName] else { return nil }
             return GeminiReferenceImage(mimeType: mimeType(for: fileName), data: data)
+        }
+
+        return linkedReferences + storyboardImages
+    }
+
+    private func referencesForCuts(_ cuts: [StoryboardCut]) -> [ReferenceImage] {
+        var seenIDs = Set<ReferenceImage.ID>()
+        let ids = cuts.flatMap(\.referenceImageIDs)
+        return ids.compactMap { id in
+            guard !seenIDs.contains(id),
+                  let reference = document.project.referenceImages.first(where: { $0.id == id }) else {
+                return nil
+            }
+            seenIDs.insert(id)
+            return reference
         }
     }
 
@@ -673,6 +792,114 @@ struct ContentView: View {
         }
     }
 
+    private func exportScenePrompts(for title: String) {
+        let cuts = selectedVideoCuts(for: title)
+        let selectedCuts = cuts.filter { selectedVideoCutIDs.contains($0.id) }
+        
+        guard !selectedCuts.isEmpty else {
+            generationStatus = "書き出すカットを選択してください"
+            return
+        }
+        
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.allowsMultipleSelection = false
+        panel.prompt = "選択"
+        panel.message = "プロンプトと画像を書き出すフォルダを選択してください。"
+        
+        let response = panel.runModal()
+        guard response == .OK, let baseURL = panel.url else { return }
+        
+        let invalidCharacters = CharacterSet(charactersIn: "\\/:*?\"<>|")
+        let safeTitle = title.components(separatedBy: invalidCharacters).joined(separator: "_")
+        let folderName = safeTitle.isEmpty ? "untitled_scene" : safeTitle
+        let sceneFolderURL = baseURL.appendingPathComponent(folderName)
+        
+        do {
+            try FileManager.default.createDirectory(at: sceneFolderURL, withIntermediateDirectories: true, attributes: nil)
+            
+            // 1. シーン全体のまとめテキストを作成
+            var summary = ""
+            summary += "=========================================\n"
+            summary += "シーン: \(title)\n"
+            summary += "=========================================\n\n"
+            
+            let scenePrompt = sceneVideoPrompt(title: title, cuts: selectedCuts)
+            summary += "【シーン動画生成用プロンプト (AI動画生成用)】\n"
+            summary += "-----------------------------------------\n"
+            summary += scenePrompt + "\n"
+            summary += "-----------------------------------------\n\n"
+            
+            summary += "【カット別詳細】\n"
+            summary += "-----------------------------------------\n"
+            
+            for cut in selectedCuts {
+                let cutNumStr = String(format: "%02d", cut.cutNumber)
+                let durationStr = cut.duration.isEmpty ? "未設定" : "\(cut.duration)秒"
+                
+                summary += "■ カット \(cut.cutNumber) (\(durationStr))\n"
+                summary += "・内容: \(cut.situation)\n"
+                
+                let dialogue = dialoguePrompt(for: cut)
+                if !dialogue.isEmpty {
+                    summary += "・セリフ:\n\(dialogue)\n"
+                }
+                
+                let drawPrompt = drawingPromptForGeneration(references: referencesForCut(cut))
+                let cPrompt = cutPrompt(for: cut)
+                let fullImagePrompt = [drawPrompt, cPrompt].filter { !$0.isEmpty }.joined(separator: "\n")
+                summary += "・画像生成プロンプト:\n\(fullImagePrompt)\n"
+                
+                if !cut.generationPrompt.isEmpty {
+                    summary += "・追加の指示: \(cut.generationPrompt)\n"
+                }
+                summary += "-----------------------------------------\n\n"
+                
+                // 2. カットごとの個別プロンプトテキストを書き出し
+                var cutPromptContent = ""
+                cutPromptContent += "【画像生成用プロンプト (Image Generation Prompt)】\n"
+                cutPromptContent += fullImagePrompt + "\n\n"
+                cutPromptContent += "【動画生成用指示 (Video Generation Settings)】\n"
+                cutPromptContent += "Duration: \(durationStr)\n"
+                cutPromptContent += "Situation: \(cut.situation)\n"
+                if !dialogue.isEmpty {
+                    cutPromptContent += "Dialogue:\n\(dialogue)\n"
+                }
+                if !cut.generationPrompt.isEmpty {
+                    cutPromptContent += "Additional Direction: \(cut.generationPrompt)\n"
+                }
+                
+                let cutPromptURL = sceneFolderURL.appendingPathComponent("cut_\(cutNumStr)_prompt.txt")
+                try cutPromptContent.write(to: cutPromptURL, atomically: true, encoding: .utf8)
+                
+                // 3. 生成済みのコンテ画像を書き出し
+                if let imageFileName = cut.imageFileName,
+                   let imageData = document.imageData[imageFileName] {
+                    let imageURL = sceneFolderURL.appendingPathComponent("cut_\(cutNumStr)_image.png")
+                    try imageData.write(to: imageURL)
+                }
+                
+                // 4. リファレンス画像を書き出し
+                let refs = referencesForCut(cut)
+                for (index, ref) in refs.enumerated() {
+                    if let refData = document.imageData[ref.imageFileName] {
+                        let refNum = index + 1
+                        let refURL = sceneFolderURL.appendingPathComponent("cut_\(cutNumStr)_ref_\(refNum).png")
+                        try refData.write(to: refURL)
+                    }
+                }
+            }
+            
+            let summaryURL = sceneFolderURL.appendingPathComponent("scene_summary.txt")
+            try summary.write(to: summaryURL, atomically: true, encoding: .utf8)
+            
+            generationStatus = "シーン「\(title)」のプロンプトと画像をフォルダ「\(folderName)」に書き出しました"
+        } catch {
+            generationStatus = "書き出しに失敗しました: \(error.localizedDescription)"
+        }
+    }
+
     private func generateImage(for cutID: StoryboardCut.ID) {
         guard canStartAIGeneration() else { return }
 
@@ -682,7 +909,7 @@ struct ContentView: View {
         let aspectRatio = ScreenAspectRatio.value(for: screenAspectRatioRawValue).ratio
 
         guard !prompt.isEmpty else {
-            generationStatus = "内容かト書きを入力してください"
+            generationStatus = "内容かセリフを入力してください"
             return
         }
 
@@ -696,19 +923,17 @@ struct ContentView: View {
                 case .openAI:
                     let service = OpenAIImageService(apiKey: openAIAPIKey, model: openAIModelName)
                     data = try await service.generateStoryboardImage(
-                        systemPrompt: geminiSystemPrompt,
-                        documentPrompt: document.project.documentPrompt,
+                        drawingPrompt: drawingPromptForGeneration(references: referencesForCut(cut)),
                         cutPrompt: prompt,
                         aspectRatio: aspectRatio
                     )
                 case .gemini:
                     let service = GeminiImageService(apiKey: geminiAPIKey, model: geminiModelName)
                     data = try await service.generateStoryboardImage(
-                        systemPrompt: geminiSystemPrompt,
-                        documentPrompt: document.project.documentPrompt,
+                        drawingPrompt: drawingPromptForGeneration(references: referencesForCut(cut)),
                         cutPrompt: prompt,
                         aspectRatio: aspectRatio,
-                        referenceImages: referenceImagesForGeneration()
+                        referenceImages: referenceImagesForGeneration(for: cut)
                     )
                 }
                 let fittedData = ImageHelpers.pngDataByCropping(data, toAspectRatio: aspectRatio)
@@ -724,10 +949,126 @@ struct ContentView: View {
                 }
             } catch {
                 await MainActor.run {
-                    generationStatus = error.localizedDescription
+                    generationStatus = "画像生成に失敗しました"
+                    generationErrorAlert = GenerationErrorAlert(title: "画像生成エラー", message: formattedErrorMessage(error))
                     generatingCutID = nil
                 }
             }
+        }
+    }
+
+    private func importImage(for cutID: StoryboardCut.ID) {
+        guard let cutIndex = document.project.cuts.firstIndex(where: { $0.id == cutID }) else { return }
+
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.image]
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.canChooseFiles = true
+
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        guard let data = try? Data(contentsOf: url) else {
+            generationStatus = "画像の読み込みに失敗しました"
+            return
+        }
+
+        let aspectRatio = ScreenAspectRatio.value(for: screenAspectRatioRawValue).ratio
+        let croppedData = ImageHelpers.pngDataByCropping(data, toAspectRatio: aspectRatio)
+        let fileName = "Images/\(cutID.uuidString).png"
+        document.imageData[fileName] = croppedData
+        document.project.cuts[cutIndex].imageFileName = fileName
+        generationStatus = "カット\(document.project.cuts[cutIndex].cutNumber)に画像を読み込みました"
+    }
+
+    private func formattedErrorMessage(_ error: Error) -> String {
+        let rawMessage = error.localizedDescription.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let data = rawMessage.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return formattedPlainErrorMessage(rawMessage)
+        }
+
+        if let errorObject = json["error"] as? [String: Any] {
+            let message = stringValue(errorObject["message"])
+            let status = stringValue(errorObject["status"])
+            let code = stringValue(errorObject["code"])
+            let type = stringValue(errorObject["type"])
+            let formatted = [
+                message,
+                labeledErrorLine("Status", status),
+                labeledErrorLine("Code", code),
+                labeledErrorLine("Type", type)
+            ]
+            .compactMap { $0 }
+            .joined(separator: "\n")
+            return formattedPlainErrorMessage(formatted)
+        }
+
+        if let message = stringValue(json["message"]) {
+            return formattedPlainErrorMessage(message)
+        }
+
+        return formattedPlainErrorMessage(rawMessage)
+    }
+
+    private func formattedPlainErrorMessage(_ rawMessage: String) -> String {
+        guard !rawMessage.isEmpty else { return "原因不明のエラーです。" }
+
+        let status = valueAfterLabel("Status:", in: rawMessage)
+        let code = valueAfterLabel("Code:", in: rawMessage)
+        let retryText = retryDelayText(in: rawMessage)
+        if status == "RESOURCE_EXHAUSTED" || code == "429" || rawMessage.localizedCaseInsensitiveContains("quota exceeded") {
+            return [
+                "Gemini APIの無料枠またはレート制限に達しました。",
+                retryText.map { "少し待ってから再試行してください（目安: \($0)）。" },
+                "AI Studioで現在の利用状況と課金設定を確認できます。",
+                "",
+                rawMessage
+            ]
+            .compactMap { $0 }
+            .joined(separator: "\n")
+        }
+
+        return rawMessage
+    }
+
+    private func valueAfterLabel(_ label: String, in text: String) -> String? {
+        text
+            .components(separatedBy: .newlines)
+            .first { $0.trimmingCharacters(in: .whitespaces).hasPrefix(label) }?
+            .replacingOccurrences(of: label, with: "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func retryDelayText(in text: String) -> String? {
+        guard let range = text.range(of: #"Please retry in ([0-9.]+)s"#, options: .regularExpression) else { return nil }
+        let matched = String(text[range])
+        guard let secondsRange = matched.range(of: #"[0-9.]+"#, options: .regularExpression),
+              let seconds = Double(matched[secondsRange]) else {
+            return nil
+        }
+        return "\(Int(ceil(seconds)))秒後"
+    }
+
+    private func stringValue(_ value: Any?) -> String? {
+        switch value {
+        case let value as String:
+            let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed.isEmpty ? nil : trimmed
+        case let value as NSNumber:
+            return value.stringValue
+        default:
+            return nil
+        }
+    }
+
+    private func labeledErrorLine(_ label: String, _ value: String?) -> String? {
+        guard let value else { return nil }
+        return "\(label): \(value)"
+    }
+
+    private func migrateGeminiImageModelIfNeeded() {
+        if geminiModelName.trimmingCharacters(in: .whitespacesAndNewlines) == "nano-banana-2" {
+            geminiModelName = "gemini-2.5-flash-image"
         }
     }
 
@@ -766,11 +1107,39 @@ struct ContentView: View {
         return cut.action
     }
 
-    private func referenceImagesForGeneration() -> [GeminiReferenceImage] {
-        document.project.referenceImages.compactMap { reference in
+    private func referenceImagesForGeneration(for cut: StoryboardCut) -> [GeminiReferenceImage] {
+        referencesForCut(cut).compactMap { reference in
             guard let data = document.imageData[reference.imageFileName] else { return nil }
             return GeminiReferenceImage(mimeType: mimeType(for: reference.imageFileName), data: data)
         }
+    }
+
+    private func referencesForCut(_ cut: StoryboardCut) -> [ReferenceImage] {
+        cut.referenceImageIDs.compactMap { id in
+            document.project.referenceImages.first { $0.id == id }
+        }
+    }
+
+    private func drawingPromptForGeneration(references: [ReferenceImage]) -> String {
+        [
+            document.project.drawingSettings.promptText(),
+            referenceImagePrompt(references: references)
+        ]
+        .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+        .joined(separator: "\n\n")
+    }
+
+    private func referenceImagePrompt(references: [ReferenceImage]) -> String {
+        let details = references.enumerated().map { index, reference in
+            let prompt = reference.promptText().trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !prompt.isEmpty else { return "" }
+            return "Reference image \(index + 1):\n\(prompt)"
+        }
+        .filter { !$0.isEmpty }
+        .joined(separator: "\n\n")
+
+        guard !details.isEmpty else { return "" }
+        return "Reference image details:\n\(details)"
     }
 
     private func mimeType(for fileName: String) -> String {

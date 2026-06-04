@@ -19,6 +19,7 @@ struct PrintablePageView: View {
             pageCutIDs: pageCutIDs,
             generatingCutID: nil,
             generate: { _ in },
+            importImage: { _ in },
             addAfter: { _ in },
             delete: { _ in }
         )

@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 enum StoryboardPageLayout {
@@ -59,6 +60,7 @@ struct StoryboardPageView: View {
     var pageCutIDs: [StoryboardCut.ID]? = nil
     var generatingCutID: StoryboardCut.ID?
     var generate: (StoryboardCut.ID) -> Void
+    var importImage: (StoryboardCut.ID) -> Void
     var addAfter: (StoryboardCut.ID) -> Void
     var delete: (StoryboardCut.ID) -> Void
 
@@ -123,35 +125,34 @@ struct StoryboardPageView: View {
 
     private var pageTitle: some View {
         HStack {
-            TextField("タイトル", text: $document.project.title)
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(.black)
-                .textFieldStyle(.plain)
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
+            CompactPageTextField(
+                text: $document.project.title,
+                placeholder: "タイトル",
+                font: .systemFont(ofSize: 15, weight: .semibold)
+            )
                 .frame(minWidth: 120, maxWidth: 160)
 
-            TextField("ブロック", text: pageSubtitle)
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(.black)
-                .textFieldStyle(.plain)
-                .lineLimit(1)
+            CompactPageTextField(
+                text: pageSubtitle,
+                placeholder: "ブロック",
+                font: .systemFont(ofSize: 12, weight: .medium)
+            )
                 .frame(width: 120)
                 .padding(.leading, 8)
 
-            TextField("シーケンス", text: pageScriptHeading)
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(.black)
-                .textFieldStyle(.plain)
-                .lineLimit(1)
+            CompactPageTextField(
+                text: pageScriptHeading,
+                placeholder: "シーケンス",
+                font: .systemFont(ofSize: 12, weight: .medium)
+            )
                 .frame(width: 120)
                 .padding(.leading, 8)
 
-            TextField("シーン", text: pageSceneName)
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(.black)
-                .textFieldStyle(.plain)
-                .lineLimit(1)
+            CompactPageTextField(
+                text: pageSceneName,
+                placeholder: "シーン",
+                font: .systemFont(ofSize: 12, weight: .medium)
+            )
                 .frame(width: 110)
                 .padding(.leading, 8)
 
@@ -225,6 +226,7 @@ struct StoryboardPageView: View {
                         cut: cut,
                         imageData: cut.wrappedValue.imageFileName.flatMap { document.imageData[$0] },
                         image: ImageHelpers.nsImage(from: cut.wrappedValue.imageFileName.flatMap { document.imageData[$0] }),
+                        referenceImages: document.project.referenceImages,
                         screenAspectRatio: screenAspectRatio,
                         showsGeneratePlaceholder: showsGeneratePlaceholder,
                         showsCutActionControls: showsCutActionControls,
@@ -235,6 +237,7 @@ struct StoryboardPageView: View {
                         textBaseFontSize: textBaseFontSize,
                         isGenerating: generatingCutID == cut.wrappedValue.id,
                         generate: { generate(cut.wrappedValue.id) },
+                        importImage: { importImage(cut.wrappedValue.id) },
                         addAfter: { addAfter(cut.wrappedValue.id) },
                         delete: { delete(cut.wrappedValue.id) }
                     )
@@ -267,7 +270,7 @@ struct StoryboardPageView: View {
             GapCell()
             HeaderCell("画面", width: imageColumnWidth)
             HeaderCell("内容", width: contentColumnWidth)
-            HeaderCell("ト書き", width: actionColumnWidth)
+            HeaderCell("セリフ", width: actionColumnWidth)
             HeaderCell("秒", width: StoryboardPageLayout.sideColumnWidth)
         }
         .frame(height: StoryboardPageLayout.headerHeight)
@@ -284,7 +287,7 @@ struct StoryboardPageView: View {
                 .offset(x: screenContentX - 5)
                 .gesture(textColumnResizeGesture)
 
-            ColumnResizeHandle(help: "ドラッグして内容とト書きの幅を調整")
+            ColumnResizeHandle(help: "ドラッグして内容とセリフの幅を調整")
                 .frame(width: 10, height: tableHeight)
                 .offset(x: contentActionX - 5)
                 .gesture(contentColumnResizeGesture)
@@ -359,6 +362,59 @@ private struct ColumnResizeHandle: View {
                 }
             }
             .help(help)
+    }
+}
+
+private struct CompactPageTextField: NSViewRepresentable {
+    @Binding var text: String
+
+    var placeholder: String
+    var font: NSFont
+
+    func makeNSView(context: Context) -> CompactPageNSTextField {
+        let field = CompactPageNSTextField(frame: .zero)
+        field.isBordered = false
+        field.isBezeled = false
+        field.drawsBackground = false
+        field.focusRingType = .none
+        field.delegate = context.coordinator
+        field.lineBreakMode = .byTruncatingTail
+        field.cell?.wraps = false
+        field.cell?.isScrollable = true
+        return field
+    }
+
+    func updateNSView(_ nsView: CompactPageNSTextField, context: Context) {
+        if nsView.stringValue != text {
+            nsView.stringValue = text
+        }
+        nsView.placeholderString = placeholder
+        nsView.font = font
+        nsView.textColor = .black
+        nsView.alignment = .left
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(text: $text)
+    }
+
+    final class Coordinator: NSObject, NSTextFieldDelegate {
+        @Binding var text: String
+
+        init(text: Binding<String>) {
+            _text = text
+        }
+
+        func controlTextDidChange(_ notification: Notification) {
+            guard let field = notification.object as? NSTextField else { return }
+            text = field.stringValue
+        }
+    }
+}
+
+private final class CompactPageNSTextField: NSTextField {
+    override var intrinsicContentSize: NSSize {
+        NSSize(width: NSView.noIntrinsicMetric, height: NSView.noIntrinsicMetric)
     }
 }
 

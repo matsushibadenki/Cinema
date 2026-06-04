@@ -1,3 +1,7 @@
+// file:///Users/Shared/Program/Xcode/Cinema/Sources/Cinema/Views/StoryboardCutRow.swift
+// StoryboardCutRow.swift
+// 絵コンテの各カット情報（カット番号、カット名、画像、セリフ、ト書き等）を表示・編集する行ビュー
+
 import AppKit
 import SwiftUI
 import UniformTypeIdentifiers
@@ -18,6 +22,81 @@ private struct PointingHandCursorModifier: ViewModifier {
                 NSCursor.pop()
             }
         }
+    }
+}
+
+private struct CompactStoryboardTextField: NSViewRepresentable {
+    @Binding var text: String
+
+    var placeholder = ""
+    var font: NSFont
+    var alignment: NSTextAlignment
+
+    func makeNSView(context: Context) -> CompactNSTextField {
+        let field = CompactNSTextField(frame: .zero)
+        field.isBordered = false
+        field.isBezeled = false
+        field.drawsBackground = false
+        field.focusRingType = .none
+        field.delegate = context.coordinator
+        field.lineBreakMode = .byTruncatingTail
+        field.cell?.wraps = false
+        field.cell?.isScrollable = true
+        return field
+    }
+
+    func updateNSView(_ nsView: CompactNSTextField, context: Context) {
+        if nsView.stringValue != text {
+            nsView.stringValue = text
+        }
+        nsView.placeholderString = placeholder
+        nsView.font = font
+        nsView.alignment = alignment
+        nsView.textColor = .black
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(text: $text)
+    }
+
+    final class Coordinator: NSObject, NSTextFieldDelegate {
+        @Binding var text: String
+
+        init(text: Binding<String>) {
+            _text = text
+        }
+
+        func controlTextDidChange(_ notification: Notification) {
+            guard let field = notification.object as? NSTextField else { return }
+            text = field.stringValue
+        }
+    }
+}
+
+private final class CompactNSTextField: NSTextField {
+    override var intrinsicContentSize: NSSize {
+        NSSize(width: NSView.noIntrinsicMetric, height: NSView.noIntrinsicMetric)
+    }
+}
+
+private struct StoryboardProgressIndicator: NSViewRepresentable {
+    func makeNSView(context: Context) -> CompactProgressIndicator {
+        let indicator = CompactProgressIndicator(frame: .zero)
+        indicator.style = .spinning
+        indicator.controlSize = .large
+        indicator.isIndeterminate = true
+        indicator.startAnimation(nil)
+        return indicator
+    }
+
+    func updateNSView(_ nsView: CompactProgressIndicator, context: Context) {
+        nsView.startAnimation(nil)
+    }
+}
+
+private final class CompactProgressIndicator: NSProgressIndicator {
+    override var intrinsicContentSize: NSSize {
+        NSSize(width: NSView.noIntrinsicMetric, height: NSView.noIntrinsicMetric)
     }
 }
 
@@ -132,9 +211,11 @@ struct StoryboardCutRow: View {
     @Binding var cut: StoryboardCut
     @Environment(\.isPrintingStoryboard) private var isPrintingStoryboard
     @State private var showsPromptEditor = false
+    @State private var showsReferencePicker = false
 
     var imageData: Data?
     var image: NSImage?
+    var referenceImages: [ReferenceImage]
     var screenAspectRatio: CGFloat
     var showsGeneratePlaceholder: Bool
     var showsCutActionControls: Bool
@@ -145,11 +226,12 @@ struct StoryboardCutRow: View {
     var textBaseFontSize: CGFloat
     var isGenerating: Bool
     var generate: () -> Void
+    var importImage: () -> Void
     var addAfter: () -> Void
     var delete: () -> Void
 
     var body: some View {
-        ZStack {
+        ZStack(alignment: .leading) {
             HStack(spacing: 0) {
                 cutColumn
                     .frame(width: StoryboardPageLayout.sideColumnWidth, height: StoryboardPageLayout.rowHeight)
@@ -164,7 +246,9 @@ struct StoryboardCutRow: View {
                     aspectRatio: screenAspectRatio,
                     showsGeneratePlaceholder: showsGeneratePlaceholder,
                     backgroundBrightness: screenBackgroundBrightness,
-                    isGenerating: isGenerating
+                    isGenerating: isGenerating,
+                    cutNumber: cut.cutNumber,
+                    importImage: importImage
                 )
                 .frame(width: imageColumnWidth, height: StoryboardPageLayout.rowHeight)
 
@@ -176,99 +260,122 @@ struct StoryboardCutRow: View {
                     .background(Color.white)
                     .frame(width: actionColumnWidth, height: StoryboardPageLayout.rowHeight)
 
-                TextField("", text: $cut.duration)
-                    .font(.system(size: 10, design: .serif))
-                    .foregroundStyle(.black)
-                    .multilineTextAlignment(.center)
-                    .textFieldStyle(.plain)
+                CompactStoryboardTextField(
+                    text: $cut.duration,
+                    font: .systemFont(ofSize: 10),
+                    alignment: .center
+                )
                     .frame(width: StoryboardPageLayout.sideColumnWidth, height: StoryboardPageLayout.rowHeight)
             }
 
+            if showsCutActionControls {
+                cutActionToolbar
+                    .frame(width: 18)
+                    .offset(x: -24)
+            }
         }
         .frame(height: StoryboardPageLayout.rowHeight)
     }
 
     private var cutColumn: some View {
-        ZStack {
-            VStack(spacing: 3) {
-                TextField("", value: $cut.cutNumber, format: .number)
-                    .font(.system(size: 12, design: .serif))
-                    .foregroundStyle(.black)
-                    .multilineTextAlignment(.center)
-                    .textFieldStyle(.plain)
+        VStack(spacing: 3) {
+            CompactStoryboardTextField(
+                text: cutNumberText,
+                font: .systemFont(ofSize: 12),
+                alignment: .center
+            )
+            .frame(height: 18)
+            .frame(maxWidth: .infinity, alignment: .center)
 
-                TextField("名前", text: $cut.cutName)
-                    .font(.system(size: 8))
-                    .foregroundStyle(.black)
-                    .multilineTextAlignment(.center)
-                    .textFieldStyle(.plain)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.6)
-            }
-            .padding(.horizontal, 2)
-
-            if showsCutActionControls {
-                VStack(spacing: 0) {
-                    HStack(spacing: 0) {
-                        Button(action: generate) {
-                            Image(systemName: "sparkles")
-                        }
-                        .buttonStyle(.borderless)
-                        .controlSize(.mini)
-                        .font(.system(size: 8))
-                        .frame(width: 14, height: 14)
-                        .contentShape(Rectangle())
-                        .pointingHandCursor(isEnabled: !isGenerating)
-                        .help("AIで画面を生成")
-                        .disabled(isGenerating)
-
-                        Button {
-                            showsPromptEditor.toggle()
-                        } label: {
-                            Image(systemName: "text.badge.plus")
-                        }
-                        .buttonStyle(.borderless)
-                        .controlSize(.mini)
-                        .font(.system(size: 8))
-                        .frame(width: 14, height: 14)
-                        .contentShape(Rectangle())
-                        .pointingHandCursor()
-                        .help("追加プロンプト")
-                        .popover(isPresented: $showsPromptEditor, arrowEdge: .trailing) {
-                            PromptEditorPopover(prompt: $cut.generationPrompt)
-                        }
-                    }
-
-                    Spacer(minLength: 0)
-
-                    HStack(spacing: 0) {
-                        Button(action: addAfter) {
-                            Image(systemName: "plus.square.on.square")
-                        }
-                        .buttonStyle(.borderless)
-                        .controlSize(.mini)
-                        .font(.system(size: 8))
-                        .frame(width: 14, height: 14)
-                        .contentShape(Rectangle())
-                        .pointingHandCursor()
-                        .help("この後ろにカットを追加")
-
-                        Button(role: .destructive, action: delete) {
-                            Image(systemName: "trash")
-                        }
-                        .buttonStyle(.borderless)
-                        .controlSize(.mini)
-                        .font(.system(size: 8))
-                        .frame(width: 14, height: 14)
-                        .contentShape(Rectangle())
-                        .pointingHandCursor()
-                        .help("カットを削除")
-                    }
-                }
-                .frame(width: 30)
-                .padding(.vertical, 3)
-            }
+            CompactStoryboardTextField(
+                text: $cut.cutName,
+                placeholder: "名前",
+                font: .systemFont(ofSize: 8),
+                alignment: .center
+            )
+            .frame(height: 14)
+            .frame(maxWidth: .infinity, alignment: .center)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+        .padding(.horizontal, 2)
+    }
+
+    private var cutActionToolbar: some View {
+        VStack(spacing: 7) {
+            iconButton(
+                systemName: "sparkles",
+                help: "AIで画面を生成",
+                action: generate
+            )
+            .pointingHandCursor(isEnabled: !isGenerating)
+            .disabled(isGenerating)
+
+            Button {
+                showsReferencePicker.toggle()
+            } label: {
+                Image(systemName: cut.referenceImageIDs.isEmpty ? "photo.on.rectangle" : "photo.on.rectangle.angled")
+            }
+            .buttonStyle(.borderless)
+            .controlSize(.mini)
+            .font(.system(size: 9))
+            .frame(width: 16, height: 16)
+            .contentShape(Rectangle())
+            .pointingHandCursor()
+            .help("このカットのリファレンスを選択")
+            .popover(isPresented: $showsReferencePicker, arrowEdge: .trailing) {
+                CutReferencePickerPopover(
+                    selectedIDs: $cut.referenceImageIDs,
+                    references: referenceImages
+                )
+            }
+
+            Button {
+                showsPromptEditor.toggle()
+            } label: {
+                Image(systemName: "text.badge.plus")
+            }
+            .buttonStyle(.borderless)
+            .controlSize(.mini)
+            .font(.system(size: 9))
+            .frame(width: 16, height: 16)
+            .contentShape(Rectangle())
+            .pointingHandCursor()
+            .help("追加プロンプト")
+            .popover(isPresented: $showsPromptEditor, arrowEdge: .trailing) {
+                PromptEditorPopover(prompt: $cut.generationPrompt)
+            }
+
+            iconButton(
+                systemName: "plus.square.on.square",
+                help: "この後ろにカットを追加",
+                action: addAfter
+            )
+
+            Button(role: .destructive, action: delete) {
+                Image(systemName: "trash")
+            }
+            .buttonStyle(.borderless)
+            .controlSize(.mini)
+            .font(.system(size: 9))
+            .frame(width: 16, height: 16)
+            .contentShape(Rectangle())
+            .pointingHandCursor()
+            .help("カットを削除")
+        }
+        .frame(maxHeight: .infinity, alignment: .center)
+    }
+
+    private func iconButton(systemName: String, help: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+        }
+        .buttonStyle(.borderless)
+        .controlSize(.mini)
+        .font(.system(size: 9))
+        .frame(width: 16, height: 16)
+        .contentShape(Rectangle())
+        .pointingHandCursor()
+        .help(help)
     }
 
     private var contentColumn: some View {
@@ -293,6 +400,17 @@ struct StoryboardCutRow: View {
 
     private var screenBackgroundColor: Color {
         Color(white: min(max(screenBackgroundBrightness, 0), 1))
+    }
+
+    private var cutNumberText: Binding<String> {
+        Binding {
+            String(cut.cutNumber)
+        } set: { newValue in
+            let digits = newValue.filter(\.isNumber)
+            if let number = Int(digits) {
+                cut.cutNumber = number
+            }
+        }
     }
 
 }
@@ -323,7 +441,7 @@ private struct SplitDragHandle: View {
                 NSCursor.pop()
             }
         }
-        .help("ドラッグして内容とト書きの高さを調整")
+        .help("ドラッグして内容とセリフの高さを調整")
     }
 }
 
@@ -339,6 +457,8 @@ private struct DialogueSheetEditor: View {
     private let splitHandleWidth: CGFloat = 3
     private let buttonWidth: CGFloat = 14
     private let buttonGap: CGFloat = 3
+    private let minimumSpeakerWidth: CGFloat = 24
+    private let minimumDialogueWidth: CGFloat = 26
 
     private var fontSize: CGFloat {
         max(baseFontSize - 1, 8)
@@ -349,46 +469,52 @@ private struct DialogueSheetEditor: View {
             GeometryReader { proxy in
                 let lineControlWidth = showsLineControls ? buttonWidth : 0
                 let lineControlGap = showsLineControls ? buttonGap : 0
-                let speakerWidth = speakerWidth(totalWidth: proxy.size.width)
-                let dialogueWidth = max(proxy.size.width - speakerWidth - splitHandleWidth - lineControlGap - lineControlWidth, 1)
-                let rowFontSize = isPrinting
-                    ? StoryboardTextFitter.dialogueFontSize(
-                        for: lines,
-                        speakerWidth: speakerWidth,
-                        dialogueWidth: dialogueWidth,
-                        height: proxy.size.height,
-                        base: fontSize,
-                        minimum: 5.5,
-                        minimumRowHeight: minimumRowHeight
-                    )
-                    : fontSize
+                let minimumEditorWidth = minimumSpeakerWidth + splitHandleWidth + minimumDialogueWidth + lineControlGap + lineControlWidth
 
-                ScrollView {
-                    VStack(spacing: 0) {
-                        ForEach(Array($lines.enumerated()), id: \.element.id) { index, $line in
-                            DialogueSheetRow(
-                                line: $line,
-                                speakerRatio: $speakerRatio,
-                                fontSize: rowFontSize,
-                                minimumRowHeight: minimumRowHeight,
-                                speakerWidth: speakerWidth,
-                                dialogueWidth: dialogueWidth,
-                                splitHandleWidth: splitHandleWidth,
-                                buttonWidth: lineControlWidth,
-                                buttonGap: lineControlGap,
-                                showsLineControls: showsLineControls,
-                                isPrinting: isPrinting,
-                                canDelete: lines.count > 1,
-                                showsAddButton: index == lines.count - 1,
-                                add: addLine,
-                                delete: { deleteLine(id: line.id) }
-                            )
+                if proxy.size.width >= minimumEditorWidth {
+                    let speakerWidth = speakerWidth(totalWidth: proxy.size.width)
+                    let dialogueWidth = max(proxy.size.width - speakerWidth - splitHandleWidth - lineControlGap - lineControlWidth, minimumDialogueWidth)
+                    let rowFontSize = isPrinting
+                        ? StoryboardTextFitter.dialogueFontSize(
+                            for: lines,
+                            speakerWidth: speakerWidth,
+                            dialogueWidth: dialogueWidth,
+                            height: proxy.size.height,
+                            base: fontSize,
+                            minimum: 5.5,
+                            minimumRowHeight: minimumRowHeight
+                        )
+                        : fontSize
+
+                    ScrollView {
+                        VStack(spacing: 0) {
+                            ForEach(Array($lines.enumerated()), id: \.element.id) { index, $line in
+                                DialogueSheetRow(
+                                    line: $line,
+                                    speakerRatio: $speakerRatio,
+                                    fontSize: rowFontSize,
+                                    minimumRowHeight: minimumRowHeight,
+                                    speakerWidth: speakerWidth,
+                                    dialogueWidth: dialogueWidth,
+                                    splitHandleWidth: splitHandleWidth,
+                                    buttonWidth: lineControlWidth,
+                                    buttonGap: lineControlGap,
+                                    showsLineControls: showsLineControls,
+                                    isPrinting: isPrinting,
+                                    canDelete: lines.count > 1,
+                                    showsAddButton: index == lines.count - 1,
+                                    add: addLine,
+                                    delete: { deleteLine(id: line.id) }
+                                )
+                            }
                         }
+                        .frame(width: proxy.size.width, alignment: .leading)
+                        .frame(minHeight: proxy.size.height, alignment: .top)
                     }
-                    .frame(width: proxy.size.width, alignment: .leading)
-                    .frame(minHeight: proxy.size.height, alignment: .top)
+                    .scrollIndicators(.never)
+                } else {
+                    Color.white
                 }
-                .scrollIndicators(.never)
             }
         }
         .background(Color.white)
@@ -414,8 +540,7 @@ private struct DialogueSheetEditor: View {
         let lineControlWidth = showsLineControls ? buttonWidth : 0
         let lineControlGap = showsLineControls ? buttonGap : 0
         let availableWidth = max(totalWidth - lineControlWidth - lineControlGap - splitHandleWidth, 1)
-        let minimumSpeakerWidth: CGFloat = 36
-        let maximumSpeakerWidth = max(minimumSpeakerWidth, availableWidth - 60)
+        let maximumSpeakerWidth = max(minimumSpeakerWidth, availableWidth - minimumDialogueWidth)
         return min(max(availableWidth * CGFloat(clampedSpeakerRatio(speakerRatio)), minimumSpeakerWidth), maximumSpeakerWidth)
     }
 
@@ -476,9 +601,7 @@ private struct DialogueSheetRow: View {
         .frame(minHeight: minimumRowHeight, alignment: .topLeading)
         .background(Color.white)
         .overlay(alignment: .bottom) {
-            Rectangle()
-                .fill(Color.black.opacity(0.2))
-                .frame(height: 0.5)
+            DialogueSheetRowDivider()
         }
     }
 
@@ -495,12 +618,10 @@ private struct DialogueSheetRow: View {
                 .frame(width: speakerWidth, alignment: .topLeading)
                 .frame(minHeight: minimumRowHeight, alignment: .topLeading)
         } else {
-            TextField("", text: $line.speaker, axis: .vertical)
-                .textFieldStyle(.plain)
+            TextEditor(text: $line.speaker)
                 .font(.system(size: fontSize))
                 .foregroundStyle(.black)
-                .multilineTextAlignment(.leading)
-                .lineLimit(1...)
+                .scrollContentBackground(.hidden)
                 .padding(.horizontal, StoryboardTextPadding.horizontal)
                 .padding(.vertical, StoryboardTextPadding.vertical)
                 .frame(width: speakerWidth, alignment: .topLeading)
@@ -522,12 +643,10 @@ private struct DialogueSheetRow: View {
                 .frame(width: dialogueWidth, alignment: .topLeading)
                 .frame(minHeight: minimumRowHeight, alignment: .topLeading)
         } else {
-            TextField("", text: $line.dialogue, axis: .vertical)
-                .textFieldStyle(.plain)
+            TextEditor(text: $line.dialogue)
                 .font(.system(size: fontSize))
                 .foregroundStyle(.black)
-                .multilineTextAlignment(.leading)
-                .lineLimit(1...)
+                .scrollContentBackground(.hidden)
                 .padding(.leading, StoryboardTextPadding.horizontal)
                 .padding(.trailing, 0)
                 .padding(.vertical, StoryboardTextPadding.vertical)
@@ -555,6 +674,19 @@ private struct DialogueSheetRow: View {
 
     private func clampedSpeakerRatio(_ ratio: Double) -> Double {
         min(max(ratio, 0.16), 0.55)
+    }
+}
+
+private struct DialogueSheetRowDivider: View {
+    var body: some View {
+        GeometryReader { proxy in
+            Path { path in
+                path.move(to: CGPoint(x: 0, y: 0.25))
+                path.addLine(to: CGPoint(x: proxy.size.width, y: 0.25))
+            }
+            .stroke(Color.black.opacity(0.22), style: StrokeStyle(lineWidth: 0.5, dash: [1.4, 2.2]))
+        }
+        .frame(height: 0.5)
     }
 }
 
@@ -592,6 +724,10 @@ private struct StoryboardScreenFrame: View {
     var showsGeneratePlaceholder: Bool
     var backgroundBrightness: CGFloat
     var isGenerating: Bool
+    var cutNumber: Int
+    var importImage: () -> Void
+
+    @State private var isEnlarged = false
 
     private var backgroundColor: Color {
         Color(white: min(max(backgroundBrightness, 0), 1))
@@ -609,30 +745,57 @@ private struct StoryboardScreenFrame: View {
                 Rectangle()
                     .fill(backgroundColor)
 
-                ZStack {
-                    Rectangle()
-                        .fill(Color.white)
+                ZStack(alignment: .bottomTrailing) {
+                    ZStack {
+                        if let image {
+                            Image(nsImage: image)
+                                .resizable()
+                                .scaledToFit()
+                                .onTapGesture(count: 2) {
+                                    isEnlarged = true
+                                }
+                                .pointingHandCursor()
+                        } else {
+                            Rectangle()
+                                .fill(Color.white)
 
-                    if let image {
-                        Image(nsImage: image)
-                            .resizable()
-                            .scaledToFit()
-                            .padding(4)
-                    } else if showsGeneratePlaceholder {
-                        VStack(spacing: 6) {
-                            Image(systemName: "photo")
-                                .font(.system(size: 24))
-                            Text("Generate")
-                                .font(.caption2)
+                            if showsGeneratePlaceholder {
+                                VStack(spacing: 6) {
+                                    Image(systemName: "photo")
+                                        .font(.system(size: 24))
+                                    Text("Generate")
+                                        .font(.caption2)
+                                }
+                                .foregroundStyle(.gray)
+                            }
                         }
-                        .foregroundStyle(.gray)
+                    }
+                    .frame(width: frameSize.width, height: frameSize.height)
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        importImage()
+                    }
+                    .help("クリックして画像を読み込む。ダブルクリックで拡大表示")
+
+                    if let imageData {
+                        Button {
+                            saveImage(data: imageData)
+                        } label: {
+                            Image(systemName: "arrow.down.circle.fill")
+                                .font(.system(size: 20))
+                                .foregroundStyle(.white)
+                                .shadow(color: .black.opacity(0.4), radius: 2, x: 0, y: 1)
+                        }
+                        .buttonStyle(.plain)
+                        .padding(8)
+                        .pointingHandCursor()
+                        .help("画像をダウンロード")
                     }
                 }
-                .frame(width: frameSize.width, height: frameSize.height)
 
                 if isGenerating {
-                    ProgressView()
-                        .controlSize(.large)
+                    StoryboardProgressIndicator()
+                        .frame(width: 32, height: 32)
                         .padding(12)
                         .background(.regularMaterial)
                         .clipShape(RoundedRectangle(cornerRadius: 8))
@@ -645,19 +808,33 @@ private struct StoryboardScreenFrame: View {
                     }
                 }
             }
+            .sheet(isPresented: $isEnlarged) {
+                if let image, let imageData {
+                    EnlargedImageView(
+                        image: image,
+                        cutNumber: cutNumber,
+                        onDismiss: { isEnlarged = false },
+                        onDownload: { saveImage(data: imageData) }
+                    )
+                }
+            }
         }
     }
 
     private func saveImage(data: Data) {
         let panel = NSSavePanel()
         panel.allowedContentTypes = [.png]
-        panel.nameFieldStringValue = "storyboard-image.png"
+        panel.nameFieldStringValue = "cut-\(cutNumber).png"
         panel.canCreateDirectories = true
 
         panel.begin { response in
             guard response == .OK, let url = panel.url else { return }
             do {
-                try data.write(to: url)
+                // Settings' aspect ratio is matched and upconverted to 4K height (2160pt)
+                let targetHeight: CGFloat = 2160
+                let targetWidth = targetHeight * aspectRatio
+                let upconvertedData = ImageHelpers.pngDataByResizing(data, width: Int(targetWidth), height: Int(targetHeight))
+                try upconvertedData.write(to: url)
             } catch {
                 NSSound.beep()
             }
@@ -671,6 +848,66 @@ private struct StoryboardScreenFrame: View {
         }
 
         return CGSize(width: size.height * aspectRatio, height: size.height)
+    }
+}
+
+private struct EnlargedImageView: View {
+    var image: NSImage
+    var cutNumber: Int
+    var onDismiss: () -> Void
+    var onDownload: () -> Void
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Text("カット \(cutNumber) 拡大プレビュー")
+                    .font(.headline)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Button(action: onDismiss) {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.title2)
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .keyboardShortcut(.cancelAction)
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 14)
+            .background(Color(nsColor: .windowBackgroundColor))
+
+            Divider()
+
+            ZStack {
+                Color.black.opacity(0.03)
+                
+                Image(nsImage: image)
+                    .resizable()
+                    .scaledToFit()
+                    .padding(20)
+                    .shadow(color: .black.opacity(0.15), radius: 10, x: 0, y: 5)
+            }
+
+            Divider()
+
+            HStack(spacing: 12) {
+                Button(action: onDownload) {
+                    Label("4Kアップコンバート保存", systemImage: "arrow.down.doc.fill")
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+                .pointingHandCursor()
+
+                Button("閉じる", action: onDismiss)
+                    .buttonStyle(.bordered)
+                    .controlSize(.large)
+                    .pointingHandCursor()
+            }
+            .padding(.vertical, 16)
+            .padding(.horizontal, 20)
+            .background(Color(nsColor: .windowBackgroundColor))
+        }
+        .frame(minWidth: 640, minHeight: 480)
     }
 }
 
@@ -758,6 +995,72 @@ private struct PromptEditorPopover: View {
                 .frame(width: 460, height: 320)
         }
         .padding(12)
+    }
+}
+
+private struct CutReferencePickerPopover: View {
+    @Binding var selectedIDs: [ReferenceImage.ID]
+    var references: [ReferenceImage]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("このカットのリファレンス")
+                .font(.headline)
+
+            if references.isEmpty {
+                Text("右側のリファレンス欄で写真を追加してください。")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .frame(width: 260, alignment: .leading)
+            } else {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 8) {
+                        ForEach(references) { reference in
+                            Toggle(isOn: binding(for: reference.id)) {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(reference.name.isEmpty ? "名称なし" : reference.name)
+                                        .lineLimit(1)
+                                    Text(reference.imageFileName)
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                        .lineLimit(1)
+                                }
+                            }
+                        }
+                    }
+                    .padding(.vertical, 2)
+                }
+                .frame(width: 300, height: min(CGFloat(references.count) * 34 + 12, 240))
+
+                HStack {
+                    Button("すべて選択") {
+                        selectedIDs = references.map(\.id)
+                    }
+
+                    Button("解除") {
+                        selectedIDs.removeAll()
+                    }
+
+                    Spacer()
+                }
+                .buttonStyle(.bordered)
+            }
+        }
+        .padding(12)
+    }
+
+    private func binding(for id: ReferenceImage.ID) -> Binding<Bool> {
+        Binding {
+            selectedIDs.contains(id)
+        } set: { isSelected in
+            if isSelected {
+                if !selectedIDs.contains(id) {
+                    selectedIDs.append(id)
+                }
+            } else {
+                selectedIDs.removeAll { $0 == id }
+            }
+        }
     }
 }
 
