@@ -11,7 +11,9 @@ struct DrawingSettingsView: View {
         VStack(alignment: .leading, spacing: 0) {
             header
 
-            Divider()
+            Rectangle()
+                .fill(CinemaDesign.fineBorder)
+                .frame(height: 1)
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
@@ -23,9 +25,10 @@ struct DrawingSettingsView: View {
                     }
                 }
                 .padding(24)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
-        .background(Color(nsColor: .textBackgroundColor))
+        .background(CinemaDesign.canvasBackground)
         .onAppear {
             settings.ensureSelection()
         }
@@ -35,6 +38,7 @@ struct DrawingSettingsView: View {
         HStack(spacing: 12) {
             Text("描画設定")
                 .font(.title2.weight(.semibold))
+                .foregroundStyle(CinemaDesign.ink)
 
             Picker("プリセット", selection: $settings.selectedPresetID) {
                 ForEach(settings.presets) { preset in
@@ -67,6 +71,7 @@ struct DrawingSettingsView: View {
         }
         .padding(.horizontal, 24)
         .padding(.vertical, 16)
+        .background(.ultraThinMaterial)
     }
 
     private func presetEditor(index: Int) -> some View {
@@ -129,12 +134,7 @@ struct DrawingSettingsView: View {
             .buttonStyle(.bordered)
         }
         .padding(16)
-        .background(Color(nsColor: .controlBackgroundColor))
-        .clipShape(RoundedRectangle(cornerRadius: 8))
-        .overlay {
-            RoundedRectangle(cornerRadius: 8)
-                .stroke(Color(nsColor: .separatorColor), lineWidth: 0.8)
-        }
+        .cinemaPanel(isHighlighted: true)
     }
 
     private func fieldEditor(presetIndex: Int, sectionIndex: Int, fieldIndex: Int) -> some View {
@@ -160,11 +160,11 @@ struct DrawingSettingsView: View {
                 .scrollContentBackground(.hidden)
                 .padding(8)
                 .frame(minHeight: 88)
-                .background(Color(nsColor: .textBackgroundColor))
+                .background(Color.white.opacity(0.94))
                 .clipShape(RoundedRectangle(cornerRadius: 6))
                 .overlay {
                     RoundedRectangle(cornerRadius: 6)
-                        .stroke(Color(nsColor: .separatorColor), lineWidth: 0.6)
+                        .stroke(CinemaDesign.fineBorder, lineWidth: 0.6)
                 }
         }
     }

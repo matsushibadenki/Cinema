@@ -9,6 +9,7 @@ struct ReferenceSidebarView: View {
             HStack {
                 Label("リファレンス", systemImage: "photo.on.rectangle")
                     .font(.headline)
+                    .foregroundStyle(CinemaDesign.ink)
                 Spacer()
                 Button {
                     addReferenceImage()
@@ -22,6 +23,7 @@ struct ReferenceSidebarView: View {
                 VStack(spacing: 8) {
                     Image(systemName: "photo.badge.plus")
                         .font(.system(size: 28))
+                        .foregroundStyle(CinemaDesign.mutedInk)
                     Text("登録写真なし")
                         .font(.callout)
                         .foregroundStyle(.secondary)
@@ -45,7 +47,7 @@ struct ReferenceSidebarView: View {
         }
         .padding(12)
         .frame(minWidth: 220, idealWidth: 240, maxWidth: 280)
-        .background(.bar)
+        .background(CinemaDesign.panelBackground)
     }
 
     private func addReferenceImage() {
@@ -93,8 +95,8 @@ private struct ReferenceImageRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             ZStack {
-                Rectangle()
-                    .fill(Color(nsColor: .textBackgroundColor))
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(Color.white.opacity(0.92))
                 if let image {
                     Image(nsImage: image)
                         .resizable()
@@ -110,8 +112,9 @@ private struct ReferenceImageRow: View {
             .clipShape(RoundedRectangle(cornerRadius: 6))
             .overlay {
                 RoundedRectangle(cornerRadius: 6)
-                    .stroke(.separator, lineWidth: 0.5)
+                    .stroke(CinemaDesign.warmBorder, lineWidth: 0.7)
             }
+            .shadow(color: .black.opacity(0.06), radius: 6, y: 2)
 
             HStack(spacing: 6) {
                 TextField("名前", text: $reference.name)
@@ -132,8 +135,7 @@ private struct ReferenceImageRow: View {
             }
         }
         .padding(8)
-        .background(.regularMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .cinemaPanel()
     }
 
     private var referenceDetailsEditor: some View {
@@ -192,8 +194,7 @@ private struct ReferenceImageRow: View {
                     .controlSize(.small)
                 }
                 .padding(8)
-                .background(Color(nsColor: .controlBackgroundColor))
-                .clipShape(RoundedRectangle(cornerRadius: 6))
+                .cinemaPanel(cornerRadius: 6)
             }
 
             Button {

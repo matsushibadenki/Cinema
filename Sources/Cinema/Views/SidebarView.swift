@@ -44,6 +44,7 @@ struct SidebarView: View {
         VStack(alignment: .leading, spacing: 12) {
             TextField("タイトル", text: $title)
                 .textFieldStyle(.roundedBorder)
+                .font(.system(size: 15, weight: .semibold))
                 .padding(.horizontal, 12)
                 .padding(.top, 12)
 
@@ -132,6 +133,7 @@ struct SidebarView: View {
                     Label("ブロックを追加", systemImage: "text.badge.plus")
                 }
                 .buttonStyle(.bordered)
+                .controlSize(.large)
 
                 Button {
                     addCut()
@@ -139,17 +141,20 @@ struct SidebarView: View {
                     Label("カットを追加", systemImage: "plus")
                 }
                 .buttonStyle(.borderedProminent)
+                .controlSize(.large)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding([.horizontal, .bottom], 12)
         }
         .frame(minWidth: 220)
+        .background(CinemaDesign.panelBackground)
     }
 
     private var aiPanel: some View {
         VStack(alignment: .leading, spacing: 10) {
             Label("AI", systemImage: "sparkles")
                 .font(.headline)
+                .foregroundStyle(CinemaDesign.ink)
 
             if isAICostLimitExceeded {
                 Label("推定料金が上限を超えています", systemImage: "exclamationmark.triangle.fill")
@@ -160,6 +165,7 @@ struct SidebarView: View {
             VStack(alignment: .leading, spacing: 6) {
                 Label("描画プリセット", systemImage: "paintpalette")
                     .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(CinemaDesign.mutedInk)
 
                 Picker("描画プリセット", selection: $drawingSettings.selectedPresetID) {
                     ForEach(drawingSettings.presets) { preset in
@@ -206,11 +212,11 @@ struct SidebarView: View {
             .foregroundStyle(isAICostLimitExceeded ? .red : .secondary)
         }
         .padding(12)
-        .background(isAICostLimitExceeded ? Color.red.opacity(0.13) : Color(nsColor: .controlBackgroundColor))
-        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .background(isAICostLimitExceeded ? Color.red.opacity(0.12) : Color.clear)
+        .cinemaPanel(isHighlighted: true)
         .overlay {
             RoundedRectangle(cornerRadius: 8)
-                .stroke(isAICostLimitExceeded ? Color.red.opacity(0.65) : Color.accentColor.opacity(0.28), lineWidth: 1)
+                .stroke(isAICostLimitExceeded ? Color.red.opacity(0.65) : CinemaDesign.warmBorder, lineWidth: 1)
         }
         .padding(.horizontal, 12)
     }
@@ -273,12 +279,7 @@ struct SidebarView: View {
             }
         }
         .padding(12)
-        .background(Color(nsColor: .textBackgroundColor))
-        .clipShape(RoundedRectangle(cornerRadius: 8))
-        .overlay {
-            RoundedRectangle(cornerRadius: 8)
-                .stroke(Color.accentColor.opacity(0.35), lineWidth: 1)
-        }
+        .cinemaPanel()
     }
 
     private var estimatedCostText: String {
@@ -308,7 +309,7 @@ struct SidebarView: View {
 
     private var cutSections: [CutSidebarSection] {
         var sections: [CutSidebarSection] = []
-        var currentTitle = "ブロックなし"
+        var currentTitle = "ブロック1"
         var currentCuts: [StoryboardCut] = []
 
         for cut in cuts {
@@ -411,8 +412,8 @@ private struct CutSidebarRow: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(.horizontal, 6)
-        .padding(.vertical, 4)
+        .padding(.horizontal, 7)
+        .padding(.vertical, 5)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(rowBackground)
         .overlay(alignment: .top) {
@@ -433,7 +434,7 @@ private struct CutSidebarRow: View {
         }
         .overlay {
             if dropTargetPosition != nil {
-                RoundedRectangle(cornerRadius: 5)
+                RoundedRectangle(cornerRadius: 6)
                     .stroke(Color.accentColor.opacity(0.7), lineWidth: 1)
             }
         }
@@ -443,7 +444,11 @@ private struct CutSidebarRow: View {
     private var dragHandle: some View {
         ZStack {
             RoundedRectangle(cornerRadius: 4)
-                .fill(isDragged ? Color.accentColor.opacity(0.18) : Color.secondary.opacity(0.08))
+                .fill(isDragged ? Color.accentColor.opacity(0.18) : Color.white.opacity(0.78))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 4)
+                        .stroke(CinemaDesign.fineBorder, lineWidth: 0.6)
+                }
 
             Image(systemName: "line.3.horizontal")
                 .font(.caption.weight(.semibold))
@@ -458,14 +463,18 @@ private struct CutSidebarRow: View {
     @ViewBuilder
     private var rowBackground: some View {
         if dropTargetPosition != nil {
-            RoundedRectangle(cornerRadius: 5)
+            RoundedRectangle(cornerRadius: 6)
                 .fill(Color.accentColor.opacity(0.16))
         } else if isDragged {
-            RoundedRectangle(cornerRadius: 5)
+            RoundedRectangle(cornerRadius: 6)
                 .fill(Color.secondary.opacity(0.14))
         } else if isVideoSceneSelected {
-            RoundedRectangle(cornerRadius: 5)
-                .fill(Color.accentColor.opacity(0.12))
+            RoundedRectangle(cornerRadius: 6)
+                .fill(Color.white.opacity(0.9))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 6)
+                        .stroke(CinemaDesign.warmBorder, lineWidth: 0.8)
+                }
         }
     }
 }
@@ -622,7 +631,13 @@ private struct SceneSelectionRow: View {
             .padding(.vertical, 6)
             .background {
                 RoundedRectangle(cornerRadius: 7)
-                    .fill(isSelected ? Color.accentColor.opacity(0.18) : Color.clear)
+                    .fill(isSelected ? Color.white.opacity(0.92) : Color.clear)
+                    .overlay {
+                        if isSelected {
+                            RoundedRectangle(cornerRadius: 7)
+                                .stroke(CinemaDesign.warmBorder, lineWidth: 0.8)
+                        }
+                    }
             }
         }
         .buttonStyle(.plain)

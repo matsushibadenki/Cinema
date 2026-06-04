@@ -45,6 +45,7 @@ struct ContentView: View {
     @AppStorage("aiEstimatedCostUSD") private var aiEstimatedCostUSD = 0.0
     @AppStorage("aiCostLimitEnabled") private var aiCostLimitEnabled = false
     @AppStorage("aiCostLimitUSD") private var aiCostLimitUSD = 10.0
+    @AppStorage("showsReferenceSidebar") private var showsReferenceSidebar = true
 
     @State private var pageIndex = 0
     @State private var generationStatus: String?
@@ -102,9 +103,14 @@ struct ContentView: View {
                     detailCanvas
                 }
 
-                Divider()
-                ReferenceSidebarView(document: $document)
+                if showsReferenceSidebar {
+                    Divider()
+                    ReferenceSidebarView(document: $document)
+                        .transition(.move(edge: .trailing).combined(with: .opacity))
+                }
             }
+            .background(CinemaDesign.canvasBackground)
+            .animation(.easeInOut(duration: 0.18), value: showsReferenceSidebar)
         }
         .navigationTitle(documentTitle)
         .alert(item: $generationErrorAlert) { alert in
@@ -182,7 +188,14 @@ struct ContentView: View {
                 .frame(width: currentPageSize.width, height: currentPageSize.height)
                 .background(pageSurfaceBackground)
                 .clipShape(RoundedRectangle(cornerRadius: showsFullCanvas ? 0 : 4))
-                .shadow(color: .black.opacity(showsFullCanvas ? 0 : 0.22), radius: 18, y: 8)
+                .overlay {
+                    if !showsFullCanvas {
+                        RoundedRectangle(cornerRadius: 4)
+                            .stroke(CinemaDesign.warmBorder, lineWidth: 0.8)
+                    }
+                }
+                .shadow(color: CinemaDesign.pageShadow.opacity(showsFullCanvas ? 0 : 1), radius: 24, x: 0, y: 12)
+                .shadow(color: Color.white.opacity(showsFullCanvas ? 0 : 0.75), radius: 1, x: 0, y: -1)
                 .scaleEffect(zoomScale, anchor: .topLeading)
         }
         .frame(
@@ -211,7 +224,13 @@ struct ContentView: View {
                 ScrollView([.horizontal, .vertical], showsIndicators: !showsFullCanvas) {
                     zoomablePage
                 }
-                .background(showsFullCanvas ? Color.clear : Color(nsColor: .underPageBackgroundColor))
+                .background {
+                    if showsFullCanvas {
+                        Color.clear
+                    } else {
+                        CinemaDesign.canvasBackground
+                    }
+                }
             }
         }
     }
@@ -282,7 +301,7 @@ struct ContentView: View {
     }
 
     private var toolbar: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 7) {
             HStack(spacing: 12) {
                 HStack(spacing: 12) {
                     Picker("", selection: $displayMode) {
@@ -308,6 +327,7 @@ struct ContentView: View {
                         Label("描画設定", systemImage: "paintpalette")
                     }
                     .buttonStyle(.bordered)
+                    .controlSize(.large)
                     .tint(showsDrawingSettings ? .accentColor : nil)
                     .padding(.leading, 12)
                 }
@@ -318,19 +338,22 @@ struct ContentView: View {
                     Button {
                         pageIndex = max(pageIndex - 1, 0)
                     } label: {
-                        Label("前ページ", systemImage: "chevron.left")
+                        Image(systemName: "chevron.left")
                     }
+                    .help("前ページ")
                     .disabled(showsDrawingSettings || pageIndex == 0)
 
                     Text("\(pageIndex + 1) / \(currentPageCount)")
-                        .font(.headline.monospacedDigit())
+                        .font(.system(.headline, design: .rounded).monospacedDigit())
+                        .foregroundStyle(CinemaDesign.ink)
                         .frame(minWidth: 72)
 
                     Button {
                         pageIndex = min(pageIndex + 1, currentPageCount - 1)
                     } label: {
-                        Label("次ページ", systemImage: "chevron.right")
+                        Image(systemName: "chevron.right")
                     }
+                    .help("次ページ")
                     .disabled(showsDrawingSettings || pageIndex >= currentPageCount - 1)
 
                     Button {
@@ -339,6 +362,7 @@ struct ContentView: View {
                         Label("全面", systemImage: showsFullCanvas ? "rectangle.inset.filled" : "rectangle.expand.vertical")
                     }
                     .buttonStyle(.bordered)
+                    .controlSize(.large)
                     .tint(showsFullCanvas ? .accentColor : nil)
                     .disabled(showsDrawingSettings)
 
@@ -349,8 +373,9 @@ struct ContentView: View {
                         Button {
                             changeZoom(by: -zoomStep)
                         } label: {
-                            Label("縮小", systemImage: "minus.magnifyingglass")
+                            Image(systemName: "minus.magnifyingglass")
                         }
+                        .help("縮小")
                         .disabled(showsDrawingSettings || zoomScale <= minimumZoomScale)
 
                         Text(zoomPercentageText)
@@ -361,8 +386,9 @@ struct ContentView: View {
                         Button {
                             changeZoom(by: zoomStep)
                         } label: {
-                            Label("拡大", systemImage: "plus.magnifyingglass")
+                            Image(systemName: "plus.magnifyingglass")
                         }
+                        .help("拡大")
                         .disabled(showsDrawingSettings || zoomScale >= maximumZoomScale)
 
                         Button {
@@ -378,10 +404,22 @@ struct ContentView: View {
 
                 HStack(spacing: 12) {
                     Button {
+                        showsReferenceSidebar.toggle()
+                    } label: {
+                        Image(systemName: showsReferenceSidebar ? "sidebar.right" : "sidebar.right")
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.large)
+                    .tint(showsReferenceSidebar ? .accentColor : nil)
+                    .help(showsReferenceSidebar ? "リファレンスを非表示" : "リファレンスを表示")
+
+                    Button {
                         printCurrentPage()
                     } label: {
                         Label("プリント", systemImage: "printer")
                     }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.large)
                     .disabled(showsDrawingSettings)
                 }
             }
@@ -394,8 +432,13 @@ struct ContentView: View {
             }
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, 10)
-        .background(.bar)
+        .padding(.vertical, 11)
+        .background(.ultraThinMaterial)
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(CinemaDesign.fineBorder)
+                .frame(height: 1)
+        }
     }
 
     private var zoomPercentageText: String {
@@ -663,7 +706,7 @@ struct ContentView: View {
 
     private func sceneSections() -> [(title: String, cuts: [StoryboardCut])] {
         var sections: [(title: String, cuts: [StoryboardCut])] = []
-        var currentTitle = "ブロックなし"
+        var currentTitle = "ブロック1"
         var currentCuts: [StoryboardCut] = []
 
         for cut in document.project.cuts {

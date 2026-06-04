@@ -119,7 +119,13 @@ struct StoryboardPageView: View {
             .frame(height: StoryboardPageLayout.footerHeight)
         }
         .padding(StoryboardPageLayout.pageMargin)
-        .background(.white)
+        .background(
+            LinearGradient(
+                colors: [.white, Color(red: 0.995, green: 0.992, blue: 0.982)],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+        )
         .onAppear(perform: applyDefaultColumnWidthsIfNeeded)
     }
 
@@ -159,6 +165,7 @@ struct StoryboardPageView: View {
             Spacer()
         }
         .frame(height: StoryboardPageLayout.titleHeight)
+        .foregroundStyle(CinemaDesign.ink)
     }
 
     private var pageSubtitle: Binding<String> {
@@ -338,7 +345,7 @@ struct StoryboardPageView: View {
 private struct GapCell: View {
     var body: some View {
         Rectangle()
-            .fill(Color.white)
+            .fill(Color(red: 0.98, green: 0.975, blue: 0.955))
             .frame(width: StoryboardPageLayout.cutImageGap)
     }
 }
@@ -581,8 +588,9 @@ private struct HeaderCell: View {
 
     var body: some View {
         Text(title)
-            .font(.system(size: 9, weight: .semibold))
-            .foregroundStyle(.black)
+            .font(.system(size: 9, weight: .bold))
+            .foregroundStyle(CinemaDesign.ink)
             .frame(width: width, height: 28)
+            .background(Color(red: 0.985, green: 0.98, blue: 0.962))
     }
 }

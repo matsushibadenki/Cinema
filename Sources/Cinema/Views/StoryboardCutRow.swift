@@ -237,7 +237,7 @@ struct StoryboardCutRow: View {
                     .frame(width: StoryboardPageLayout.sideColumnWidth, height: StoryboardPageLayout.rowHeight)
 
                 Rectangle()
-                    .fill(Color.white)
+                    .fill(Color(red: 0.98, green: 0.975, blue: 0.955))
                     .frame(width: StoryboardPageLayout.cutImageGap, height: StoryboardPageLayout.rowHeight)
 
                 StoryboardScreenFrame(
@@ -270,8 +270,16 @@ struct StoryboardCutRow: View {
 
             if showsCutActionControls {
                 cutActionToolbar
-                    .frame(width: 18)
-                    .offset(x: -24)
+                    .padding(.vertical, 8)
+                    .frame(width: 20, height: StoryboardPageLayout.rowHeight - 18)
+                    .background(.regularMaterial)
+                    .clipShape(Capsule())
+                    .overlay {
+                        Capsule()
+                            .stroke(CinemaDesign.fineBorder, lineWidth: 0.6)
+                    }
+                    .shadow(color: .black.opacity(0.08), radius: 8, y: 3)
+                    .offset(x: -28)
             }
         }
         .frame(height: StoryboardPageLayout.rowHeight)
@@ -301,7 +309,7 @@ struct StoryboardCutRow: View {
     }
 
     private var cutActionToolbar: some View {
-        VStack(spacing: 7) {
+        VStack(spacing: 5) {
             iconButton(
                 systemName: "sparkles",
                 help: "AIで画面を生成",
@@ -742,8 +750,14 @@ private struct StoryboardScreenFrame: View {
             let frameSize = fittedSize(in: paddedSize, aspectRatio: aspectRatio)
 
             ZStack {
-                Rectangle()
-                    .fill(backgroundColor)
+                LinearGradient(
+                    colors: [
+                        backgroundColor,
+                        backgroundColor.opacity(0.86)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
 
                 ZStack(alignment: .bottomTrailing) {
                     ZStack {
@@ -757,7 +771,7 @@ private struct StoryboardScreenFrame: View {
                                 .pointingHandCursor()
                         } else {
                             Rectangle()
-                                .fill(Color.white)
+                                .fill(Color(red: 0.99, green: 0.988, blue: 0.98))
 
                             if showsGeneratePlaceholder {
                                 VStack(spacing: 6) {
@@ -771,6 +785,11 @@ private struct StoryboardScreenFrame: View {
                         }
                     }
                     .frame(width: frameSize.width, height: frameSize.height)
+                    .overlay {
+                        Rectangle()
+                            .stroke(Color.black.opacity(0.12), lineWidth: 0.8)
+                    }
+                    .shadow(color: .black.opacity(image == nil ? 0 : 0.14), radius: 5, x: 0, y: 2)
                     .contentShape(Rectangle())
                     .onTapGesture {
                         importImage()
@@ -925,7 +944,7 @@ struct EmptyCutRow: View {
         ZStack {
             HStack(spacing: 0) {
                 Rectangle().fill(.white).frame(width: StoryboardPageLayout.sideColumnWidth, height: StoryboardPageLayout.rowHeight)
-                Rectangle().fill(.white).frame(width: StoryboardPageLayout.cutImageGap, height: StoryboardPageLayout.rowHeight)
+                Rectangle().fill(Color(red: 0.98, green: 0.975, blue: 0.955)).frame(width: StoryboardPageLayout.cutImageGap, height: StoryboardPageLayout.rowHeight)
                 Rectangle().fill(screenBackgroundColor).frame(width: imageColumnWidth, height: StoryboardPageLayout.rowHeight)
                 Rectangle().fill(.white).frame(width: contentColumnWidth, height: StoryboardPageLayout.rowHeight)
                 Rectangle().fill(.white).frame(width: actionColumnWidth, height: StoryboardPageLayout.rowHeight)
