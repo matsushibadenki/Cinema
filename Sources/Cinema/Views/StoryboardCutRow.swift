@@ -7,8 +7,8 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 private enum StoryboardTextPadding {
-    static let horizontal: CGFloat = 4
-    static let vertical: CGFloat = 3
+    static let horizontal: CGFloat = 5
+    static let vertical: CGFloat = 4
 }
 
 private struct PointingHandCursorModifier: ViewModifier {
@@ -100,6 +100,148 @@ private final class CompactProgressIndicator: NSProgressIndicator {
     }
 }
 
+private struct StoryboardTextView: NSViewRepresentable {
+    @Binding var text: String
+
+    var fontSize: CGFloat
+    var horizontalInset: CGFloat = StoryboardTextPadding.horizontal
+    var verticalInset: CGFloat = StoryboardTextPadding.vertical
+    var lineSpacing: CGFloat = 0
+    var alignment: NSTextAlignment = .left
+
+    func makeNSView(context: Context) -> NSScrollView {
+        let scrollView = NSScrollView()
+        scrollView.drawsBackground = false
+        scrollView.borderType = .noBorder
+        scrollView.hasVerticalScroller = false
+        scrollView.hasHorizontalScroller = false
+        scrollView.autohidesScrollers = true
+
+        let textView = NSTextView()
+        textView.drawsBackground = false
+        textView.isRichText = true
+        textView.isEditable = true
+        textView.isSelectable = true
+        textView.allowsUndo = true
+        textView.textContainerInset = NSSize(width: horizontalInset, height: verticalInset)
+        textView.textContainer?.lineFragmentPadding = 0
+        textView.textContainer?.widthTracksTextView = true
+        textView.textContainer?.heightTracksTextView = false
+        textView.minSize = .zero
+        textView.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
+        textView.isVerticallyResizable = true
+        textView.isHorizontallyResizable = false
+        textView.delegate = context.coordinator
+
+        scrollView.documentView = textView
+        context.coordinator.textView = textView
+        applyStyle(to: textView)
+        textView.string = text
+        return scrollView
+    }
+
+    func updateNSView(_ nsView: NSScrollView, context: Context) {
+        guard let textView = context.coordinator.textView else { return }
+        if textView.string != text {
+            textView.string = text
+        }
+        applyStyle(to: textView)
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(text: $text)
+    }
+
+    private func applyStyle(to textView: NSTextView) {
+        let font = NSFont.systemFont(ofSize: fontSize)
+        let paragraphStyle = NSMutableParagraphStyle()
+        paragraphStyle.lineSpacing = lineSpacing
+        paragraphStyle.alignment = alignment
+        textView.font = font
+        textView.textColor = .black
+        textView.alignment = alignment
+        textView.typingAttributes = [
+            .font: font,
+            .foregroundColor: NSColor.black,
+            .paragraphStyle: paragraphStyle
+        ]
+        textView.textContainerInset = NSSize(width: horizontalInset, height: verticalInset)
+        textView.textContainer?.lineFragmentPadding = 0
+    }
+
+    final class Coordinator: NSObject, NSTextViewDelegate {
+        @Binding var text: String
+        weak var textView: NSTextView?
+
+        init(text: Binding<String>) {
+            _text = text
+        }
+
+        func textDidChange(_ notification: Notification) {
+            guard let textView = notification.object as? NSTextView else { return }
+            TextSelectionStyleApplicator.activeTextView = textView
+            text = textView.string
+        }
+
+        func textViewDidChangeSelection(_ notification: Notification) {
+            guard let textView = notification.object as? NSTextView else { return }
+            TextSelectionStyleApplicator.activeTextView = textView
+        }
+
+        func textDidBeginEditing(_ notification: Notification) {
+            guard let textView = notification.object as? NSTextView else { return }
+            TextSelectionStyleApplicator.activeTextView = textView
+        }
+    }
+}
+
+private struct StoryboardStaticTextView: NSViewRepresentable {
+    var text: String
+    var fontSize: CGFloat
+    var horizontalInset: CGFloat = StoryboardTextPadding.horizontal
+    var verticalInset: CGFloat = StoryboardTextPadding.vertical
+    var lineSpacing: CGFloat = 0
+    var alignment: NSTextAlignment = .left
+
+    func makeNSView(context: Context) -> NSTextView {
+        let textView = NSTextView()
+        textView.drawsBackground = false
+        textView.isRichText = false
+        textView.isEditable = false
+        textView.isSelectable = false
+        textView.textContainerInset = NSSize(width: horizontalInset, height: verticalInset)
+        textView.textContainer?.lineFragmentPadding = 0
+        textView.textContainer?.widthTracksTextView = true
+        applyStyle(to: textView)
+        return textView
+    }
+
+    func updateNSView(_ nsView: NSTextView, context: Context) {
+        applyStyle(to: nsView)
+    }
+
+    private func applyStyle(to textView: NSTextView) {
+        let font = NSFont.systemFont(ofSize: fontSize)
+        let paragraphStyle = NSMutableParagraphStyle()
+        paragraphStyle.lineSpacing = lineSpacing
+        paragraphStyle.alignment = alignment
+        textView.string = text
+        textView.font = font
+        textView.textColor = .black
+        textView.alignment = alignment
+        textView.textStorage?.addAttributes(
+            [
+                .font: font,
+                .foregroundColor: NSColor.black,
+                .paragraphStyle: paragraphStyle
+            ],
+            range: NSRange(location: 0, length: textView.string.utf16.count)
+        )
+        textView.textContainerInset = NSSize(width: horizontalInset, height: verticalInset)
+        textView.textContainer?.lineFragmentPadding = 0
+    }
+}
+
 private extension View {
     func pointingHandCursor(isEnabled: Bool = true) -> some View {
         modifier(PointingHandCursorModifier(isEnabled: isEnabled))
@@ -173,7 +315,7 @@ private enum StoryboardTextFitter {
             )
             let dialogueHeight = estimatedHeight(
                 for: line.dialogue,
-                width: dialogueWidth - StoryboardTextPadding.horizontal,
+                width: dialogueWidth - (StoryboardTextPadding.horizontal * 2),
                 fontSize: fontSize
             )
             let rowHeight = max(speakerHeight, dialogueHeight) + (StoryboardTextPadding.vertical * 2)
@@ -227,6 +369,7 @@ struct StoryboardCutRow: View {
     var isGenerating: Bool
     var generate: () -> Void
     var importImage: () -> Void
+    var deleteImageData: (String) -> Void
     var addAfter: () -> Void
     var delete: () -> Void
 
@@ -248,7 +391,8 @@ struct StoryboardCutRow: View {
                     backgroundBrightness: screenBackgroundBrightness,
                     isGenerating: isGenerating,
                     cutNumber: cut.cutNumber,
-                    importImage: importImage
+                    importImage: importImage,
+                    deleteImage: deleteImage
                 )
                 .frame(width: imageColumnWidth, height: StoryboardPageLayout.rowHeight)
 
@@ -386,6 +530,12 @@ struct StoryboardCutRow: View {
         .help(help)
     }
 
+    private func deleteImage() {
+        guard let imageFileName = cut.imageFileName else { return }
+        cut.imageFileName = nil
+        deleteImageData(imageFileName)
+    }
+
     private var contentColumn: some View {
         AutoSizingStoryboardTextEditor(
             text: $cut.situation,
@@ -464,7 +614,6 @@ private struct DialogueSheetEditor: View {
     private let minimumRowHeight: CGFloat = 18
     private let splitHandleWidth: CGFloat = 3
     private let buttonWidth: CGFloat = 14
-    private let buttonGap: CGFloat = 3
     private let minimumSpeakerWidth: CGFloat = 24
     private let minimumDialogueWidth: CGFloat = 26
 
@@ -475,13 +624,11 @@ private struct DialogueSheetEditor: View {
     var body: some View {
         VStack(spacing: 0) {
             GeometryReader { proxy in
-                let lineControlWidth = showsLineControls ? buttonWidth : 0
-                let lineControlGap = showsLineControls ? buttonGap : 0
-                let minimumEditorWidth = minimumSpeakerWidth + splitHandleWidth + minimumDialogueWidth + lineControlGap + lineControlWidth
+                let minimumEditorWidth = minimumSpeakerWidth + splitHandleWidth + minimumDialogueWidth
 
                 if proxy.size.width >= minimumEditorWidth {
                     let speakerWidth = speakerWidth(totalWidth: proxy.size.width)
-                    let dialogueWidth = max(proxy.size.width - speakerWidth - splitHandleWidth - lineControlGap - lineControlWidth, minimumDialogueWidth)
+                    let dialogueWidth = max(proxy.size.width - speakerWidth - splitHandleWidth, minimumDialogueWidth)
                     let rowFontSize = isPrinting
                         ? StoryboardTextFitter.dialogueFontSize(
                             for: lines,
@@ -497,16 +644,22 @@ private struct DialogueSheetEditor: View {
                     ScrollView {
                         VStack(spacing: 0) {
                             ForEach(Array($lines.enumerated()), id: \.element.id) { index, $line in
+                                let rowHeight = dialogueRowHeight(
+                                    for: line,
+                                    speakerWidth: speakerWidth,
+                                    dialogueWidth: dialogueWidth,
+                                    fontSize: rowFontSize
+                                )
                                 DialogueSheetRow(
                                     line: $line,
                                     speakerRatio: $speakerRatio,
                                     fontSize: rowFontSize,
                                     minimumRowHeight: minimumRowHeight,
+                                    rowHeight: rowHeight,
                                     speakerWidth: speakerWidth,
                                     dialogueWidth: dialogueWidth,
                                     splitHandleWidth: splitHandleWidth,
-                                    buttonWidth: lineControlWidth,
-                                    buttonGap: lineControlGap,
+                                    buttonWidth: buttonWidth,
                                     showsLineControls: showsLineControls,
                                     isPrinting: isPrinting,
                                     canDelete: lines.count > 1,
@@ -545,11 +698,29 @@ private struct DialogueSheetEditor: View {
     }
 
     private func speakerWidth(totalWidth: CGFloat) -> CGFloat {
-        let lineControlWidth = showsLineControls ? buttonWidth : 0
-        let lineControlGap = showsLineControls ? buttonGap : 0
-        let availableWidth = max(totalWidth - lineControlWidth - lineControlGap - splitHandleWidth, 1)
+        let availableWidth = max(totalWidth - splitHandleWidth, 1)
         let maximumSpeakerWidth = max(minimumSpeakerWidth, availableWidth - minimumDialogueWidth)
         return min(max(availableWidth * CGFloat(clampedSpeakerRatio(speakerRatio)), minimumSpeakerWidth), maximumSpeakerWidth)
+    }
+
+    private func dialogueRowHeight(
+        for line: DialogueLine,
+        speakerWidth: CGFloat,
+        dialogueWidth: CGFloat,
+        fontSize: CGFloat
+    ) -> CGFloat {
+        let speakerHeight = StoryboardTextFitter.estimatedHeight(
+            for: line.speaker,
+            width: speakerWidth - (StoryboardTextPadding.horizontal * 2),
+            fontSize: fontSize
+        )
+        let dialogueHeight = StoryboardTextFitter.estimatedHeight(
+            for: line.dialogue,
+            width: dialogueWidth - (StoryboardTextPadding.horizontal * 2),
+            fontSize: fontSize
+        )
+        let textHeight = max(speakerHeight, dialogueHeight) + (StoryboardTextPadding.vertical * 2)
+        return max(minimumRowHeight, ceil(textHeight))
     }
 
     private func clampedSpeakerRatio(_ ratio: Double) -> Double {
@@ -564,11 +735,11 @@ private struct DialogueSheetRow: View {
 
     var fontSize: CGFloat
     var minimumRowHeight: CGFloat
+    var rowHeight: CGFloat
     var speakerWidth: CGFloat
     var dialogueWidth: CGFloat
     var splitHandleWidth: CGFloat
     var buttonWidth: CGFloat
-    var buttonGap: CGFloat
     var showsLineControls: Bool
     var isPrinting: Bool
     var canDelete: Bool
@@ -582,32 +753,29 @@ private struct DialogueSheetRow: View {
 
             DialogueColumnSplitHandle()
                 .frame(width: splitHandleWidth)
-                .frame(minHeight: minimumRowHeight, maxHeight: .infinity)
-                .gesture(splitGesture(totalWidth: speakerWidth + dialogueWidth + splitHandleWidth + buttonGap + buttonWidth))
+                .frame(height: rowHeight)
+                .gesture(splitGesture(totalWidth: speakerWidth + dialogueWidth + splitHandleWidth))
 
             dialogueCell
-
+        }
+        .frame(height: rowHeight, alignment: .topLeading)
+        .background(Color.white)
+        .overlay(alignment: .bottomLeading) {
             if showsLineControls {
-                Spacer(minLength: 0)
-                    .frame(width: buttonGap)
-
                 Button(action: showsAddButton ? add : delete) {
                     Image(systemName: showsAddButton ? "plus" : "minus")
                 }
                 .buttonStyle(.borderless)
                 .controlSize(.mini)
                 .font(.system(size: 8))
-                .padding(.vertical, 2)
-                .frame(width: buttonWidth, alignment: .top)
-                .frame(minHeight: minimumRowHeight, alignment: .top)
+                .frame(width: buttonWidth, height: buttonWidth)
                 .opacity(showsAddButton || canDelete ? 0.7 : 0.25)
                 .pointingHandCursor(isEnabled: showsAddButton || canDelete)
                 .disabled(!showsAddButton && !canDelete)
                 .help(showsAddButton ? "会話行を追加" : "会話行を削除")
+                .offset(x: 2, y: -2)
             }
         }
-        .frame(minHeight: minimumRowHeight, alignment: .topLeading)
-        .background(Color.white)
         .overlay(alignment: .bottom) {
             DialogueSheetRowDivider()
         }
@@ -624,42 +792,28 @@ private struct DialogueSheetRow: View {
                 .padding(.horizontal, StoryboardTextPadding.horizontal)
                 .padding(.vertical, StoryboardTextPadding.vertical)
                 .frame(width: speakerWidth, alignment: .topLeading)
-                .frame(minHeight: minimumRowHeight, alignment: .topLeading)
+                .frame(height: rowHeight, alignment: .topLeading)
         } else {
-            TextEditor(text: $line.speaker)
-                .font(.system(size: fontSize))
-                .foregroundStyle(.black)
-                .scrollContentBackground(.hidden)
-                .padding(.horizontal, StoryboardTextPadding.horizontal)
-                .padding(.vertical, StoryboardTextPadding.vertical)
+            StoryboardTextView(text: $line.speaker, fontSize: fontSize)
                 .frame(width: speakerWidth, alignment: .topLeading)
-                .frame(minHeight: minimumRowHeight, alignment: .topLeading)
+                .frame(height: rowHeight, alignment: .topLeading)
         }
     }
 
     @ViewBuilder
     private var dialogueCell: some View {
         if isPrinting {
-            Text(line.dialogue)
-                .font(.system(size: fontSize))
-                .foregroundStyle(.black)
-                .multilineTextAlignment(.leading)
-                .lineLimit(nil)
-                .padding(.leading, StoryboardTextPadding.horizontal)
-                .padding(.trailing, 0)
-                .padding(.vertical, StoryboardTextPadding.vertical)
+            StoryboardStaticTextView(
+                text: line.dialogue,
+                fontSize: fontSize,
+                alignment: .justified
+            )
                 .frame(width: dialogueWidth, alignment: .topLeading)
-                .frame(minHeight: minimumRowHeight, alignment: .topLeading)
+                .frame(height: rowHeight, alignment: .topLeading)
         } else {
-            TextEditor(text: $line.dialogue)
-                .font(.system(size: fontSize))
-                .foregroundStyle(.black)
-                .scrollContentBackground(.hidden)
-                .padding(.leading, StoryboardTextPadding.horizontal)
-                .padding(.trailing, 0)
-                .padding(.vertical, StoryboardTextPadding.vertical)
+            StoryboardTextView(text: $line.dialogue, fontSize: fontSize, alignment: .justified)
                 .frame(width: dialogueWidth, alignment: .topLeading)
-                .frame(minHeight: minimumRowHeight, alignment: .topLeading)
+                .frame(height: rowHeight, alignment: .topLeading)
         }
     }
 
@@ -670,7 +824,7 @@ private struct DialogueSheetRow: View {
                     speakerDragStartRatio = speakerRatio
                 }
 
-                let availableWidth = max(totalWidth - buttonWidth - buttonGap - splitHandleWidth, 1)
+                let availableWidth = max(totalWidth - splitHandleWidth, 1)
                 let startRatio = speakerDragStartRatio ?? speakerRatio
                 speakerRatio = clampedSpeakerRatio(startRatio + Double(value.translation.width / availableWidth))
             }
@@ -734,6 +888,7 @@ private struct StoryboardScreenFrame: View {
     var isGenerating: Bool
     var cutNumber: Int
     var importImage: () -> Void
+    var deleteImage: () -> Void
 
     @State private var isEnlarged = false
 
@@ -759,7 +914,7 @@ private struct StoryboardScreenFrame: View {
                     endPoint: .bottomTrailing
                 )
 
-                ZStack(alignment: .bottomTrailing) {
+                ZStack {
                     ZStack {
                         if let image {
                             Image(nsImage: image)
@@ -796,20 +951,25 @@ private struct StoryboardScreenFrame: View {
                     }
                     .help("クリックして画像を読み込む。ダブルクリックで拡大表示")
 
-                    if let imageData {
-                        Button {
-                            saveImage(data: imageData)
-                        } label: {
-                            Image(systemName: "arrow.down.circle.fill")
-                                .font(.system(size: 20))
-                                .foregroundStyle(.white)
-                                .shadow(color: .black.opacity(0.4), radius: 2, x: 0, y: 1)
-                        }
-                        .buttonStyle(.plain)
-                        .padding(8)
-                        .pointingHandCursor()
-                        .help("画像をダウンロード")
+                }
+
+                if let imageData {
+                    HStack(spacing: 4) {
+                        imageCellButton(
+                            systemName: "arrow.down",
+                            help: "AI生成画像をダウンロード",
+                            action: { saveImage(data: imageData) }
+                        )
+
+                        imageCellButton(
+                            systemName: "trash",
+                            help: "画像を削除",
+                            action: deleteImage
+                        )
                     }
+                    .padding(.leading, 6)
+                    .padding(.bottom, 5)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
                 }
 
                 if isGenerating {
@@ -858,6 +1018,24 @@ private struct StoryboardScreenFrame: View {
                 NSSound.beep()
             }
         }
+    }
+
+    private func imageCellButton(systemName: String, help: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundStyle(.primary)
+                .frame(width: 13, height: 13)
+                .background(.regularMaterial)
+                .clipShape(Circle())
+                .overlay {
+                    Circle()
+                        .stroke(Color.black.opacity(0.12), lineWidth: 0.5)
+                }
+        }
+        .buttonStyle(.plain)
+        .pointingHandCursor()
+        .help(help)
     }
 
     private func fittedSize(in size: CGSize, aspectRatio: CGFloat) -> CGSize {
@@ -1117,29 +1295,26 @@ private struct AutoSizingStoryboardTextEditor: View {
                     minimum: 5.5
                 )
 
-                Text(text)
-                    .font(.system(size: printFontSize))
-                    .foregroundStyle(.black)
-                    .multilineTextAlignment(.leading)
-                    .lineLimit(nil)
-                    .padding(.horizontal, StoryboardTextPadding.horizontal)
-                    .padding(.vertical, StoryboardTextPadding.vertical)
+                StoryboardStaticTextView(
+                    text: text,
+                    fontSize: printFontSize,
+                    alignment: .justified
+                )
                     .frame(width: proxy.size.width, height: proxy.size.height, alignment: .topLeading)
             } else {
-                TextEditor(text: $text)
-                    .font(.system(size: fontSize))
-                    .foregroundStyle(.black)
-                    .lineSpacing(fontSize <= 8 ? 0 : 1)
-                    .scrollContentBackground(.hidden)
-                    .padding(.horizontal, StoryboardTextPadding.horizontal)
-                    .padding(.vertical, StoryboardTextPadding.vertical)
+                StoryboardTextView(
+                    text: $text,
+                    fontSize: fontSize,
+                    lineSpacing: fontSize <= 8 ? 0 : 1,
+                    alignment: .justified
+                )
                     .overlay(alignment: .topLeading) {
                         if text.isEmpty {
                             Text(placeholder)
                                 .font(.system(size: 11))
                                 .foregroundStyle(.gray)
-                                .padding(.leading, StoryboardTextPadding.horizontal + 4)
-                                .padding(.top, StoryboardTextPadding.vertical + 5)
+                                .padding(.leading, StoryboardTextPadding.horizontal)
+                                .padding(.top, StoryboardTextPadding.vertical)
                         }
                     }
             }

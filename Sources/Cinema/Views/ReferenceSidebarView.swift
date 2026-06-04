@@ -1,10 +1,49 @@
 import AppKit
 import SwiftUI
 
+private enum InspectorSidebarTab: String, CaseIterable, Identifiable {
+    case reference
+    case properties
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .reference:
+            return "リファレンス"
+        case .properties:
+            return "プロパティ"
+        }
+    }
+}
+
 struct ReferenceSidebarView: View {
     @Binding var document: StoryboardDocument
+    @State private var selectedTab: InspectorSidebarTab = .reference
 
     var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Picker("表示", selection: $selectedTab) {
+                ForEach(InspectorSidebarTab.allCases) { tab in
+                    Text(tab.label).tag(tab)
+                }
+            }
+            .labelsHidden()
+            .pickerStyle(.segmented)
+
+            switch selectedTab {
+            case .reference:
+                referencePanel
+            case .properties:
+                TextPropertiesPanel()
+            }
+        }
+        .padding(12)
+        .frame(minWidth: 220, idealWidth: 240, maxWidth: 280)
+        .background(CinemaDesign.panelBackground)
+    }
+
+    private var referencePanel: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Label("リファレンス", systemImage: "photo.on.rectangle")
@@ -45,9 +84,6 @@ struct ReferenceSidebarView: View {
                 }
             }
         }
-        .padding(12)
-        .frame(minWidth: 220, idealWidth: 240, maxWidth: 280)
-        .background(CinemaDesign.panelBackground)
     }
 
     private func addReferenceImage() {
@@ -211,5 +247,205 @@ private struct ReferenceImageRow: View {
             .controlSize(.small)
         }
         .padding(.top, 4)
+    }
+}
+
+private struct TextPropertiesPanel: View {
+    @AppStorage("storyboardTextBaseFontSize") private var storyboardTextBaseFontSize = 11.0
+    @AppStorage("selectedTextFontName") private var selectedTextFontName = "System"
+    @AppStorage("selectedTextLetterSpacing") private var selectedTextLetterSpacing = 0.0
+    @AppStorage("selectedTextLineSpacing") private var selectedTextLineSpacing = 1.0
+    @AppStorage("selectedTextAlignment") private var selectedTextAlignment = TextAlignmentOption.left.rawValue
+    @AppStorage("selectedTextIsBold") private var selectedTextIsBold = false
+    @AppStorage("selectedTextIsItalic") private var selectedTextIsItalic = false
+    @AppStorage("selectedTextIsUnderline") private var selectedTextIsUnderline = false
+    @State private var selectedTextColor = Color.black
+
+    private var fontNames: [String] {
+        ["System"] + NSFontManager.shared.availableFontFamilies.sorted {
+            $0.localizedStandardCompare($1) == .orderedAscending
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Label("プロパティ", systemImage: "slider.horizontal.3")
+                .font(.headline)
+                .foregroundStyle(CinemaDesign.ink)
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 12) {
+                    propertySection("書体") {
+                        propertyRow("フォント") {
+                            Picker("フォント", selection: $selectedTextFontName) {
+                                ForEach(fontNames, id: \.self) { fontName in
+                                    Text(fontName).tag(fontName)
+                                }
+                            }
+                            .labelsHidden()
+                            .pickerStyle(.menu)
+                        }
+
+                        propertyRow("サイズ") {
+                            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                                Stepper(
+                                    "",
+                                    value: $storyboardTextBaseFontSize,
+                                    in: 7...24,
+                                    step: 0.5
+                                )
+                                .labelsHidden()
+
+                                Text("\(storyboardTextBaseFontSize, specifier: "%.1f")")
+                                    .font(.system(size: 22, weight: .semibold, design: .rounded).monospacedDigit())
+                                    .foregroundStyle(CinemaDesign.ink)
+                                    .frame(width: 64, alignment: .trailing)
+                            }
+                        }
+
+                        propertyRow("文字色") {
+                            ColorPicker("文字色", selection: $selectedTextColor, supportsOpacity: true)
+                                .labelsHidden()
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+
+                        propertyRow("形態") {
+                            HStack(spacing: 6) {
+                                Toggle("B", isOn: $selectedTextIsBold)
+                                    .toggleStyle(.button)
+                                    .help("ボールド")
+
+                                Toggle("I", isOn: $selectedTextIsItalic)
+                                    .toggleStyle(.button)
+                                    .help("イタリック")
+
+                                Toggle("U", isOn: $selectedTextIsUnderline)
+                                    .toggleStyle(.button)
+                                    .help("下線")
+                            }
+                        }
+
+                        propertyRow("字間") {
+                            HStack(spacing: 8) {
+                                Slider(value: $selectedTextLetterSpacing, in: -2...8, step: 0.5)
+                                Text("\(selectedTextLetterSpacing, specifier: "%.1f")")
+                                    .font(.caption.monospacedDigit())
+                                    .foregroundStyle(.secondary)
+                                    .frame(width: 36, alignment: .trailing)
+                            }
+                        }
+
+                        propertyRow("行間") {
+                            HStack(spacing: 8) {
+                                Slider(value: $selectedTextLineSpacing, in: 0.8...2.4, step: 0.1)
+                                Text("\(selectedTextLineSpacing, specifier: "%.1f")")
+                                    .font(.caption.monospacedDigit())
+                                    .foregroundStyle(.secondary)
+                                    .frame(width: 36, alignment: .trailing)
+                            }
+                        }
+
+                        VStack(alignment: .leading, spacing: 7) {
+                            Text("揃え")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(CinemaDesign.mutedInk)
+
+                            Picker("揃え", selection: $selectedTextAlignment) {
+                                ForEach(TextAlignmentOption.allCases) { option in
+                                    Image(systemName: option.systemImageName).tag(option.rawValue)
+                                }
+                            }
+                            .labelsHidden()
+                            .pickerStyle(.segmented)
+                        }
+
+                        Button {
+                            applyTextStyle()
+                        } label: {
+                            Label("選択文字に適用", systemImage: "checkmark.circle")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.large)
+                    }
+                }
+                .padding(.bottom, 4)
+            }
+        }
+    }
+
+    private func propertySection<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(title)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(CinemaDesign.ink)
+
+            content()
+        }
+        .padding(10)
+        .cinemaPanel()
+    }
+
+    private func propertyRow<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 7) {
+            Text(title)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(CinemaDesign.mutedInk)
+
+            content()
+        }
+    }
+
+    private func applyTextStyle() {
+        let alignmentOption = TextAlignmentOption(rawValue: selectedTextAlignment) ?? .left
+        let color = NSColor(selectedTextColor).usingColorSpace(.sRGB) ?? .black
+        TextSelectionStyleApplicator.apply(
+            TextSelectionStyle(
+                fontFamily: selectedTextFontName,
+                fontSize: CGFloat(storyboardTextBaseFontSize),
+                color: color,
+                isBold: selectedTextIsBold,
+                isItalic: selectedTextIsItalic,
+                isUnderline: selectedTextIsUnderline,
+                letterSpacing: CGFloat(selectedTextLetterSpacing),
+                lineSpacing: CGFloat(selectedTextLineSpacing),
+                alignment: alignmentOption.nsTextAlignment
+            )
+        )
+    }
+}
+
+private enum TextAlignmentOption: String, CaseIterable, Identifiable {
+    case left
+    case center
+    case right
+    case justified
+
+    var id: String { rawValue }
+
+    var systemImageName: String {
+        switch self {
+        case .left:
+            return "text.alignleft"
+        case .center:
+            return "text.aligncenter"
+        case .right:
+            return "text.alignright"
+        case .justified:
+            return "text.justify"
+        }
+    }
+
+    var nsTextAlignment: NSTextAlignment {
+        switch self {
+        case .left:
+            return .left
+        case .center:
+            return .center
+        case .right:
+            return .right
+        case .justified:
+            return .justified
+        }
     }
 }

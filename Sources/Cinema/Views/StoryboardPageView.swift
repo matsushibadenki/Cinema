@@ -245,6 +245,7 @@ struct StoryboardPageView: View {
                         isGenerating: generatingCutID == cut.wrappedValue.id,
                         generate: { generate(cut.wrappedValue.id) },
                         importImage: { importImage(cut.wrappedValue.id) },
+                        deleteImageData: { fileName in document.imageData[fileName] = nil },
                         addAfter: { addAfter(cut.wrappedValue.id) },
                         delete: { delete(cut.wrappedValue.id) }
                     )

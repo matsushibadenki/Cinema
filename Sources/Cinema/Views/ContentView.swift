@@ -59,11 +59,14 @@ struct ContentView: View {
     @State private var displayMode: DocumentDisplayMode = .storyboard
     @State private var showsDrawingSettings = false
     @State private var showsFullCanvas = false
+    @State private var isInitialStoryboardFitPending = true
+    @State private var storyboardCanvasHeight: CGFloat = 0
 
     private let cutsPerPage = 5
     private let minimumZoomScale: CGFloat = 0.5
     private let maximumZoomScale: CGFloat = 2.5
     private let zoomStep: CGFloat = 0.1
+    private let pageCanvasPadding: CGFloat = 16
 
     var body: some View {
         NavigationSplitView {
@@ -113,6 +116,7 @@ struct ContentView: View {
             .animation(.easeInOut(duration: 0.18), value: showsReferenceSidebar)
         }
         .navigationTitle(documentTitle)
+        .background(MainWindowConfigurator())
         .alert(item: $generationErrorAlert) { alert in
             Alert(
                 title: Text(alert.title),
@@ -122,6 +126,9 @@ struct ContentView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .printCurrentStoryboardPage)) { _ in
             printCurrentPage()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .mainWindowDidApplyInitialFrame)) { _ in
+            applyInitialStoryboardFit(availableHeight: storyboardCanvasHeight, finalize: true)
         }
         .onChange(of: document.project.cuts.count) { _, _ in
             pageIndex = min(pageIndex, max(currentPageCount - 1, 0))
@@ -203,7 +210,7 @@ struct ContentView: View {
             height: currentPageSize.height * zoomScale,
             alignment: .topLeading
         )
-        .padding(showsFullCanvas ? 0 : 32)
+        .padding(showsFullCanvas ? 0 : pageCanvasPadding)
         .gesture(zoomGesture)
     }
 
@@ -215,20 +222,30 @@ struct ContentView: View {
                     .background(Color(nsColor: .textBackgroundColor))
             } else if showsFullCanvas {
                 GeometryReader { proxy in
-                    ScrollView(.vertical) {
-                        fullCanvasPage(availableWidth: proxy.size.width)
+                    ScrollView([.horizontal, .vertical], showsIndicators: false) {
+                        fullCanvasPage(availableSize: proxy.size)
                     }
                     .background(Color.clear)
                 }
             } else {
-                ScrollView([.horizontal, .vertical], showsIndicators: !showsFullCanvas) {
-                    zoomablePage
-                }
-                .background {
-                    if showsFullCanvas {
-                        Color.clear
-                    } else {
-                        CinemaDesign.canvasBackground
+                GeometryReader { proxy in
+                    ScrollView([.horizontal, .vertical], showsIndicators: !showsFullCanvas) {
+                        zoomablePage
+                    }
+                    .background {
+                        if showsFullCanvas {
+                            Color.clear
+                        } else {
+                            CinemaDesign.canvasBackground
+                        }
+                    }
+                    .onAppear {
+                        storyboardCanvasHeight = proxy.size.height
+                        applyInitialStoryboardFit(availableHeight: proxy.size.height)
+                    }
+                    .onChange(of: proxy.size.height) { _, newHeight in
+                        storyboardCanvasHeight = newHeight
+                        applyInitialStoryboardFit(availableHeight: newHeight)
                     }
                 }
             }
@@ -239,10 +256,12 @@ struct ContentView: View {
         showsFullCanvas ? .clear : Color(nsColor: .textBackgroundColor)
     }
 
-    private func fullCanvasPage(availableWidth: CGFloat) -> some View {
+    private func fullCanvasPage(availableSize: CGSize) -> some View {
         let horizontalPadding: CGFloat = 16
-        let fittedWidth = max(availableWidth - (horizontalPadding * 2), 1)
-        let scale = fittedWidth / currentPageSize.width
+        let verticalPadding: CGFloat = 16
+        let availableWidth = max(availableSize.width - (horizontalPadding * 2), 1)
+        let scale = availableWidth / currentPageSize.width
+        let fittedWidth = currentPageSize.width * scale
         let fittedHeight = currentPageSize.height * scale
 
         return currentPage
@@ -250,8 +269,24 @@ struct ContentView: View {
             .scaleEffect(scale, anchor: .topLeading)
             .frame(width: fittedWidth, height: fittedHeight, alignment: .topLeading)
             .padding(.horizontal, horizontalPadding)
-            .padding(.vertical, 16)
+            .padding(.vertical, verticalPadding)
             .frame(maxWidth: .infinity, alignment: .topLeading)
+    }
+
+    private func applyInitialStoryboardFit(availableHeight: CGFloat, finalize: Bool = false) {
+        guard (isInitialStoryboardFitPending || finalize),
+              displayMode == .storyboard,
+              !showsDrawingSettings,
+              !showsFullCanvas,
+              availableHeight > 0 else {
+            return
+        }
+
+        let availablePageHeight = max(availableHeight - (pageCanvasPadding * 2), 1)
+        zoomScale = clampedZoomScale(availablePageHeight / StoryboardPageLayout.pageSize.height)
+        if finalize {
+            isInitialStoryboardFitPending = false
+        }
     }
 
     @ViewBuilder
@@ -357,7 +392,7 @@ struct ContentView: View {
                     .disabled(showsDrawingSettings || pageIndex >= currentPageCount - 1)
 
                     Button {
-                        showsFullCanvas.toggle()
+                        toggleFullCanvas()
                     } label: {
                         Label("全面", systemImage: showsFullCanvas ? "rectangle.inset.filled" : "rectangle.expand.vertical")
                     }
@@ -449,6 +484,10 @@ struct ContentView: View {
         zoomScale = clampedZoomScale(zoomScale + delta)
     }
 
+    private func toggleFullCanvas() {
+        showsFullCanvas.toggle()
+    }
+
     private func clampedZoomScale(_ scale: CGFloat) -> CGFloat {
         min(max(scale, minimumZoomScale), maximumZoomScale)
     }
@@ -465,6 +504,7 @@ struct ContentView: View {
     private func addCutAtEnd() {
         let cut = StoryboardCut(cutNumber: document.project.cuts.count + 1)
         document.project.cuts.append(cut)
+        selectedVideoCutIDs.insert(cut.id)
         document.renumberCuts()
         jumpToCut(cut.id)
     }
@@ -472,6 +512,7 @@ struct ContentView: View {
     private func addSubtitleAtEnd() {
         let cut = StoryboardCut(cutNumber: document.project.cuts.count + 1, subtitle: nextSubtitleName())
         document.project.cuts.append(cut)
+        selectedVideoCutIDs.insert(cut.id)
         document.renumberCuts()
         jumpToCut(cut.id)
     }
@@ -488,6 +529,7 @@ struct ContentView: View {
             document.project.cuts[index].sceneName = ""
         }
         document.project.cuts.insert(cut, at: index)
+        selectedVideoCutIDs.insert(cut.id)
         document.renumberCuts()
         jumpToCut(cut.id)
     }
@@ -496,6 +538,7 @@ struct ContentView: View {
         guard let index = document.project.cuts.firstIndex(where: { $0.id == cutID }) else { return }
         let cut = StoryboardCut(cutNumber: index + 2)
         document.project.cuts.insert(cut, at: index + 1)
+        selectedVideoCutIDs.insert(cut.id)
         document.renumberCuts()
         jumpToCut(cut.id)
     }
@@ -1229,4 +1272,43 @@ struct ContentView: View {
             return (Double(tokens) / 1_000_000.0) * 0.30 + (Double(seconds) * 0.60)
         }
     }
+}
+
+private struct MainWindowConfigurator: NSViewRepresentable {
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
+
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView()
+        DispatchQueue.main.async {
+            configure(window: view.window, coordinator: context.coordinator)
+        }
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        DispatchQueue.main.async {
+            configure(window: nsView.window, coordinator: context.coordinator)
+        }
+    }
+
+    private func configure(window: NSWindow?, coordinator: Coordinator) {
+        guard let window, !coordinator.didConfigure else { return }
+        let visibleFrame = (window.screen ?? NSScreen.main)?.visibleFrame
+        guard let visibleFrame else { return }
+        window.setFrame(visibleFrame, display: true, animate: false)
+        coordinator.didConfigure = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+            NotificationCenter.default.post(name: .mainWindowDidApplyInitialFrame, object: nil)
+        }
+    }
+
+    final class Coordinator {
+        var didConfigure = false
+    }
+}
+
+private extension Notification.Name {
+    static let mainWindowDidApplyInitialFrame = Notification.Name("mainWindowDidApplyInitialFrame")
 }
