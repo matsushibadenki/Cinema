@@ -403,6 +403,7 @@ struct StoryboardCut: Codable, Identifiable, Equatable {
     var scriptHeading: String
     var sceneName: String
     var referenceImageIDs: [ReferenceImage.ID]
+    var aiShotSettings: AIShotSettings
 
     init(
         id: UUID = UUID(),
@@ -419,7 +420,8 @@ struct StoryboardCut: Codable, Identifiable, Equatable {
         subtitle: String = "",
         scriptHeading: String = "",
         sceneName: String = "",
-        referenceImageIDs: [ReferenceImage.ID] = []
+        referenceImageIDs: [ReferenceImage.ID] = [],
+        aiShotSettings: AIShotSettings = AIShotSettings()
     ) {
         self.id = id
         self.cutNumber = cutNumber
@@ -436,6 +438,7 @@ struct StoryboardCut: Codable, Identifiable, Equatable {
         self.scriptHeading = scriptHeading
         self.sceneName = sceneName
         self.referenceImageIDs = referenceImageIDs
+        self.aiShotSettings = aiShotSettings
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -454,6 +457,7 @@ struct StoryboardCut: Codable, Identifiable, Equatable {
         case scriptHeading
         case sceneName
         case referenceImageIDs
+        case aiShotSettings
     }
 
     init(from decoder: Decoder) throws {
@@ -475,5 +479,6 @@ struct StoryboardCut: Codable, Identifiable, Equatable {
         scriptHeading = try container.decodeIfPresent(String.self, forKey: .scriptHeading) ?? ""
         sceneName = try container.decodeIfPresent(String.self, forKey: .sceneName) ?? ""
         referenceImageIDs = try container.decodeIfPresent([ReferenceImage.ID].self, forKey: .referenceImageIDs) ?? []
+        aiShotSettings = try container.decodeIfPresent(AIShotSettings.self, forKey: .aiShotSettings) ?? AIShotSettings()
     }
 }

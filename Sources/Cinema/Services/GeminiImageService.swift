@@ -59,7 +59,10 @@ struct GeminiImageService {
             contents: [
                 GeminiContent(parts: parts)
             ],
-            generationConfig: GeminiGenerationConfig(responseModalities: ["IMAGE"])
+            generationConfig: GeminiGenerationConfig(
+                responseModalities: ["IMAGE"],
+                imageConfig: GeminiImageConfig(aspectRatio: aspectRatioName(for: aspectRatio))
+            )
         ))
 
         let (data, response) = try await URLSession.shared.data(for: request)
@@ -82,10 +85,8 @@ struct GeminiImageService {
 
     private func composedPrompt(drawingPrompt: String, cutPrompt: String, aspectRatio: CGFloat, hasReferenceImages: Bool) -> String {
         let basePrompt = """
-        Create a realistic cinematic film still or a clear, natural storyboard image.
-        Compose the image as a photorealistic, authentic scene environment based on the written situation and dialogue.
-        Use the drawing settings to choose the visual style, color, lighting, camera, and texture.
-        Avoid any CGI, 3D render, digital painting look, or artificial AI look. Render with natural lighting, organic textures, and realistic skin details.
+        Create a production-ready cinematic frame or storyboard image based on the written situation and dialogue.
+        The drawing settings are authoritative for visual medium, style, color, lighting, camera, and texture.
         Show clear character placement, location, mood, and action. Do not render any text, captions, speech bubbles, or UI elements inside the image.
         """
 
@@ -106,6 +107,17 @@ struct GeminiImageService {
         ]
         .filter { !$0.isEmpty }
         .joined(separator: "\n")
+    }
+
+    private func aspectRatioName(for ratio: CGFloat) -> String {
+        let options: [(String, CGFloat)] = [
+            ("9:16", 9.0 / 16.0),
+            ("3:4", 3.0 / 4.0),
+            ("4:3", 4.0 / 3.0),
+            ("16:9", 16.0 / 9.0),
+            ("21:9", 21.0 / 9.0)
+        ]
+        return options.min { abs($0.1 - ratio) < abs($1.1 - ratio) }?.0 ?? "16:9"
     }
 
     static func fetchAvailableModels(apiKey: String) async throws -> [String] {
@@ -148,6 +160,11 @@ private struct GeminiGenerateRequest: Encodable {
 
 private struct GeminiGenerationConfig: Encodable {
     var responseModalities: [String]
+    var imageConfig: GeminiImageConfig
+}
+
+private struct GeminiImageConfig: Encodable {
+    var aspectRatio: String
 }
 
 private struct GeminiContent: Codable {
@@ -178,4 +195,3 @@ private struct GeminiModelListResponse: Decodable {
     }
     let models: [Model]?
 }
-

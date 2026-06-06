@@ -494,7 +494,10 @@ struct StoryboardCutRow: View {
             .pointingHandCursor()
             .help("追加プロンプト")
             .popover(isPresented: $showsPromptEditor, arrowEdge: .trailing) {
-                PromptEditorPopover(prompt: $cut.generationPrompt)
+                PromptEditorPopover(
+                    prompt: $cut.generationPrompt,
+                    shotSettings: $cut.aiShotSettings
+                )
             }
 
             iconButton(
@@ -539,7 +542,7 @@ struct StoryboardCutRow: View {
     private var contentColumn: some View {
         AutoSizingStoryboardTextEditor(
             text: $cut.situation,
-            placeholder: "内容",
+            placeholder: "",
             baseFontSize: textBaseFontSize,
             minimumFontSize: 8,
             isPrinting: isPrintingStoryboard
@@ -1136,6 +1139,7 @@ struct EmptyCutRow: View {
 
 private struct PromptEditorPopover: View {
     @Binding var prompt: String
+    @Binding var shotSettings: AIShotSettings
 
     private let template = """
 ・被写体（Subject）
@@ -1179,19 +1183,69 @@ private struct PromptEditorPopover: View {
                 .buttonStyle(.bordered)
             }
 
-            TextEditor(text: $prompt)
-                .font(.system(size: 12))
-                .foregroundStyle(.black)
-                .scrollContentBackground(.hidden)
-                .padding(6)
-                .background(Color(nsColor: .textBackgroundColor))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 4)
-                        .stroke(Color(nsColor: .separatorColor), lineWidth: 0.8)
+            TabView {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 10) {
+                        shotField("ショットサイズ", text: $shotSettings.shotSize, prompt: "例: クローズアップ、ミディアム、ワイド")
+                        shotField("カメラアングル", text: $shotSettings.cameraAngle, prompt: "例: 目線の高さ、ローアングル")
+                        shotField("レンズ", text: $shotSettings.lens, prompt: "例: 50mm、広角、浅い被写界深度")
+                        shotField("カメラ移動", text: $shotSettings.cameraMovement, prompt: "例: ゆっくりドリーイン")
+                        shotField("被写体の動き", text: $shotSettings.subjectMovement, prompt: "例: 画面左から右へ歩く")
+                        shotField("開始状態", text: $shotSettings.startState, prompt: "人物位置、視線、姿勢、小道具")
+                        shotField("終了状態", text: $shotSettings.endState, prompt: "次のカットへ渡す状態")
+                        shotField("次への接続", text: $shotSettings.transition, prompt: "例: 動作つなぎ、カット、ディゾルブ")
+                        shotField("音・環境音", text: $shotSettings.soundDirection, prompt: "例: 雨音、遠くの電車")
+                        shotField("避ける要素", text: $shotSettings.negativePrompt, prompt: "例: 顔の変化、余分な人物、文字")
+
+                        HStack {
+                            Text("連続性")
+                                .frame(width: 92, alignment: .leading)
+                            Slider(value: $shotSettings.continuityStrength, in: 0...1)
+                            Text("\(Int((shotSettings.continuityStrength * 100).rounded()))%")
+                                .monospacedDigit()
+                                .frame(width: 42, alignment: .trailing)
+                        }
+
+                        HStack {
+                            Text("Seed")
+                                .frame(width: 92, alignment: .leading)
+                            TextField(
+                                "任意",
+                                value: $shotSettings.seed,
+                                format: .number
+                            )
+                            .textFieldStyle(.roundedBorder)
+                        }
+                    }
+                    .padding(8)
                 }
-                .frame(width: 460, height: 320)
+                .tabItem { Text("ショット設定") }
+
+                TextEditor(text: $prompt)
+                    .font(.system(size: 12))
+                    .foregroundStyle(.primary)
+                    .scrollContentBackground(.hidden)
+                    .padding(6)
+                    .background(Color(nsColor: .textBackgroundColor))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 4)
+                            .stroke(Color(nsColor: .separatorColor), lineWidth: 0.8)
+                    }
+                    .padding(8)
+                    .tabItem { Text("自由記述") }
+            }
+            .frame(width: 500, height: 430)
         }
         .padding(12)
+    }
+
+    private func shotField(_ title: String, text: Binding<String>, prompt: String) -> some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text(title)
+                .frame(width: 92, alignment: .leading)
+            TextField(prompt, text: text)
+                .textFieldStyle(.roundedBorder)
+        }
     }
 }
 

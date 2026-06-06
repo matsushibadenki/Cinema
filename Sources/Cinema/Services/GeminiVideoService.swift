@@ -31,7 +31,9 @@ struct GeminiVideoService {
         prompt: String,
         durationSeconds: Int,
         aspectRatio: String,
-        referenceImages: [GeminiReferenceImage]
+        referenceImages: [GeminiReferenceImage],
+        negativePrompt: String? = nil,
+        seed: Int? = nil
     ) async throws -> Data {
         guard !apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             throw ServiceError.missingAPIKey
@@ -62,7 +64,9 @@ struct GeminiVideoService {
                 aspectRatio: aspectRatio,
                 durationSeconds: "\(durationSeconds)",
                 numberOfVideos: 1,
-                resolution: "720p"
+                resolution: "720p",
+                negativePrompt: negativePrompt?.nilIfBlank,
+                seed: seed
             )
         ))
 
@@ -77,6 +81,9 @@ struct GeminiVideoService {
         }
 
         let status = try await pollOperation(name: operationName)
+        if let error = status.error {
+            throw ServiceError.requestFailed(error.message ?? "Veo video generation failed.")
+        }
         guard let videoURI = status.response?.generateVideoResponse?.generatedSamples?.first?.video?.uri,
               let url = URL(string: videoURI) else {
             throw ServiceError.videoNotFound
@@ -141,12 +148,21 @@ private struct GeminiVideoParameters: Encodable {
     var durationSeconds: String
     var numberOfVideos: Int
     var resolution: String
+    var negativePrompt: String?
+    var seed: Int?
 }
 
 private struct GeminiVideoOperation: Decodable {
     var name: String?
     var done: Bool?
     var response: GeminiVideoOperationResponse?
+    var error: GeminiVideoOperationError?
+}
+
+private struct GeminiVideoOperationError: Decodable {
+    var code: Int?
+    var message: String?
+    var status: String?
 }
 
 private struct GeminiVideoOperationResponse: Decodable {
@@ -163,4 +179,11 @@ private struct GeminiGeneratedVideoSample: Decodable {
 
 private struct GeminiGeneratedVideo: Decodable {
     var uri: String?
+}
+
+private extension String {
+    var nilIfBlank: String? {
+        let trimmed = trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
 }

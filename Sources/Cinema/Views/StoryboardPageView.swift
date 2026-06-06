@@ -63,6 +63,7 @@ struct StoryboardPageView: View {
     var importImage: (StoryboardCut.ID) -> Void
     var addAfter: (StoryboardCut.ID) -> Void
     var delete: (StoryboardCut.ID) -> Void
+    var appLanguage: String = AppLanguage.japanese.rawValue
 
     private var pageCuts: [Binding<StoryboardCut>] {
         if let pageCutIDs {
@@ -133,14 +134,14 @@ struct StoryboardPageView: View {
         HStack {
             CompactPageTextField(
                 text: $document.project.title,
-                placeholder: "タイトル",
+                placeholder: t(.title),
                 font: .systemFont(ofSize: 15, weight: .semibold)
             )
                 .frame(minWidth: 120, maxWidth: 160)
 
             CompactPageTextField(
                 text: pageSubtitle,
-                placeholder: "ブロック",
+                placeholder: t(.block),
                 font: .systemFont(ofSize: 12, weight: .medium)
             )
                 .frame(width: 120)
@@ -148,7 +149,7 @@ struct StoryboardPageView: View {
 
             CompactPageTextField(
                 text: pageScriptHeading,
-                placeholder: "シーケンス",
+                placeholder: t(.sequence),
                 font: .systemFont(ofSize: 12, weight: .medium)
             )
                 .frame(width: 120)
@@ -156,7 +157,7 @@ struct StoryboardPageView: View {
 
             CompactPageTextField(
                 text: pageSceneName,
-                placeholder: "シーン",
+                placeholder: t(.scene),
                 font: .systemFont(ofSize: 12, weight: .medium)
             )
                 .frame(width: 110)
@@ -274,14 +275,18 @@ struct StoryboardPageView: View {
 
     private var header: some View {
         HStack(spacing: 0) {
-            HeaderCell("カット", width: StoryboardPageLayout.sideColumnWidth)
+            HeaderCell(t(.cut), width: StoryboardPageLayout.sideColumnWidth)
             GapCell()
-            HeaderCell("画面", width: imageColumnWidth)
-            HeaderCell("内容", width: contentColumnWidth)
-            HeaderCell("セリフ", width: actionColumnWidth)
-            HeaderCell("秒", width: StoryboardPageLayout.sideColumnWidth)
+            HeaderCell(t(.screen), width: imageColumnWidth)
+            HeaderCell(t(.content), width: contentColumnWidth)
+            HeaderCell(t(.dialogue), width: actionColumnWidth)
+            HeaderCell(t(.seconds), width: StoryboardPageLayout.sideColumnWidth)
         }
         .frame(height: StoryboardPageLayout.headerHeight)
+    }
+
+    private func t(_ key: CinemaTextKey) -> String {
+        CinemaStrings.text(key, language: appLanguage)
     }
 
     private var columnResizeHandles: some View {
@@ -588,10 +593,64 @@ private struct HeaderCell: View {
     }
 
     var body: some View {
-        Text(title)
-            .font(.system(size: 9, weight: .bold))
-            .foregroundStyle(CinemaDesign.ink)
+        CrispHeaderText(title: title)
             .frame(width: width, height: 28)
             .background(Color(red: 0.985, green: 0.98, blue: 0.962))
+    }
+}
+
+private struct CrispHeaderText: NSViewRepresentable {
+    var title: String
+
+    func makeNSView(context: Context) -> CrispHeaderContainerView {
+        let view = CrispHeaderContainerView()
+        view.update(title: title)
+        return view
+    }
+
+    func updateNSView(_ nsView: CrispHeaderContainerView, context: Context) {
+        nsView.update(title: title)
+    }
+}
+
+private final class CrispHeaderContainerView: NSView {
+    private let label: NSTextField = {
+        let field = NSTextField(labelWithString: "")
+        field.alignment = .center
+        field.isEditable = false
+        field.isSelectable = false
+        field.drawsBackground = false
+        field.cell?.usesSingleLineMode = true
+        field.cell?.lineBreakMode = .byClipping
+        field.font = .systemFont(ofSize: 10.5, weight: .heavy)
+        field.textColor = NSColor.labelColor
+        field.translatesAutoresizingMaskIntoConstraints = true
+        field.autoresizingMask = [.width, .height]
+        return field
+    }()
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        translatesAutoresizingMaskIntoConstraints = false
+        addSubview(label)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func layout() {
+        super.layout()
+        label.frame = bounds.insetBy(dx: 3, dy: 5)
+    }
+
+    override var intrinsicContentSize: NSSize {
+        NSSize(width: NSView.noIntrinsicMetric, height: 28)
+    }
+
+    func update(title: String) {
+        label.stringValue = title
+        needsLayout = true
     }
 }

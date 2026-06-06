@@ -7,6 +7,7 @@ struct PrintablePageView: View {
     @AppStorage("screenBackgroundBrightness") private var screenBackgroundBrightness = 0.0
     @AppStorage("storyboardTextColumnWidth") private var storyboardTextColumnWidth = Double(StoryboardPageLayout.mainColumnWidth)
     @AppStorage("storyboardTextBaseFontSize") private var storyboardTextBaseFontSize = 11.0
+    @AppStorage("appLanguage") private var appLanguage = AppLanguage.japanese.rawValue
 
     var document: StoryboardDocument
     var pageIndex: Int
@@ -21,7 +22,8 @@ struct PrintablePageView: View {
             generate: { _ in },
             importImage: { _ in },
             addAfter: { _ in },
-            delete: { _ in }
+            delete: { _ in },
+            appLanguage: appLanguage
         )
         .screenAspectRatio(ScreenAspectRatio.value(for: screenAspectRatioRawValue).ratio)
         .showsGeneratePlaceholder(showsGeneratePlaceholder)

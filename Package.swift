@@ -23,6 +23,11 @@ let package = Package(
                     "-Xlinker", "Sources/Cinema/Resources/Info.plist"
                 ])
             ]
+        ),
+        .testTarget(
+            name: "CinemaTests",
+            dependencies: ["Cinema"],
+            path: "Tests/CinemaTests"
         )
     ]
 )

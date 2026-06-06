@@ -31,30 +31,51 @@ struct OpenAIImageService {
     func generateStoryboardImage(
         drawingPrompt: String,
         cutPrompt: String,
-        aspectRatio: CGFloat
+        aspectRatio: CGFloat,
+        referenceImages: [OpenAIImageReference]
     ) async throws -> Data {
         guard !apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             throw ServiceError.missingAPIKey
         }
 
-        guard let url = URL(string: "https://api.openai.com/v1/images/generations") else {
+        let usesReferences = !referenceImages.isEmpty
+        guard let url = URL(string: usesReferences
+            ? "https://api.openai.com/v1/images/edits"
+            : "https://api.openai.com/v1/images/generations") else {
             throw ServiceError.invalidURL
         }
 
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
-        request.httpBody = try JSONEncoder().encode(OpenAIImageRequest(
-            model: model,
-            prompt: composedPrompt(
-                drawingPrompt: drawingPrompt,
-                cutPrompt: cutPrompt,
-                aspectRatio: aspectRatio
-            ),
-            size: imageSize(for: aspectRatio),
-            n: 1
-        ))
+        let prompt = composedPrompt(
+            drawingPrompt: drawingPrompt,
+            cutPrompt: cutPrompt,
+            aspectRatio: aspectRatio
+        )
+        if usesReferences {
+            let boundary = "Boundary-\(UUID().uuidString)"
+            request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+            request.httpBody = multipartBody(
+                boundary: boundary,
+                fields: [
+                    "model": model,
+                    "prompt": prompt,
+                    "size": imageSize(for: aspectRatio),
+                    "quality": "high"
+                ],
+                images: Array(referenceImages.prefix(5))
+            )
+        } else {
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.httpBody = try JSONEncoder().encode(OpenAIImageRequest(
+                model: model,
+                prompt: prompt,
+                size: imageSize(for: aspectRatio),
+                quality: "high",
+                n: 1
+            ))
+        }
 
         let (data, response) = try await URLSession.shared.data(for: request)
         if let httpResponse = response as? HTTPURLResponse, !(200..<300).contains(httpResponse.statusCode) {
@@ -73,10 +94,8 @@ struct OpenAIImageService {
 
     private func composedPrompt(drawingPrompt: String, cutPrompt: String, aspectRatio: CGFloat) -> String {
         let basePrompt = """
-        Create a realistic cinematic film still or a clear, natural storyboard image.
-        Compose the image as a photorealistic, authentic scene environment based on the written situation and dialogue.
-        Use the drawing settings to choose the visual style, color, lighting, camera, and texture.
-        Avoid any CGI, 3D render, digital painting look, or artificial AI look. Render with natural lighting, organic textures, and realistic skin details.
+        Create a production-ready cinematic frame or storyboard image based on the written situation and dialogue.
+        The drawing settings are authoritative for visual medium, style, color, lighting, camera, and texture.
         Show clear character placement, location, mood, and action. Do not render any text, captions, speech bubbles, or UI elements inside the image.
         """
 
@@ -99,6 +118,28 @@ struct OpenAIImageService {
 
     private func imageSize(for aspectRatio: CGFloat) -> String {
         aspectRatio >= 1 ? "1536x1024" : "1024x1536"
+    }
+
+    private func multipartBody(
+        boundary: String,
+        fields: [String: String],
+        images: [OpenAIImageReference]
+    ) -> Data {
+        var body = Data()
+        for (name, value) in fields {
+            body.appendString("--\(boundary)\r\n")
+            body.appendString("Content-Disposition: form-data; name=\"\(name)\"\r\n\r\n")
+            body.appendString("\(value)\r\n")
+        }
+        for (index, image) in images.enumerated() {
+            body.appendString("--\(boundary)\r\n")
+            body.appendString("Content-Disposition: form-data; name=\"image[]\"; filename=\"reference-\(index).\(image.fileExtension)\"\r\n")
+            body.appendString("Content-Type: \(image.mimeType)\r\n\r\n")
+            body.append(image.data)
+            body.appendString("\r\n")
+        }
+        body.appendString("--\(boundary)--\r\n")
+        return body
     }
 
     static func fetchAvailableModels(apiKey: String) async throws -> [String] {
@@ -130,7 +171,21 @@ private struct OpenAIImageRequest: Encodable {
     var model: String
     var prompt: String
     var size: String
+    var quality: String
     var n: Int
+}
+
+struct OpenAIImageReference {
+    var mimeType: String
+    var data: Data
+
+    var fileExtension: String {
+        switch mimeType {
+        case "image/jpeg": return "jpg"
+        case "image/webp": return "webp"
+        default: return "png"
+        }
+    }
 }
 
 private struct OpenAIImageResponse: Decodable {
@@ -152,3 +207,10 @@ private struct OpenAIModelListResponse: Decodable {
     let data: [Model]?
 }
 
+private extension Data {
+    mutating func appendString(_ string: String) {
+        if let data = string.data(using: .utf8) {
+            append(data)
+        }
+    }
+}

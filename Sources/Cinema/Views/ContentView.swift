@@ -46,6 +46,7 @@ struct ContentView: View {
     @AppStorage("aiCostLimitEnabled") private var aiCostLimitEnabled = false
     @AppStorage("aiCostLimitUSD") private var aiCostLimitUSD = 10.0
     @AppStorage("showsReferenceSidebar") private var showsReferenceSidebar = true
+    @AppStorage("appLanguage") private var appLanguage = AppLanguage.japanese.rawValue
 
     @State private var pageIndex = 0
     @State private var generationStatus: String?
@@ -97,7 +98,8 @@ struct ContentView: View {
                 aiEstimatedCostUSD: aiEstimatedCostUSD,
                 aiCostLimitEnabled: aiCostLimitEnabled,
                 aiCostLimitUSD: aiCostLimitUSD,
-                isAICostLimitExceeded: isAICostLimitExceeded
+                isAICostLimitExceeded: isAICostLimitExceeded,
+                appLanguage: appLanguage
             )
         } detail: {
             HStack(spacing: 0) {
@@ -108,7 +110,7 @@ struct ContentView: View {
 
                 if showsReferenceSidebar {
                     Divider()
-                    ReferenceSidebarView(document: $document)
+                    ReferenceSidebarView(document: $document, appLanguage: appLanguage)
                         .transition(.move(edge: .trailing).combined(with: .opacity))
                 }
             }
@@ -142,7 +144,7 @@ struct ContentView: View {
             ensureSelectedVideoCuts(reset: true)
         }
         .onAppear {
-            migrateGeminiImageModelIfNeeded()
+            migrateAIModelsIfNeeded()
             document.project.drawingSettings.ensureSelection()
             ensureSelectedVideoScene()
             ensureSelectedVideoCuts()
@@ -260,7 +262,7 @@ struct ContentView: View {
         let horizontalPadding: CGFloat = 16
         let verticalPadding: CGFloat = 16
         let availableWidth = max(availableSize.width - (horizontalPadding * 2), 1)
-        let scale = availableWidth / currentPageSize.width
+        let scale = pixelAlignedScale(availableWidth / currentPageSize.width)
         let fittedWidth = currentPageSize.width * scale
         let fittedHeight = currentPageSize.height * scale
 
@@ -283,10 +285,16 @@ struct ContentView: View {
         }
 
         let availablePageHeight = max(availableHeight - (pageCanvasPadding * 2), 1)
-        zoomScale = clampedZoomScale(availablePageHeight / StoryboardPageLayout.pageSize.height)
+        zoomScale = clampedZoomScale(pixelAlignedScale(availablePageHeight / StoryboardPageLayout.pageSize.height))
         if finalize {
             isInitialStoryboardFitPending = false
         }
+    }
+
+    private func pixelAlignedScale(_ scale: CGFloat) -> CGFloat {
+        let backingScale = NSScreen.main?.backingScaleFactor ?? 2
+        let stepsPerPoint: CGFloat = 20
+        return (scale * backingScale * stepsPerPoint).rounded() / (backingScale * stepsPerPoint)
     }
 
     @ViewBuilder
@@ -302,7 +310,8 @@ struct ContentView: View {
                 generate: generateImage,
                 importImage: importImage,
                 addAfter: addCutAfter,
-                delete: deleteCut
+                delete: deleteCut,
+                appLanguage: appLanguage
             )
             .screenAspectRatio(ScreenAspectRatio.value(for: screenAspectRatioRawValue).ratio)
             .showsGeneratePlaceholder(showsGeneratePlaceholder)
@@ -339,17 +348,22 @@ struct ContentView: View {
         VStack(alignment: .leading, spacing: 7) {
             HStack(spacing: 12) {
                 HStack(spacing: 12) {
-                    Picker("", selection: $displayMode) {
-                        ForEach(DocumentDisplayMode.allCases) { mode in
-                            Text(mode.label).tag(mode)
+                    Label(t(.storyboard), systemImage: "rectangle.grid.1x2")
+                        .font(.headline)
+                        .foregroundStyle(CinemaDesign.ink)
+                        .frame(width: 150, alignment: .leading)
+                        .onAppear {
+                            displayMode = .storyboard
+                        }
+
+                    Picker(t(.language), selection: $appLanguage) {
+                        ForEach(AppLanguage.allCases) { language in
+                            Text(language.displayName).tag(language.rawValue)
                         }
                     }
-                    .pickerStyle(.segmented)
-                    .frame(width: 150)
-                    .onChange(of: displayMode) { _, _ in
-                        showsDrawingSettings = false
-                        showsFullCanvas = false
-                    }
+                    .labelsHidden()
+                    .pickerStyle(.menu)
+                    .frame(width: 110)
 
                     Button {
                         showsDrawingSettings.toggle()
@@ -359,7 +373,7 @@ struct ContentView: View {
                             pageIndex = 0
                         }
                     } label: {
-                        Label("描画設定", systemImage: "paintpalette")
+                        Label(t(.drawingSettings), systemImage: "paintpalette")
                     }
                     .buttonStyle(.bordered)
                     .controlSize(.large)
@@ -375,7 +389,7 @@ struct ContentView: View {
                     } label: {
                         Image(systemName: "chevron.left")
                     }
-                    .help("前ページ")
+                    .help(t(.previousPage))
                     .disabled(showsDrawingSettings || pageIndex == 0)
 
                     Text("\(pageIndex + 1) / \(currentPageCount)")
@@ -388,13 +402,13 @@ struct ContentView: View {
                     } label: {
                         Image(systemName: "chevron.right")
                     }
-                    .help("次ページ")
+                    .help(t(.nextPage))
                     .disabled(showsDrawingSettings || pageIndex >= currentPageCount - 1)
 
                     Button {
                         toggleFullCanvas()
                     } label: {
-                        Label("全面", systemImage: showsFullCanvas ? "rectangle.inset.filled" : "rectangle.expand.vertical")
+                        Label(t(.fullCanvas), systemImage: showsFullCanvas ? "rectangle.inset.filled" : "rectangle.expand.vertical")
                     }
                     .buttonStyle(.bordered)
                     .controlSize(.large)
@@ -410,7 +424,7 @@ struct ContentView: View {
                         } label: {
                             Image(systemName: "minus.magnifyingglass")
                         }
-                        .help("縮小")
+                        .help(t(.zoomOut))
                         .disabled(showsDrawingSettings || zoomScale <= minimumZoomScale)
 
                         Text(zoomPercentageText)
@@ -423,13 +437,13 @@ struct ContentView: View {
                         } label: {
                             Image(systemName: "plus.magnifyingglass")
                         }
-                        .help("拡大")
+                        .help(t(.zoomIn))
                         .disabled(showsDrawingSettings || zoomScale >= maximumZoomScale)
 
                         Button {
                             zoomScale = 1.0
                         } label: {
-                            Label("実寸", systemImage: "1.magnifyingglass")
+                            Label(t(.actualSize), systemImage: "1.magnifyingglass")
                         }
                         .disabled(showsDrawingSettings || abs(zoomScale - 1.0) < 0.001)
                     }
@@ -446,12 +460,12 @@ struct ContentView: View {
                     .buttonStyle(.bordered)
                     .controlSize(.large)
                     .tint(showsReferenceSidebar ? .accentColor : nil)
-                    .help(showsReferenceSidebar ? "リファレンスを非表示" : "リファレンスを表示")
+                    .help(showsReferenceSidebar ? t(.hideReference) : t(.showReference))
 
                     Button {
                         printCurrentPage()
                     } label: {
-                        Label("プリント", systemImage: "printer")
+                        Label(t(.print), systemImage: "printer")
                     }
                     .buttonStyle(.borderedProminent)
                     .controlSize(.large)
@@ -478,6 +492,10 @@ struct ContentView: View {
 
     private var zoomPercentageText: String {
         "\(Int((zoomScale * 100).rounded()))%"
+    }
+
+    private func t(_ key: CinemaTextKey) -> String {
+        CinemaStrings.text(key, language: appLanguage)
     }
 
     private func changeZoom(by delta: CGFloat) {
@@ -650,7 +668,7 @@ struct ContentView: View {
 
     private func nextSubtitleName() -> String {
         let count = document.project.cuts.filter { !$0.subtitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }.count + 1
-        return "ブロック\(count)"
+        return CinemaStrings.blockName(count, language: appLanguage)
     }
 
     private func generateSceneVideo(for title: String) {
@@ -674,28 +692,68 @@ struct ContentView: View {
         Task {
             do {
                 let provider = AIVideoGenerationProvider.value(for: videoGenerationProvider)
-                let referenceImages = sceneReferenceImages(for: cuts)
-                let durationSeconds = videoDurationSeconds(for: cuts, hasReferenceImages: provider == .gemini && !referenceImages.isEmpty)
-                let videoData: Data
+                var clips: [Data] = []
+                var previousLastFrame: GeminiReferenceImage?
+                var totalDurationSeconds = 0
 
-                switch provider {
-                case .gemini:
-                    let service = GeminiVideoService(apiKey: geminiAPIKey, model: geminiVideoModelName)
-                    videoData = try await service.generateSceneVideo(
-                        prompt: prompt,
-                        durationSeconds: durationSeconds,
-                        aspectRatio: videoAspectRatio,
-                        referenceImages: referenceImages
+                for (index, cut) in cuts.enumerated() {
+                    await MainActor.run {
+                        generationStatus = "シーン「\(title)」のカット \(index + 1)/\(cuts.count) を生成中..."
+                    }
+
+                    let cutReferences = sceneReferenceImages(for: [cut])
+                    let orderedReferences = ([previousLastFrame].compactMap { $0 } + cutReferences)
+                    let capabilities = AIProviderCapabilities.video(
+                        provider: provider,
+                        hasReferenceImages: !orderedReferences.isEmpty
                     )
-                case .openAI:
-                    let service = OpenAIVideoService(apiKey: openAIAPIKey, model: openAIVideoModelName)
-                    videoData = try await service.generateSceneVideo(
-                        prompt: prompt,
-                        durationSeconds: durationSeconds,
-                        aspectRatio: videoAspectRatio,
-                        inputReference: openAIVideoReferenceImage(from: referenceImages.first, aspectRatio: videoAspectRatio)
+                    let references = Array(orderedReferences.prefix(capabilities.maximumReferenceImages))
+                    let durationSeconds = videoDurationSeconds(
+                        for: [cut],
+                        provider: provider,
+                        hasReferenceImages: !references.isEmpty
                     )
+                    let cutPrompt = AIPromptBuilder.scenePrompt(
+                        title: title,
+                        cuts: [cut],
+                        drawingPrompt: drawingPromptForGeneration(references: referencesForCut(cut)),
+                        isSingleCutGeneration: true,
+                        previousCut: index > 0 ? cuts[index - 1] : nil
+                    )
+                    let clip: Data
+
+                    switch provider {
+                    case .gemini:
+                        let service = GeminiVideoService(apiKey: geminiAPIKey, model: geminiVideoModelName)
+                        clip = try await service.generateSceneVideo(
+                            prompt: cutPrompt,
+                            durationSeconds: durationSeconds,
+                            aspectRatio: videoAspectRatio,
+                            referenceImages: references,
+                            negativePrompt: cut.aiShotSettings.negativePrompt,
+                            seed: cut.aiShotSettings.seed
+                        )
+                    case .openAI:
+                        let service = OpenAIVideoService(apiKey: openAIAPIKey, model: openAIVideoModelName)
+                        clip = try await service.generateSceneVideo(
+                            prompt: cutPrompt,
+                            durationSeconds: durationSeconds,
+                            aspectRatio: videoAspectRatio,
+                            inputReference: openAIVideoReferenceImage(
+                                from: references.first,
+                                aspectRatio: videoAspectRatio
+                            )
+                        )
+                    }
+
+                    clips.append(clip)
+                    totalDurationSeconds += durationSeconds
+                    if index < cuts.count - 1,
+                       let frameData = try? await VideoAssemblyService.lastFramePNG(from: clip) {
+                        previousLastFrame = GeminiReferenceImage(mimeType: "image/png", data: frameData)
+                    }
                 }
+                let videoData = try await VideoAssemblyService.concatenate(clips)
 
                 await MainActor.run {
                     let safeTitle = safeFileComponent(title)
@@ -703,7 +761,14 @@ struct ContentView: View {
                     document.videoData[fileName] = videoData
                     document.project.sceneVideos.removeAll { $0.title == title }
                     document.project.sceneVideos.append(SceneVideo(title: title, videoFileName: fileName))
-                    recordAIUsage(prompt: prompt, kind: .video(provider: provider.rawValue, seconds: durationSeconds))
+                    recordAIUsage(
+                        prompt: prompt,
+                        kind: .video(
+                            provider: provider.rawValue,
+                            model: provider == .openAI ? openAIVideoModelName : geminiVideoModelName,
+                            seconds: totalDurationSeconds
+                        )
+                    )
                     generationStatus = "シーン「\(title)」の動画を生成しました"
                     generatingSceneTitle = nil
                 }
@@ -749,7 +814,7 @@ struct ContentView: View {
 
     private func sceneSections() -> [(title: String, cuts: [StoryboardCut])] {
         var sections: [(title: String, cuts: [StoryboardCut])] = []
-        var currentTitle = "ブロック1"
+        var currentTitle = CinemaStrings.blockName(1, language: appLanguage)
         var currentCuts: [StoryboardCut] = []
 
         for cut in document.project.cuts {
@@ -772,43 +837,29 @@ struct ContentView: View {
     }
 
     private func sceneVideoPrompt(title: String, cuts: [StoryboardCut]) -> String {
-        let cutDescriptions = cuts.map { cut -> String in
-            [
-                "Cut \(cut.cutNumber)",
-                labeledPrompt("Duration seconds", cut.duration),
-                labeledPrompt("Scene content", cut.situation),
-                labeledPrompt("Names and dialogue", dialoguePrompt(for: cut)),
-                labeledPrompt("Additional direction", cut.generationPrompt)
-            ]
-            .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
-            .joined(separator: "\n")
-        }
-        .joined(separator: "\n\n")
-
-        return [
-            "Create a cinematic video for the selected storyboard scene.",
-            "Scene title: \(title)",
-            "Drawing settings:\n\(drawingPromptForGeneration(references: referencesForCuts(cuts)))",
-            "Use the attached storyboard images as visual references for composition, characters, locations, and continuity.",
-            "Respect the cut order and timing notes. Use camera movement and scene motion to connect the cuts into one coherent short video.",
-            cutDescriptions
-        ]
-        .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
-        .joined(separator: "\n\n")
+        AIPromptBuilder.scenePrompt(
+            title: title,
+            cuts: cuts,
+            drawingPrompt: drawingPromptForGeneration(references: referencesForCuts(cuts)),
+            isSingleCutGeneration: cuts.count == 1
+        )
     }
 
     private func sceneReferenceImages(for cuts: [StoryboardCut]) -> [GeminiReferenceImage] {
+        let storyboardImages = storyboardReferenceImages(for: cuts)
         let linkedReferences = referencesForCuts(cuts).compactMap { reference -> GeminiReferenceImage? in
             guard let data = document.imageData[reference.imageFileName] else { return nil }
             return GeminiReferenceImage(mimeType: mimeType(for: reference.imageFileName), data: data)
         }
 
-        let storyboardImages = cuts.compactMap { cut -> GeminiReferenceImage? in
+        return storyboardImages + linkedReferences
+    }
+
+    private func storyboardReferenceImages(for cuts: [StoryboardCut]) -> [GeminiReferenceImage] {
+        cuts.compactMap { cut -> GeminiReferenceImage? in
             guard let fileName = cut.imageFileName, let data = document.imageData[fileName] else { return nil }
             return GeminiReferenceImage(mimeType: mimeType(for: fileName), data: data)
         }
-
-        return linkedReferences + storyboardImages
     }
 
     private func referencesForCuts(_ cuts: [StoryboardCut]) -> [ReferenceImage] {
@@ -824,16 +875,20 @@ struct ContentView: View {
         }
     }
 
-    private func videoDurationSeconds(for cuts: [StoryboardCut], hasReferenceImages: Bool) -> Int {
-        if hasReferenceImages { return 8 }
-
+    private func videoDurationSeconds(
+        for cuts: [StoryboardCut],
+        provider: AIVideoGenerationProvider,
+        hasReferenceImages: Bool
+    ) -> Int {
         let total = cuts
             .compactMap { Double($0.duration.trimmingCharacters(in: .whitespacesAndNewlines).replacingOccurrences(of: ",", with: ".")) }
             .reduce(0, +)
-
-        if total <= 4 { return 4 }
-        if total <= 6 { return 6 }
-        return 8
+        let requested = total > 0 ? total : 4
+        return AIProviderCapabilities.video(
+            provider: provider,
+            hasReferenceImages: hasReferenceImages
+        )
+        .normalizedDuration(requested)
     }
 
     private var videoAspectRatio: String {
@@ -1011,7 +1066,8 @@ struct ContentView: View {
                     data = try await service.generateStoryboardImage(
                         drawingPrompt: drawingPromptForGeneration(references: referencesForCut(cut)),
                         cutPrompt: prompt,
-                        aspectRatio: aspectRatio
+                        aspectRatio: aspectRatio,
+                        referenceImages: openAIImageReferencesForGeneration(for: cut)
                     )
                 case .gemini:
                     let service = GeminiImageService(apiKey: geminiAPIKey, model: geminiModelName)
@@ -1029,7 +1085,19 @@ struct ContentView: View {
                     if let updateIndex = document.project.cuts.firstIndex(where: { $0.id == cutID }) {
                         document.project.cuts[updateIndex].imageFileName = fileName
                     }
-                    recordAIUsage(prompt: prompt, kind: .image(provider: imageGenerationProvider))
+                    recordAIUsage(
+                        prompt: [
+                            drawingPromptForGeneration(references: referencesForCut(cut)),
+                            prompt
+                        ].joined(separator: "\n"),
+                        kind: .image(
+                            provider: imageGenerationProvider,
+                            model: AIImageGenerationProvider.value(for: imageGenerationProvider) == .openAI
+                                ? openAIModelName
+                                : geminiModelName,
+                            referenceCount: referencesForCut(cut).count
+                        )
+                    )
                     generationStatus = "カット\(cut.cutNumber)を生成しました"
                     generatingCutID = nil
                 }
@@ -1152,21 +1220,20 @@ struct ContentView: View {
         return "\(label): \(value)"
     }
 
-    private func migrateGeminiImageModelIfNeeded() {
+    private func migrateAIModelsIfNeeded() {
         if geminiModelName.trimmingCharacters(in: .whitespacesAndNewlines) == "nano-banana-2" {
             geminiModelName = "gemini-2.5-flash-image"
+        }
+        if ["dall-e-2", "dall-e-3"].contains(openAIModelName.trimmingCharacters(in: .whitespacesAndNewlines)) {
+            openAIModelName = "gpt-image-2"
+        }
+        if openAIVideoModelName.trimmingCharacters(in: .whitespacesAndNewlines) == "sora-1" {
+            openAIVideoModelName = "sora-2"
         }
     }
 
     private func cutPrompt(for cut: StoryboardCut) -> String {
-        [
-            labeledPrompt("Scene content", cut.situation),
-            labeledPrompt("Action direction", cut.action),
-            labeledPrompt("Names and dialogue", dialoguePrompt(for: cut)),
-            labeledPrompt("Additional cut direction", cut.generationPrompt)
-        ]
-        .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
-        .joined(separator: "\n\n")
+        AIPromptBuilder.cutPrompt(for: cut, previousCut: previousCutForContinuity(before: cut))
     }
 
     private func labeledPrompt(_ label: String, _ value: String) -> String {
@@ -1176,28 +1243,37 @@ struct ContentView: View {
     }
 
     private func dialoguePrompt(for cut: StoryboardCut) -> String {
-        let dialogue = cut.dialogueLines
-            .map { line -> String in
-                let speaker = line.speaker.trimmingCharacters(in: .whitespacesAndNewlines)
-                let text = line.dialogue.trimmingCharacters(in: .whitespacesAndNewlines)
-                guard !speaker.isEmpty || !text.isEmpty else { return "" }
-                return speaker.isEmpty ? text : "\(speaker): \(text)"
-            }
-            .filter { !$0.isEmpty }
-            .joined(separator: "\n")
-
-        if !dialogue.isEmpty {
-            return dialogue
-        }
-
-        return cut.action
+        AIPromptBuilder.dialoguePrompt(for: cut)
     }
 
     private func referenceImagesForGeneration(for cut: StoryboardCut) -> [GeminiReferenceImage] {
-        referencesForCut(cut).compactMap { reference in
+        let previousFrame = previousCutForContinuity(before: cut).flatMap { previousCut -> GeminiReferenceImage? in
+            guard let fileName = previousCut.imageFileName,
+                  let data = document.imageData[fileName] else {
+                return nil
+            }
+            return GeminiReferenceImage(mimeType: mimeType(for: fileName), data: data)
+        }
+        let selectedReferences: [GeminiReferenceImage] = referencesForCut(cut).compactMap { reference in
             guard let data = document.imageData[reference.imageFileName] else { return nil }
             return GeminiReferenceImage(mimeType: mimeType(for: reference.imageFileName), data: data)
         }
+        return Array(([previousFrame].compactMap { $0 } + selectedReferences).prefix(5))
+    }
+
+    private func openAIImageReferencesForGeneration(for cut: StoryboardCut) -> [OpenAIImageReference] {
+        referenceImagesForGeneration(for: cut).map {
+            OpenAIImageReference(mimeType: $0.mimeType, data: $0.data)
+        }
+    }
+
+    private func previousCutForContinuity(before cut: StoryboardCut) -> StoryboardCut? {
+        guard cut.subtitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              let index = document.project.cuts.firstIndex(where: { $0.id == cut.id }),
+              index > 0 else {
+            return nil
+        }
+        return document.project.cuts[index - 1]
     }
 
     private func referencesForCut(_ cut: StoryboardCut) -> [ReferenceImage] {
@@ -1240,8 +1316,8 @@ struct ContentView: View {
     }
 
     private enum AIUsageKind {
-        case image(provider: String)
-        case video(provider: String, seconds: Int)
+        case image(provider: String, model: String, referenceCount: Int)
+        case video(provider: String, model: String, seconds: Int)
     }
 
     private func canStartAIGeneration() -> Bool {
@@ -1253,23 +1329,34 @@ struct ContentView: View {
     }
 
     private func recordAIUsage(prompt: String, kind: AIUsageKind) {
-        let tokens = max(1, Int(ceil(Double(prompt.count) / 4.0)))
+        let tokens = max(1, Int(ceil(Double(prompt.utf8.count) / 4.0)))
         aiEstimatedTokensUsed += tokens
         aiEstimatedCostUSD += estimatedCostUSD(tokens: tokens, kind: kind)
     }
 
     private func estimatedCostUSD(tokens: Int, kind: AIUsageKind) -> Double {
         switch kind {
-        case .image(let provider):
+        case .image(let provider, let model, let referenceCount):
             if provider == "openai" {
-                return (Double(tokens) / 1_000_000.0) * 5.0 + 0.08
+                let outputCost: Double
+                if model.contains("mini") {
+                    outputCost = 0.052
+                } else if model.contains("gpt-image-1") {
+                    outputCost = 0.20
+                } else {
+                    outputCost = 0.20
+                }
+                let referenceInputCost = Double(referenceCount) * 0.012
+                return (Double(tokens) / 1_000_000.0) * 5.0 + referenceInputCost + outputCost
             }
-            return (Double(tokens) / 1_000_000.0) * 0.30 + 0.04
-        case .video(let provider, let seconds):
+            return (Double(tokens) / 1_000_000.0) * 0.30 + (Double(referenceCount) * 0.0004) + 0.039
+        case .video(let provider, let model, let seconds):
             if provider == AIVideoGenerationProvider.openAI.rawValue {
-                return (Double(tokens) / 1_000_000.0) * 5.0 + (Double(seconds) * 0.10)
+                let perSecond = model.contains("pro") ? 0.30 : 0.10
+                return (Double(tokens) / 1_000_000.0) * 5.0 + (Double(seconds) * perSecond)
             }
-            return (Double(tokens) / 1_000_000.0) * 0.30 + (Double(seconds) * 0.60)
+            let perSecond = model.contains("fast") ? 0.15 : 0.40
+            return (Double(tokens) / 1_000_000.0) * 0.30 + (Double(seconds) * perSecond)
         }
     }
 }

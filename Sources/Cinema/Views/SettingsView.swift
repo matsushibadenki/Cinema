@@ -32,13 +32,14 @@ struct SettingsView: View {
     @AppStorage("aiCostLimitEnabled") private var aiCostLimitEnabled = false
     @AppStorage("aiCostLimitUSD") private var aiCostLimitUSD = 10.0
     @AppStorage("aiEstimatedCostUSD") private var aiEstimatedCostUSD = 0.0
+    @AppStorage("appLanguage") private var appLanguage = AppLanguage.japanese.rawValue
 
     @State private var selection: SettingsTab = .ai
 
-    private let geminiImagePresets = ["gemini-2.5-flash-image", "imagen-3.0-generate-002"]
+    private let geminiImagePresets = ["gemini-2.5-flash-image"]
     private let geminiVideoPresets = ["veo-3.1-generate-preview"]
-    private let openAIImagePresets = ["dall-e-3", "dall-e-2", "gpt-image-2"]
-    private let openAIVideoPresets = ["sora-2", "sora-1"]
+    private let openAIImagePresets = ["gpt-image-2", "gpt-image-1.5", "gpt-image-1-mini"]
+    private let openAIVideoPresets = ["sora-2", "sora-2-pro"]
 
     @State private var geminiImageSelection: String = "custom"
     @State private var geminiVideoSelection: String = "custom"
@@ -89,9 +90,9 @@ struct SettingsView: View {
     var body: some View {
         NavigationSplitView {
             List(selection: $selection) {
-                Label("AI生成", systemImage: "sparkles")
+                Label(t(.aiGeneration), systemImage: "sparkles")
                     .tag(SettingsTab.ai)
-                Label("画面表示", systemImage: "rectangle.inset.filled")
+                Label(t(.displaySettings), systemImage: "rectangle.inset.filled")
                     .tag(SettingsTab.display)
             }
             .listStyle(.sidebar)
@@ -175,7 +176,7 @@ struct SettingsView: View {
 
     private var aiSettings: some View {
         SettingsDetailScrollView {
-            SettingsSection("画像生成サービス") {
+            SettingsSection(t(.imageGenerationService)) {
                 Picker("Provider", selection: $imageGenerationProvider) {
                     ForEach(AIImageGenerationProvider.allCases) { provider in
                         Text(provider.label).tag(provider.rawValue)
@@ -184,7 +185,7 @@ struct SettingsView: View {
                 .pickerStyle(.segmented)
             }
 
-            SettingsSection("動画生成サービス") {
+            SettingsSection(t(.videoGenerationService)) {
                 Picker("Provider", selection: $videoGenerationProvider) {
                     ForEach(AIVideoGenerationProvider.allCases) { provider in
                         Text(provider.label).tag(provider.rawValue)
@@ -198,7 +199,7 @@ struct SettingsView: View {
                     VStack(alignment: .leading, spacing: 6) {
                         APIKeyField(
                             text: $geminiAPIKey,
-                            linkTitle: "Google AI Studioで取得",
+                            linkTitle: t(.getGoogleAIStudio),
                             linkURL: URL(string: "https://aistudio.google.com/app/apikey")!
                         )
                         
@@ -206,7 +207,7 @@ struct SettingsView: View {
                             if isFetchingGemini {
                                 ProgressView()
                                     .controlSize(.small)
-                                Text("モデル一覧を取得中...")
+                                Text(t(.fetchingModels))
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             } else {
@@ -215,19 +216,19 @@ struct SettingsView: View {
                                         await fetchGeminiModels()
                                     }
                                 }) {
-                                    Label("モデル一覧を更新", systemImage: "arrow.clockwise")
+                                    Label(t(.refreshModels), systemImage: "arrow.clockwise")
                                         .font(.caption)
                                 }
                                 .buttonStyle(.borderless)
                                 .disabled(geminiAPIKey.isEmpty)
 
                                 if let error = geminiFetchError {
-                                    Text("取得エラー: \(error)")
+                                    Text(CinemaStrings.fetchError(error, language: appLanguage))
                                         .font(.caption)
                                         .foregroundStyle(.red)
                                         .lineLimit(1)
                                 } else if !geminiFetchedModels.isEmpty {
-                                    Text("取得完了 (\(geminiFetchedModels.count)個のモデル)")
+                                    Text(CinemaStrings.fetchComplete(count: geminiFetchedModels.count, language: appLanguage))
                                         .font(.caption)
                                         .foregroundStyle(.green)
                                 }
@@ -239,7 +240,7 @@ struct SettingsView: View {
                 SettingsFieldRow("Image Model") {
                     VStack(alignment: .leading, spacing: 4) {
                         Picker("", selection: $geminiImageSelection) {
-                            Section(header: Text("推奨モデル")) {
+                            Section(header: Text(t(.recommendedModels))) {
                                 ForEach(geminiImagePresets, id: \.self) { preset in
                                     Text(preset).tag(preset)
                                 }
@@ -247,7 +248,7 @@ struct SettingsView: View {
                             
                             let fetchedList = geminiFetchedModels.filter { ($0.contains("imagen") || $0.contains("gemini") || $0.contains("flash")) && !geminiImagePresets.contains($0) }
                             if !fetchedList.isEmpty {
-                                Section(header: Text("取得されたモデル")) {
+                                Section(header: Text(t(.fetchedModels))) {
                                     ForEach(fetchedList, id: \.self) { model in
                                         Text(model).tag(model)
                                     }
@@ -255,13 +256,13 @@ struct SettingsView: View {
                             }
                             
                             Section {
-                                Text("その他 (直接入力)").tag("custom")
+                                Text(t(.customDirectInput)).tag("custom")
                             }
                         }
                         .pickerStyle(.menu)
                         
                         if geminiImageSelection == "custom" {
-                            TextField("モデル名を直接入力", text: $geminiModelName)
+                            TextField(t(.enterModelName), text: $geminiModelName)
                                 .textFieldStyle(.roundedBorder)
                         }
                     }
@@ -270,7 +271,7 @@ struct SettingsView: View {
                 SettingsFieldRow("Video Model") {
                     VStack(alignment: .leading, spacing: 4) {
                         Picker("", selection: $geminiVideoSelection) {
-                            Section(header: Text("推奨モデル")) {
+                            Section(header: Text(t(.recommendedModels))) {
                                 ForEach(geminiVideoPresets, id: \.self) { preset in
                                     Text(preset).tag(preset)
                                 }
@@ -278,7 +279,7 @@ struct SettingsView: View {
                             
                             let fetchedList = geminiFetchedModels.filter { ($0.contains("veo") || $0.contains("generate")) && !geminiVideoPresets.contains($0) }
                             if !fetchedList.isEmpty {
-                                Section(header: Text("取得されたモデル")) {
+                                Section(header: Text(t(.fetchedModels))) {
                                     ForEach(fetchedList, id: \.self) { model in
                                         Text(model).tag(model)
                                     }
@@ -286,19 +287,19 @@ struct SettingsView: View {
                             }
                             
                             Section {
-                                Text("その他 (直接入力)").tag("custom")
+                                Text(t(.customDirectInput)).tag("custom")
                             }
                         }
                         .pickerStyle(.menu)
                         
                         if geminiVideoSelection == "custom" {
-                            TextField("モデル名を直接入力", text: $geminiVideoModelName)
+                            TextField(t(.enterModelName), text: $geminiVideoModelName)
                                 .textFieldStyle(.roundedBorder)
                         }
                     }
                 }
 
-                Text("画像と動画で別のモデル名を指定できます。Google側の正式モデル名が異なる場合はここで変更できます。")
+                Text(t(.geminiModelHelp))
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
@@ -308,7 +309,7 @@ struct SettingsView: View {
                     VStack(alignment: .leading, spacing: 6) {
                         APIKeyField(
                             text: $openAIAPIKey,
-                            linkTitle: "OpenAI Platformで取得",
+                            linkTitle: t(.getOpenAIPlatform),
                             linkURL: URL(string: "https://platform.openai.com/api-keys")!
                         )
                         
@@ -316,7 +317,7 @@ struct SettingsView: View {
                             if isFetchingOpenAI {
                                 ProgressView()
                                     .controlSize(.small)
-                                Text("モデル一覧を取得中...")
+                                Text(t(.fetchingModels))
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             } else {
@@ -325,19 +326,19 @@ struct SettingsView: View {
                                         await fetchOpenAIModels()
                                     }
                                 }) {
-                                    Label("モデル一覧を更新", systemImage: "arrow.clockwise")
+                                    Label(t(.refreshModels), systemImage: "arrow.clockwise")
                                         .font(.caption)
                                 }
                                 .buttonStyle(.borderless)
                                 .disabled(openAIAPIKey.isEmpty)
 
                                 if let error = openAIFetchError {
-                                    Text("取得エラー: \(error)")
+                                    Text(CinemaStrings.fetchError(error, language: appLanguage))
                                         .font(.caption)
                                         .foregroundStyle(.red)
                                         .lineLimit(1)
                                 } else if !openAIFetchedModels.isEmpty {
-                                    Text("取得完了 (\(openAIFetchedModels.count)個のモデル)")
+                                    Text(CinemaStrings.fetchComplete(count: openAIFetchedModels.count, language: appLanguage))
                                         .font(.caption)
                                         .foregroundStyle(.green)
                                 }
@@ -349,7 +350,7 @@ struct SettingsView: View {
                 SettingsFieldRow("Image Model") {
                     VStack(alignment: .leading, spacing: 4) {
                         Picker("", selection: $openAIImageSelection) {
-                            Section(header: Text("推奨モデル")) {
+                            Section(header: Text(t(.recommendedModels))) {
                                 ForEach(openAIImagePresets, id: \.self) { preset in
                                     Text(preset).tag(preset)
                                 }
@@ -357,7 +358,7 @@ struct SettingsView: View {
                             
                             let fetchedList = openAIFetchedModels.filter { ($0.contains("dall") || $0.contains("gpt")) && !openAIImagePresets.contains($0) }
                             if !fetchedList.isEmpty {
-                                Section(header: Text("取得されたモデル")) {
+                                Section(header: Text(t(.fetchedModels))) {
                                     ForEach(fetchedList, id: \.self) { model in
                                         Text(model).tag(model)
                                     }
@@ -365,13 +366,13 @@ struct SettingsView: View {
                             }
                             
                             Section {
-                                Text("その他 (直接入力)").tag("custom")
+                                Text(t(.customDirectInput)).tag("custom")
                             }
                         }
                         .pickerStyle(.menu)
                         
                         if openAIImageSelection == "custom" {
-                            TextField("モデル名を直接入力", text: $openAIModelName)
+                            TextField(t(.enterModelName), text: $openAIModelName)
                                 .textFieldStyle(.roundedBorder)
                         }
                     }
@@ -380,7 +381,7 @@ struct SettingsView: View {
                 SettingsFieldRow("Video Model") {
                     VStack(alignment: .leading, spacing: 4) {
                         Picker("", selection: $openAIVideoSelection) {
-                            Section(header: Text("推奨モデル")) {
+                            Section(header: Text(t(.recommendedModels))) {
                                 ForEach(openAIVideoPresets, id: \.self) { preset in
                                     Text(preset).tag(preset)
                                 }
@@ -388,7 +389,7 @@ struct SettingsView: View {
                             
                             let fetchedList = openAIFetchedModels.filter { $0.contains("sora") && !openAIVideoPresets.contains($0) }
                             if !fetchedList.isEmpty {
-                                Section(header: Text("取得されたモデル")) {
+                                Section(header: Text(t(.fetchedModels))) {
                                     ForEach(fetchedList, id: \.self) { model in
                                         Text(model).tag(model)
                                     }
@@ -396,34 +397,34 @@ struct SettingsView: View {
                             }
                             
                             Section {
-                                Text("その他 (直接入力)").tag("custom")
+                                Text(t(.customDirectInput)).tag("custom")
                             }
                         }
                         .pickerStyle(.menu)
                         
                         if openAIVideoSelection == "custom" {
-                            TextField("モデル名を直接入力", text: $openAIVideoModelName)
+                            TextField(t(.enterModelName), text: $openAIVideoModelName)
                                 .textFieldStyle(.roundedBorder)
                         }
                     }
                 }
 
-                Text("画像と動画で別のモデル名を指定できます。Soraなど動画モデル名もここで変更できます。")
+                Text(t(.openAIModelHelp))
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
 
-            SettingsSection("利用料金リミッター") {
-                Toggle("推定料金の上限を有効にする", isOn: $aiCostLimitEnabled)
+            SettingsSection(t(.costLimiter)) {
+                Toggle(t(.enableCostLimit), isOn: $aiCostLimitEnabled)
 
-                SettingsFieldRow("上限 USD") {
+                SettingsFieldRow(t(.limitUSD)) {
                     TextField("", value: $aiCostLimitUSD, format: .number.precision(.fractionLength(2)))
                         .textFieldStyle(.roundedBorder)
                         .disabled(!aiCostLimitEnabled)
                 }
 
                 HStack {
-                    Text("現在の推定料金")
+                    Text(t(.currentEstimatedCost))
                     Spacer()
                     Text(costText(aiEstimatedCostUSD))
                         .monospacedDigit()
@@ -431,7 +432,7 @@ struct SettingsView: View {
                 .font(.footnote)
                 .foregroundStyle(.secondary)
 
-                Text("上限を超えるとドキュメント側のAI枠が赤く警告され、追加の画像/動画生成は止めます。")
+                Text(t(.costLimiterHelp))
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
@@ -509,12 +510,21 @@ struct SettingsView: View {
 
     private var displaySettings: some View {
         SettingsDetailScrollView {
-            SettingsSection("ドキュメントの画面比率") {
-                Picker("画面サイズ", selection: $screenAspectRatioRawValue) {
+            SettingsSection(CinemaStrings.text(.language, language: appLanguage)) {
+                Picker(CinemaStrings.text(.language, language: appLanguage), selection: $appLanguage) {
+                    ForEach(AppLanguage.allCases) { language in
+                        Text(language.displayName).tag(language.rawValue)
+                    }
+                }
+                .pickerStyle(.segmented)
+            }
+
+            SettingsSection(t(.documentAspectRatio)) {
+                Picker(t(.screenSize), selection: $screenAspectRatioRawValue) {
                     ForEach(ScreenAspectRatio.allCases) { ratio in
                         VStack(alignment: .leading) {
-                            Text(ratio.label)
-                            Text(ratio.detail)
+                            Text(ratio.label(language: appLanguage))
+                            Text(ratio.detail(language: appLanguage))
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
@@ -530,19 +540,19 @@ struct SettingsView: View {
                     .frame(width: 220, height: 100)
                     .padding(.top, 8)
 
-                Text("画面欄は選択した比率の白いフレームで表示し、余白は黒ベタになります。")
+                Text(t(.screenFrameDescription))
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
 
-            SettingsSection("プレースホルダー") {
-                Toggle("未生成の画面にGenerate表示を出す", isOn: $showsGeneratePlaceholder)
+            SettingsSection(t(.placeholder)) {
+                Toggle(t(.showGeneratePlaceholder), isOn: $showsGeneratePlaceholder)
             }
 
-            SettingsSection("画面背景") {
+            SettingsSection(t(.screenBackground)) {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack {
-                        Text("明度")
+                        Text(t(.brightness))
                         Spacer()
                         Text("\(Int((screenBackgroundBrightness * 100).rounded()))%")
                             .foregroundStyle(.secondary)
@@ -553,10 +563,10 @@ struct SettingsView: View {
                 }
             }
 
-            SettingsSection("内容 / セリフ") {
+            SettingsSection(t(.contentAndDialogue)) {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack {
-                        Text("幅")
+                        Text(t(.width))
                         Spacer()
                         Text("\(Int(storyboardTextColumnWidth.rounded())) pt")
                             .foregroundStyle(.secondary)
@@ -570,19 +580,20 @@ struct SettingsView: View {
                     )
                 }
 
-                Picker("文字サイズ", selection: $storyboardTextBaseFontSize) {
-                    Text("小").tag(9.0)
-                    Text("標準").tag(11.0)
-                    Text("大").tag(13.0)
-                    Text("特大").tag(15.0)
+                Picker(t(.textSize), selection: $storyboardTextBaseFontSize) {
+                    Text(t(.small)).tag(9.0)
+                    Text(t(.standard)).tag(11.0)
+                    Text(t(.large)).tag(13.0)
+                    Text(t(.extraLarge)).tag(15.0)
                 }
                 .pickerStyle(.menu)
 
-                Text("内容 / セリフの幅を広げると、その分だけ画面欄が狭くなります。文字量が多い場合は選択サイズから自動で縮小します。")
+                Text(t(.contentDialogueWidthDescription))
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
 
+            if showsScriptSettings {
             SettingsSection("台本表示") {
                 SettingsSliderRow(
                     title: "話者名",
@@ -633,7 +644,16 @@ struct SettingsView: View {
                 }
                 .buttonStyle(.bordered)
             }
+            }
         }
+    }
+
+    private var showsScriptSettings: Bool {
+        false
+    }
+
+    private func t(_ key: CinemaTextKey) -> String {
+        CinemaStrings.text(key, language: appLanguage)
     }
 }
 

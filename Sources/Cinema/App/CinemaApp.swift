@@ -6,6 +6,7 @@ struct CinemaApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @AppStorage("showsCutActionControls") private var showsCutActionControls = true
     @AppStorage("storyboardTextBaseFontSize") private var storyboardTextBaseFontSize = 11.0
+    @AppStorage("appLanguage") private var appLanguage = AppLanguage.japanese.rawValue
     private let settingsWindowID = "settings-window"
 
     var body: some Scene {
@@ -16,6 +17,7 @@ struct CinemaApp: App {
             AppCommands(
                 showsCutActionControls: $showsCutActionControls,
                 storyboardTextBaseFontSize: $storyboardTextBaseFontSize,
+                appLanguage: appLanguage,
                 settingsWindowID: settingsWindowID
             )
         }
@@ -31,6 +33,7 @@ private struct AppCommands: Commands {
     @Environment(\.openWindow) private var openWindow
     @Binding var showsCutActionControls: Bool
     @Binding var storyboardTextBaseFontSize: Double
+    var appLanguage: String
     var settingsWindowID: String
 
     var body: some Commands {
@@ -42,19 +45,19 @@ private struct AppCommands: Commands {
         }
 
         CommandGroup(after: .newItem) {
-            Button("現在のページをプリント...") {
+            Button(CinemaStrings.text(.print, language: appLanguage) + "...") {
                 NotificationCenter.default.post(name: .printCurrentStoryboardPage, object: nil)
             }
             .keyboardShortcut("p", modifiers: [.command, .shift])
         }
 
-        CommandMenu("絵コンテ") {
-            Toggle("セリフ下のボタンを表示", isOn: $showsCutActionControls)
+        CommandMenu(CinemaStrings.text(.storyboard, language: appLanguage)) {
+            Toggle(CinemaStrings.text(.dialogue, language: appLanguage), isOn: $showsCutActionControls)
                 .keyboardShortcut("b", modifiers: [.command, .option])
 
             Divider()
 
-            Menu("内容 / セリフの文字サイズ") {
+            Menu("\(CinemaStrings.text(.content, language: appLanguage)) / \(CinemaStrings.text(.dialogue, language: appLanguage))") {
                 textSizeButton("小", size: 9.0)
                 textSizeButton("標準", size: 11.0)
                 textSizeButton("大", size: 13.0)

@@ -34,6 +34,7 @@ struct SidebarView: View {
     var aiCostLimitEnabled: Bool
     var aiCostLimitUSD: Double
     var isAICostLimitExceeded: Bool
+    var appLanguage: String
 
     @State private var draggedCutID: StoryboardCut.ID?
     @State private var hoveredDropTarget: HoveredCutDropTarget?
@@ -42,7 +43,7 @@ struct SidebarView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            TextField("タイトル", text: $title)
+            TextField(t(.title), text: $title)
                 .textFieldStyle(.roundedBorder)
                 .font(.system(size: 15, weight: .semibold))
                 .padding(.horizontal, 12)
@@ -51,13 +52,13 @@ struct SidebarView: View {
             aiPanel
 
             List(selection: $pageIndex) {
-                Section("ページ") {
+                Section(t(.page)) {
                     ForEach(0..<pageCount, id: \.self) { index in
                         let summary = pageSummaries.indices.contains(index) ? pageSummaries[index] : "Page \(index + 1)"
                         Text(summary)
                             .tag(index)
                             .contextMenu {
-                                Button("このページを削除", role: .destructive) {
+                                Button(t(.deletePage), role: .destructive) {
                                     deletePage(index)
                                 }
                                 .disabled(pageCount <= 1)
@@ -100,23 +101,23 @@ struct SidebarView: View {
                                 )
                             )
                             .contextMenu {
-                                Button("このカットへ移動") {
+                                Button(t(.goToCut)) {
                                     jumpToCut(cut.id)
                                 }
 
                                 Divider()
 
-                                Button("この上にカットを追加") {
+                                Button(t(.addCutAbove)) {
                                     addCutAbove(cut.id)
                                 }
 
-                                Button("この下にカットを追加") {
+                                Button(t(.addCutBelow)) {
                                     addCutBelow(cut.id)
                                 }
 
                                 Divider()
 
-                                Button("このカットを削除", role: .destructive) {
+                                Button(t(.deleteCut), role: .destructive) {
                                     deleteCut(cut.id)
                                 }
                             }
@@ -130,7 +131,7 @@ struct SidebarView: View {
                 Button {
                     addSubtitle()
                 } label: {
-                    Label("ブロックを追加", systemImage: "text.badge.plus")
+                    Label(t(.addBlock), systemImage: "text.badge.plus")
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.large)
@@ -138,7 +139,7 @@ struct SidebarView: View {
                 Button {
                     addCut()
                 } label: {
-                    Label("カットを追加", systemImage: "plus")
+                    Label(t(.addCut), systemImage: "plus")
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.large)
@@ -152,22 +153,22 @@ struct SidebarView: View {
 
     private var aiPanel: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Label("AI", systemImage: "sparkles")
+            Label(t(.ai), systemImage: "sparkles")
                 .font(.headline)
                 .foregroundStyle(CinemaDesign.ink)
 
             if isAICostLimitExceeded {
-                Label("推定料金が上限を超えています", systemImage: "exclamationmark.triangle.fill")
+                Label(t(.costLimitExceeded), systemImage: "exclamationmark.triangle.fill")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.red)
             }
 
             VStack(alignment: .leading, spacing: 6) {
-                Label("描画プリセット", systemImage: "paintpalette")
+                Label(t(.drawingPreset), systemImage: "paintpalette")
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(CinemaDesign.mutedInk)
 
-                Picker("描画プリセット", selection: $drawingSettings.selectedPresetID) {
+                Picker(t(.drawingPreset), selection: $drawingSettings.selectedPresetID) {
                     ForEach(drawingSettings.presets) { preset in
                         Text(preset.name).tag(preset.id)
                     }
@@ -180,20 +181,20 @@ struct SidebarView: View {
             DisclosureGroup {
                 videoSelectionPanel
             } label: {
-                Label("動画化", systemImage: "film.stack")
+                Label(t(.video), systemImage: "film.stack")
                     .font(.subheadline.weight(.semibold))
             }
 
             VStack(alignment: .leading, spacing: 4) {
                 HStack {
-                    Text("推定トークン")
+                    Text(t(.estimatedTokens))
                     Spacer()
                     Text("\(aiEstimatedTokensUsed)")
                         .monospacedDigit()
                 }
 
                 HStack {
-                    Text("推定料金")
+                    Text(t(.estimatedCost))
                     Spacer()
                     Text(estimatedCostText)
                         .monospacedDigit()
@@ -201,7 +202,7 @@ struct SidebarView: View {
 
                 if aiCostLimitEnabled {
                     HStack {
-                        Text("上限")
+                        Text(t(.limit))
                         Spacer()
                         Text(costText(aiCostLimitUSD))
                             .monospacedDigit()
@@ -244,7 +245,7 @@ struct SidebarView: View {
                     Button {
                         exportScenePrompts(selectedSection.title)
                     } label: {
-                        Text("プロンプト書き出し")
+                        Text(t(.exportPrompt))
                             .foregroundStyle(.white)
                             .frame(maxWidth: .infinity)
                     }
@@ -255,7 +256,7 @@ struct SidebarView: View {
                         Button {
                             generateSceneVideo(selectedSection.title)
                         } label: {
-                            Text(generatingSceneTitle == selectedSection.title ? "生成中..." : "選択シーンの動画作成")
+                            Text(generatingSceneTitle == selectedSection.title ? t(.generating) : t(.createSelectedSceneVideo))
                                 .frame(maxWidth: .infinity)
                         }
                         .buttonStyle(.borderedProminent)
@@ -268,12 +269,12 @@ struct SidebarView: View {
                                 Image(systemName: "square.and.arrow.down")
                             }
                             .buttonStyle(.bordered)
-                            .help("生成動画を保存")
+                            .help(t(.saveGeneratedVideo))
                         }
                     }
                 }
             } else {
-                Text("シーンを選択してください")
+                Text(t(.selectScene))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -309,7 +310,7 @@ struct SidebarView: View {
 
     private var cutSections: [CutSidebarSection] {
         var sections: [CutSidebarSection] = []
-        var currentTitle = "ブロック1"
+        var currentTitle = CinemaStrings.blockName(1, language: appLanguage)
         var currentCuts: [StoryboardCut] = []
 
         for cut in cuts {
@@ -343,9 +344,9 @@ struct SidebarView: View {
             }
             let sceneTitle = pageCuts.first?.subtitle.trimmingCharacters(in: .whitespacesAndNewlines)
             if let sceneTitle, !sceneTitle.isEmpty {
-                return "Page \(index + 1)  /  \(sceneTitle)  /  \(rangeText)"
+                return CinemaStrings.pageSummary(page: index + 1, rangeText: rangeText, sceneTitle: sceneTitle, language: appLanguage)
             }
-            return "Page \(index + 1)  /  \(rangeText)"
+            return CinemaStrings.pageSummary(page: index + 1, rangeText: rangeText, sceneTitle: nil, language: appLanguage)
         }
     }
 
@@ -364,6 +365,12 @@ struct SidebarView: View {
                 updateCutName(cutID, newValue)
             }
         )
+    }
+}
+
+private extension SidebarView {
+    func t(_ key: CinemaTextKey) -> String {
+        CinemaStrings.text(key, language: appLanguage)
     }
 }
 

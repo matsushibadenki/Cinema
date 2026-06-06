@@ -7,25 +7,21 @@ private enum InspectorSidebarTab: String, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
-    var label: String {
-        switch self {
-        case .reference:
-            return "リファレンス"
-        case .properties:
-            return "プロパティ"
-        }
+    func label(language: String) -> String {
+        CinemaStrings.text(self == .reference ? .reference : .properties, language: language)
     }
 }
 
 struct ReferenceSidebarView: View {
     @Binding var document: StoryboardDocument
+    var appLanguage: String
     @State private var selectedTab: InspectorSidebarTab = .reference
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Picker("表示", selection: $selectedTab) {
                 ForEach(InspectorSidebarTab.allCases) { tab in
-                    Text(tab.label).tag(tab)
+                    Text(tab.label(language: appLanguage)).tag(tab)
                 }
             }
             .labelsHidden()
@@ -35,7 +31,7 @@ struct ReferenceSidebarView: View {
             case .reference:
                 referencePanel
             case .properties:
-                TextPropertiesPanel()
+                TextPropertiesPanel(appLanguage: appLanguage)
             }
         }
         .padding(12)
@@ -46,7 +42,7 @@ struct ReferenceSidebarView: View {
     private var referencePanel: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Label("リファレンス", systemImage: "photo.on.rectangle")
+                Label(t(.reference), systemImage: "photo.on.rectangle")
                     .font(.headline)
                     .foregroundStyle(CinemaDesign.ink)
                 Spacer()
@@ -55,7 +51,7 @@ struct ReferenceSidebarView: View {
                 } label: {
                     Image(systemName: "plus")
                 }
-                .help("写真を登録")
+                .help(t(.addPhoto))
             }
 
             if document.project.referenceImages.isEmpty {
@@ -63,7 +59,7 @@ struct ReferenceSidebarView: View {
                     Image(systemName: "photo.badge.plus")
                         .font(.system(size: 28))
                         .foregroundStyle(CinemaDesign.mutedInk)
-                    Text("登録写真なし")
+                    Text(t(.noPhotos))
                         .font(.callout)
                         .foregroundStyle(.secondary)
                 }
@@ -119,6 +115,10 @@ struct ReferenceSidebarView: View {
     private func normalizedImageExtension(from url: URL) -> String {
         let ext = url.pathExtension.lowercased()
         return ext.isEmpty ? "png" : ext
+    }
+
+    private func t(_ key: CinemaTextKey) -> String {
+        CinemaStrings.text(key, language: appLanguage)
     }
 }
 
@@ -251,6 +251,7 @@ private struct ReferenceImageRow: View {
 }
 
 private struct TextPropertiesPanel: View {
+    var appLanguage: String
     @AppStorage("storyboardTextBaseFontSize") private var storyboardTextBaseFontSize = 11.0
     @AppStorage("selectedTextFontName") private var selectedTextFontName = "System"
     @AppStorage("selectedTextLetterSpacing") private var selectedTextLetterSpacing = 0.0
@@ -269,15 +270,15 @@ private struct TextPropertiesPanel: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Label("プロパティ", systemImage: "slider.horizontal.3")
+            Label(t(.properties), systemImage: "slider.horizontal.3")
                 .font(.headline)
                 .foregroundStyle(CinemaDesign.ink)
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
-                    propertySection("書体") {
-                        propertyRow("フォント") {
-                            Picker("フォント", selection: $selectedTextFontName) {
+                    propertySection(t(.typography)) {
+                        propertyRow(t(.font)) {
+                            Picker(t(.font), selection: $selectedTextFontName) {
                                 ForEach(fontNames, id: \.self) { fontName in
                                     Text(fontName).tag(fontName)
                                 }
@@ -286,7 +287,7 @@ private struct TextPropertiesPanel: View {
                             .pickerStyle(.menu)
                         }
 
-                        propertyRow("サイズ") {
+                        propertyRow(t(.size)) {
                             HStack(alignment: .firstTextBaseline, spacing: 8) {
                                 Stepper(
                                     "",
@@ -303,29 +304,29 @@ private struct TextPropertiesPanel: View {
                             }
                         }
 
-                        propertyRow("文字色") {
-                            ColorPicker("文字色", selection: $selectedTextColor, supportsOpacity: true)
+                        propertyRow(t(.textColor)) {
+                            ColorPicker(t(.textColor), selection: $selectedTextColor, supportsOpacity: true)
                                 .labelsHidden()
                                 .frame(maxWidth: .infinity, alignment: .leading)
                         }
 
-                        propertyRow("形態") {
+                        propertyRow(t(.style)) {
                             HStack(spacing: 6) {
                                 Toggle("B", isOn: $selectedTextIsBold)
                                     .toggleStyle(.button)
-                                    .help("ボールド")
+                                    .help(t(.bold))
 
                                 Toggle("I", isOn: $selectedTextIsItalic)
                                     .toggleStyle(.button)
-                                    .help("イタリック")
+                                    .help(t(.italic))
 
                                 Toggle("U", isOn: $selectedTextIsUnderline)
                                     .toggleStyle(.button)
-                                    .help("下線")
+                                    .help(t(.underline))
                             }
                         }
 
-                        propertyRow("字間") {
+                        propertyRow(t(.letterSpacing)) {
                             HStack(spacing: 8) {
                                 Slider(value: $selectedTextLetterSpacing, in: -2...8, step: 0.5)
                                 Text("\(selectedTextLetterSpacing, specifier: "%.1f")")
@@ -335,7 +336,7 @@ private struct TextPropertiesPanel: View {
                             }
                         }
 
-                        propertyRow("行間") {
+                        propertyRow(t(.lineSpacing)) {
                             HStack(spacing: 8) {
                                 Slider(value: $selectedTextLineSpacing, in: 0.8...2.4, step: 0.1)
                                 Text("\(selectedTextLineSpacing, specifier: "%.1f")")
@@ -346,11 +347,11 @@ private struct TextPropertiesPanel: View {
                         }
 
                         VStack(alignment: .leading, spacing: 7) {
-                            Text("揃え")
+                            Text(t(.alignment))
                                 .font(.caption.weight(.semibold))
                                 .foregroundStyle(CinemaDesign.mutedInk)
 
-                            Picker("揃え", selection: $selectedTextAlignment) {
+                            Picker(t(.alignment), selection: $selectedTextAlignment) {
                                 ForEach(TextAlignmentOption.allCases) { option in
                                     Image(systemName: option.systemImageName).tag(option.rawValue)
                                 }
@@ -362,7 +363,7 @@ private struct TextPropertiesPanel: View {
                         Button {
                             applyTextStyle()
                         } label: {
-                            Label("選択文字に適用", systemImage: "checkmark.circle")
+                            Label(t(.applyToSelection), systemImage: "checkmark.circle")
                                 .frame(maxWidth: .infinity)
                         }
                         .buttonStyle(.borderedProminent)
@@ -412,6 +413,10 @@ private struct TextPropertiesPanel: View {
                 alignment: alignmentOption.nsTextAlignment
             )
         )
+    }
+
+    private func t(_ key: CinemaTextKey) -> String {
+        CinemaStrings.text(key, language: appLanguage)
     }
 }
 
