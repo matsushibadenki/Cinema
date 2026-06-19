@@ -12,6 +12,9 @@ struct SidebarView: View {
     var cuts: [StoryboardCut]
     @Binding var pageIndex: Int
     var pageCount: Int
+    var navigationSectionTitle: String
+    var navigationSummaries: [String]
+    var allowsDeleteNavigationItems: Bool
     var addCut: () -> Void
     var addSubtitle: () -> Void
     var addCutAbove: (StoryboardCut.ID) -> Void
@@ -42,26 +45,43 @@ struct SidebarView: View {
     private let cutsPerPage = 5
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            TextField(t(.title), text: $title)
-                .textFieldStyle(.roundedBorder)
-                .font(.system(size: 15, weight: .semibold))
-                .padding(.horizontal, 12)
-                .padding(.top, 12)
+        VStack(alignment: .leading, spacing: 10) {
+            // Title field with underline accent
+            VStack(alignment: .leading, spacing: 4) {
+                TextField(t(.title), text: $title)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundStyle(CinemaDesign.ink)
+                    .padding(.horizontal, 14)
+                    .padding(.top, 14)
+
+                Rectangle()
+                    .fill(
+                        LinearGradient(
+                            colors: [CinemaDesign.aiSparkle.opacity(0.5), CinemaDesign.warmBorder],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                    .frame(height: 1.5)
+                    .padding(.horizontal, 14)
+            }
 
             aiPanel
 
             List(selection: $pageIndex) {
-                Section(t(.page)) {
+                Section(navigationSectionTitle) {
                     ForEach(0..<pageCount, id: \.self) { index in
-                        let summary = pageSummaries.indices.contains(index) ? pageSummaries[index] : "Page \(index + 1)"
+                        let summary = navigationSummaries.indices.contains(index) ? navigationSummaries[index] : "\(navigationSectionTitle) \(index + 1)"
                         Text(summary)
                             .tag(index)
                             .contextMenu {
-                                Button(t(.deletePage), role: .destructive) {
-                                    deletePage(index)
+                                if allowsDeleteNavigationItems {
+                                    Button(t(.deletePage), role: .destructive) {
+                                        deletePage(index)
+                                    }
+                                    .disabled(pageCount <= 1)
                                 }
-                                .disabled(pageCount <= 1)
                             }
                     }
                 }
@@ -127,11 +147,12 @@ struct SidebarView: View {
             }
             .listStyle(.sidebar)
 
-            VStack(spacing: 8) {
+            VStack(spacing: 10) {
                 Button {
                     addSubtitle()
                 } label: {
                     Label(t(.addBlock), systemImage: "text.badge.plus")
+                        .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.large)
@@ -140,27 +161,54 @@ struct SidebarView: View {
                     addCut()
                 } label: {
                     Label(t(.addCut), systemImage: "plus")
+                        .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.large)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding([.horizontal, .bottom], 12)
+            .padding(.horizontal, 14)
+            .padding(.bottom, 14)
         }
-        .frame(minWidth: 220)
+        .frame(minWidth: 230)
         .background(CinemaDesign.panelBackground)
     }
 
     private var aiPanel: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Label(t(.ai), systemImage: "sparkles")
-                .font(.headline)
-                .foregroundStyle(CinemaDesign.ink)
+        VStack(alignment: .leading, spacing: 12) {
+            // AI header with sparkle badge
+            HStack(spacing: 8) {
+                Image(systemName: "sparkles")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(CinemaDesign.aiSparkle)
+                    .frame(width: 28, height: 28)
+                    .background(
+                        Circle()
+                            .fill(CinemaDesign.aiSparkleLight)
+                    )
+
+                Text(t(.ai))
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(CinemaDesign.ink)
+
+                Spacer()
+            }
+
+            aiSummaryMetrics
 
             if isAICostLimitExceeded {
-                Label(t(.costLimitExceeded), systemImage: "exclamationmark.triangle.fill")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.red)
+                HStack(spacing: 6) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 11))
+                    Text(t(.costLimitExceeded))
+                        .font(.caption.weight(.semibold))
+                }
+                .foregroundStyle(.red)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 5)
+                .background {
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .fill(Color.red.opacity(0.08))
+                }
             }
 
             VStack(alignment: .leading, spacing: 6) {
@@ -184,42 +232,85 @@ struct SidebarView: View {
                 Label(t(.video), systemImage: "film.stack")
                     .font(.subheadline.weight(.semibold))
             }
-
-            VStack(alignment: .leading, spacing: 4) {
-                HStack {
-                    Text(t(.estimatedTokens))
-                    Spacer()
-                    Text("\(aiEstimatedTokensUsed)")
-                        .monospacedDigit()
-                }
-
-                HStack {
-                    Text(t(.estimatedCost))
-                    Spacer()
-                    Text(estimatedCostText)
-                        .monospacedDigit()
-                }
-
-                if aiCostLimitEnabled {
-                    HStack {
-                        Text(t(.limit))
-                        Spacer()
-                        Text(costText(aiCostLimitUSD))
-                            .monospacedDigit()
-                    }
-                }
-            }
-            .font(.caption)
-            .foregroundStyle(isAICostLimitExceeded ? .red : .secondary)
         }
-        .padding(12)
-        .background(isAICostLimitExceeded ? Color.red.opacity(0.12) : Color.clear)
+        .padding(14)
+        .background(
+            isAICostLimitExceeded
+            ? AnyShapeStyle(Color.red.opacity(0.06))
+            : AnyShapeStyle(CinemaDesign.aiSparkleLight)
+        )
         .cinemaPanel(isHighlighted: true)
         .overlay {
-            RoundedRectangle(cornerRadius: 8)
-                .stroke(isAICostLimitExceeded ? Color.red.opacity(0.65) : CinemaDesign.warmBorder, lineWidth: 1)
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .stroke(
+                    isAICostLimitExceeded
+                    ? Color.red.opacity(0.50)
+                    : CinemaDesign.warmBorder,
+                    lineWidth: isAICostLimitExceeded ? 1.2 : 0.8
+                )
         }
-        .padding(.horizontal, 12)
+        .padding(.horizontal, 14)
+    }
+
+    private var aiSummaryMetrics: some View {
+        HStack(spacing: 10) {
+            // Token card
+            VStack(alignment: .leading, spacing: 3) {
+                Text(t(.estimatedTokens))
+                    .font(.system(size: 9, weight: .medium))
+                    .foregroundStyle(isAICostLimitExceeded ? .red.opacity(0.7) : CinemaDesign.mutedInk)
+                    .lineLimit(1)
+
+                Text("\(aiEstimatedTokensUsed)")
+                    .font(.system(size: 20, weight: .bold, design: .rounded).monospacedDigit())
+                    .foregroundStyle(isAICostLimitExceeded ? .red : CinemaDesign.ink)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .background {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(Color.white.opacity(0.70))
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .stroke(CinemaDesign.fineBorder, lineWidth: 0.6)
+            }
+
+            // Cost card
+            VStack(alignment: .leading, spacing: 3) {
+                Text(t(.estimatedCost))
+                    .font(.system(size: 9, weight: .medium))
+                    .foregroundStyle(isAICostLimitExceeded ? .red.opacity(0.7) : CinemaDesign.mutedInk)
+                    .lineLimit(1)
+
+                Text(estimatedCostText)
+                    .font(.system(size: 20, weight: .bold, design: .rounded).monospacedDigit())
+                    .foregroundStyle(isAICostLimitExceeded ? .red : CinemaDesign.ink)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+
+                if aiCostLimitEnabled {
+                    Text("\(t(.limit)): \(costText(aiCostLimitUSD))")
+                        .font(.system(size: 9, weight: .medium).monospacedDigit())
+                        .foregroundStyle(isAICostLimitExceeded ? .red.opacity(0.7) : .secondary)
+                        .lineLimit(1)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .background {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(Color.white.opacity(0.70))
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .stroke(CinemaDesign.fineBorder, lineWidth: 0.6)
+            }
+        }
     }
 
     private var selectedSection: CutSidebarSection? {
@@ -330,24 +421,6 @@ struct SidebarView: View {
         }
 
         return sections
-    }
-
-    private var pageSummaries: [String] {
-        StoryboardPageView.pageCutIDs(for: cuts, cutsPerPage: cutsPerPage).enumerated().map { index, ids in
-            let pageCuts = ids.compactMap { id in cuts.first(where: { $0.id == id }) }
-            let numbers = pageCuts.map(\.cutNumber)
-            let rangeText: String
-            if let first = numbers.first, let last = numbers.last {
-                rangeText = first == last ? "Cut \(first)" : "Cut \(first)-\(last)"
-            } else {
-                rangeText = "空き"
-            }
-            let sceneTitle = pageCuts.first?.subtitle.trimmingCharacters(in: .whitespacesAndNewlines)
-            if let sceneTitle, !sceneTitle.isEmpty {
-                return CinemaStrings.pageSummary(page: index + 1, rangeText: rangeText, sceneTitle: sceneTitle, language: appLanguage)
-            }
-            return CinemaStrings.pageSummary(page: index + 1, rangeText: rangeText, sceneTitle: nil, language: appLanguage)
-        }
     }
 
     private func cutTitle(for cut: StoryboardCut) -> String {
@@ -612,8 +685,14 @@ private struct SceneSelectionRow: View {
     var body: some View {
         Button(action: select) {
             HStack(spacing: 8) {
+                // Accent bar for selected state
+                RoundedRectangle(cornerRadius: 1.5)
+                    .fill(isSelected ? Color.accentColor : Color.clear)
+                    .frame(width: 3, height: 24)
+
                 Image(systemName: isSelected ? "largecircle.fill.circle" : "circle")
                     .foregroundStyle(isSelected ? Color.accentColor : .secondary)
+                    .font(.system(size: 13))
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
@@ -632,16 +711,17 @@ private struct SceneSelectionRow: View {
                 } else if hasVideo {
                     Image(systemName: "checkmark.circle.fill")
                         .foregroundStyle(.green)
+                        .font(.system(size: 14))
                 }
             }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 6)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 7)
             .background {
-                RoundedRectangle(cornerRadius: 7)
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
                     .fill(isSelected ? Color.white.opacity(0.92) : Color.clear)
                     .overlay {
                         if isSelected {
-                            RoundedRectangle(cornerRadius: 7)
+                            RoundedRectangle(cornerRadius: 8, style: .continuous)
                                 .stroke(CinemaDesign.warmBorder, lineWidth: 0.8)
                         }
                     }

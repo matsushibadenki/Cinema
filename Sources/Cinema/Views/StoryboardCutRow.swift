@@ -34,6 +34,7 @@ private struct CompactStoryboardTextField: NSViewRepresentable {
 
     func makeNSView(context: Context) -> CompactNSTextField {
         let field = CompactNSTextField(frame: .zero)
+        field.cell = VerticallyCenteredTextFieldCell(textCell: "")
         field.isBordered = false
         field.isBezeled = false
         field.drawsBackground = false
@@ -76,6 +77,32 @@ private struct CompactStoryboardTextField: NSViewRepresentable {
 private final class CompactNSTextField: NSTextField {
     override var intrinsicContentSize: NSSize {
         NSSize(width: NSView.noIntrinsicMetric, height: NSView.noIntrinsicMetric)
+    }
+}
+
+private final class VerticallyCenteredTextFieldCell: NSTextFieldCell {
+    override func drawingRect(forBounds rect: NSRect) -> NSRect {
+        centeredRect(for: super.drawingRect(forBounds: rect))
+    }
+
+    override func edit(withFrame rect: NSRect, in controlView: NSView, editor textObj: NSText, delegate: Any?, event: NSEvent?) {
+        super.edit(withFrame: centeredRect(for: rect), in: controlView, editor: textObj, delegate: delegate, event: event)
+    }
+
+    override func select(withFrame rect: NSRect, in controlView: NSView, editor textObj: NSText, delegate: Any?, start selStart: Int, length selLength: Int) {
+        super.select(withFrame: centeredRect(for: rect), in: controlView, editor: textObj, delegate: delegate, start: selStart, length: selLength)
+    }
+
+    private func centeredRect(for rect: NSRect) -> NSRect {
+        let titleSize = cellSize(forBounds: rect)
+        let heightDelta = rect.height - titleSize.height
+        guard heightDelta > 0 else { return rect }
+        return NSRect(
+            x: rect.origin.x,
+            y: rect.origin.y + floor(heightDelta / 2),
+            width: rect.width,
+            height: titleSize.height
+        )
     }
 }
 
@@ -574,6 +601,368 @@ struct StoryboardCutRow: View {
         }
     }
 
+}
+
+struct FocusedStoryboardCutScroller: View {
+    @Binding var cuts: [StoryboardCut]
+    @Binding var currentIndex: Int
+    @Binding var scrollPosition: Int?
+
+    var referenceImages: [ReferenceImage]
+    var imageData: [String: Data]
+    var screenAspectRatio: CGFloat
+    var showsGeneratePlaceholder: Bool
+    var screenBackgroundBrightness: CGFloat
+    var textBaseFontSize: CGFloat
+    var generatingCutID: StoryboardCut.ID?
+    var deleteImageData: (String) -> Void
+    var generate: (StoryboardCut.ID) -> Void
+    var importImage: (StoryboardCut.ID) -> Void
+    var addAfter: (StoryboardCut.ID) -> Void
+    var delete: (StoryboardCut.ID) -> Void
+    var appLanguage: String
+
+    var body: some View {
+        GeometryReader { proxy in
+            ScrollView(.vertical) {
+                LazyVStack(spacing: 0) {
+                    ForEach(Array($cuts.enumerated()), id: \.element.id) { index, $cut in
+                        FocusedStoryboardCutView(
+                            cut: $cut,
+                            imageData: cut.imageFileName.flatMap { imageData[$0] },
+                            image: ImageHelpers.nsImage(from: cut.imageFileName.flatMap { imageData[$0] }),
+                            referenceImages: referenceImages,
+                            screenAspectRatio: screenAspectRatio,
+                            showsGeneratePlaceholder: showsGeneratePlaceholder,
+                            screenBackgroundBrightness: screenBackgroundBrightness,
+                            textBaseFontSize: textBaseFontSize,
+                            isGenerating: generatingCutID == cut.id,
+                            deleteImageData: deleteImageData,
+                            generate: { generate(cut.id) },
+                            importImage: { importImage(cut.id) },
+                            addAfter: { addAfter(cut.id) },
+                            delete: { delete(cut.id) },
+                            appLanguage: appLanguage
+                        )
+                        .frame(height: max(proxy.size.height, 700))
+                        .id(index)
+                    }
+                }
+                .scrollTargetLayout()
+            }
+            .scrollIndicators(.never)
+            .scrollTargetBehavior(.viewAligned)
+            .scrollPosition(id: $scrollPosition)
+            .background(CinemaDesign.canvasBackground)
+            .onAppear {
+                scrollPosition = min(max(currentIndex, 0), max(cuts.count - 1, 0))
+            }
+            .onChange(of: scrollPosition) { _, newValue in
+                guard let newValue, cuts.indices.contains(newValue), currentIndex != newValue else { return }
+                currentIndex = newValue
+            }
+        }
+    }
+}
+
+private struct FocusedStoryboardCutView: View {
+    private enum InspectorTab: String, CaseIterable, Identifiable {
+        case contentDialogue
+        case additionalPrompt
+
+        var id: String { rawValue }
+    }
+
+    @Binding var cut: StoryboardCut
+    @AppStorage("focusedCutInspectorWidthRatio") private var inspectorWidthRatio = 0.38
+    @State private var selectedTab: InspectorTab = .contentDialogue
+    @State private var inspectorDragStartRatio: Double?
+
+    var imageData: Data?
+    var image: NSImage?
+    var referenceImages: [ReferenceImage]
+    var screenAspectRatio: CGFloat
+    var showsGeneratePlaceholder: Bool
+    var screenBackgroundBrightness: CGFloat
+    var textBaseFontSize: CGFloat
+    var isGenerating: Bool
+    var deleteImageData: (String) -> Void
+    var generate: () -> Void
+    var importImage: () -> Void
+    var addAfter: () -> Void
+    var delete: () -> Void
+    var appLanguage: String
+
+    private let headerHorizontalPadding: CGFloat = 18
+    private let contentHorizontalPadding: CGFloat = 18
+    private let contentSpacing: CGFloat = 14
+
+    var body: some View {
+        GeometryReader { proxy in
+            let contentHeight = max(proxy.size.height - 108, 520)
+            let inspectorWidth = clampedInspectorWidth(
+                totalWidth: proxy.size.width,
+                ratio: inspectorWidthRatio
+            )
+            let handleWidth: CGFloat = 2
+            let availableContentWidth = max(
+                proxy.size.width - (contentHorizontalPadding * 2),
+                320
+            )
+            let imageWidth = max(
+                availableContentWidth - inspectorWidth - handleWidth - (contentSpacing * 2),
+                280
+            )
+
+            VStack(spacing: 0) {
+                header
+                    .frame(height: 76)
+
+                HStack(spacing: contentSpacing) {
+                    StoryboardScreenFrame(
+                        imageData: imageData,
+                        image: image,
+                        aspectRatio: screenAspectRatio,
+                        showsGeneratePlaceholder: showsGeneratePlaceholder,
+                        backgroundBrightness: screenBackgroundBrightness,
+                        isGenerating: isGenerating,
+                        cutNumber: cut.cutNumber,
+                        importImage: importImage,
+                        deleteImage: deleteImage
+                    )
+                    .frame(width: imageWidth)
+                    .frame(maxHeight: .infinity)
+                    .background(Color.white.opacity(0.8))
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .stroke(CinemaDesign.warmBorder, lineWidth: 0.8)
+                    )
+                    .shadow(color: .black.opacity(0.04), radius: 2, x: 0, y: 1)
+                    .shadow(color: .black.opacity(0.08), radius: 16, x: 0, y: 8)
+
+                    FocusedInspectorSplitHandle()
+                        .frame(width: handleWidth)
+                        .frame(maxHeight: .infinity)
+                        .gesture(inspectorWidthGesture(totalWidth: proxy.size.width))
+
+                    VStack(spacing: 12) {
+                        Picker("Inspector", selection: $selectedTab) {
+                            Text(t(.contentAndDialogue)).tag(InspectorTab.contentDialogue)
+                            Text(t(.additionalPrompt)).tag(InspectorTab.additionalPrompt)
+                        }
+                        .pickerStyle(.segmented)
+
+                        Group {
+                            switch selectedTab {
+                            case .contentDialogue:
+                                contentDialogueTab(contentHeight: contentHeight)
+                            case .additionalPrompt:
+                                PromptEditorContent(
+                                    prompt: $cut.generationPrompt,
+                                    shotSettings: $cut.aiShotSettings
+                                )
+                            }
+                        }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                    }
+                    .frame(width: inspectorWidth)
+                    .frame(maxHeight: .infinity)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .padding(.horizontal, contentHorizontalPadding)
+                .padding(.bottom, 18)
+            }
+            .padding(.top, 16)
+            .background(CinemaDesign.canvasBackground)
+        }
+    }
+
+    @ViewBuilder
+    private func contentDialogueTab(contentHeight: CGFloat) -> some View {
+        VStack(spacing: 18) {
+            panel(title: t(.content)) {
+                AutoSizingStoryboardTextEditor(
+                    text: $cut.situation,
+                    placeholder: "",
+                    baseFontSize: max(textBaseFontSize + 3, 13),
+                    minimumFontSize: 10,
+                    isPrinting: false
+                )
+                .background(Color.white)
+            }
+            .frame(maxHeight: max(contentHeight * 0.38, 180))
+
+            panel(title: t(.dialogue)) {
+                DialogueSheetEditor(
+                    lines: $cut.dialogueLines,
+                    speakerRatio: $cut.dialogueSpeakerRatio,
+                    baseFontSize: max(textBaseFontSize + 2, 12),
+                    showsLineControls: true,
+                    isPrinting: false
+                )
+                .background(Color.white)
+            }
+            .frame(maxHeight: .infinity)
+        }
+    }
+
+    private var header: some View {
+        HStack(spacing: 10) {
+            metaField(text: cutNumberText, placeholder: t(.cut), width: 54, alignment: .center, fontSize: 20)
+            metaField(text: $cut.cutName, placeholder: t(.cutName), width: 168, alignment: .left, fontSize: 18)
+            metaField(text: $cut.subtitle, placeholder: t(.block), width: 132, alignment: .left, fontSize: 14)
+            metaField(text: $cut.scriptHeading, placeholder: t(.sequence), width: 148, alignment: .left, fontSize: 14)
+            metaField(text: $cut.sceneName, placeholder: t(.scene), width: 132, alignment: .left, fontSize: 14)
+            metaField(text: $cut.duration, placeholder: t(.seconds), width: 72, alignment: .center, fontSize: 16)
+            Spacer(minLength: 12)
+            actionToolbar
+                .fixedSize()
+        }
+        .padding(.horizontal, headerHorizontalPadding)
+    }
+
+    private func panel<Content: View>(title: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.system(size: 13, weight: .bold))
+                .foregroundStyle(CinemaDesign.sectionHeader)
+            content()
+                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .stroke(CinemaDesign.warmBorder, lineWidth: 0.8)
+                )
+                .shadow(color: .black.opacity(0.03), radius: 1, x: 0, y: 1)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    private func clampedInspectorWidth(totalWidth: CGFloat, ratio: Double) -> CGFloat {
+        let width = totalWidth * CGFloat(ratio)
+        return min(max(width, 320), max(totalWidth * 0.52, 360))
+    }
+
+    private func inspectorWidthGesture(totalWidth: CGFloat) -> some Gesture {
+        DragGesture(minimumDistance: 0)
+            .onChanged { value in
+                if inspectorDragStartRatio == nil {
+                    inspectorDragStartRatio = inspectorWidthRatio
+                }
+                let start = inspectorDragStartRatio ?? inspectorWidthRatio
+                let nextWidth = clampedInspectorWidth(
+                    totalWidth: totalWidth,
+                    ratio: start
+                ) - value.translation.width
+                inspectorWidthRatio = Double(nextWidth / max(totalWidth, 1))
+            }
+            .onEnded { _ in
+                let clamped = clampedInspectorWidth(totalWidth: totalWidth, ratio: inspectorWidthRatio)
+                inspectorWidthRatio = Double(clamped / max(totalWidth, 1))
+                inspectorDragStartRatio = nil
+            }
+    }
+
+    private func metaField(
+        text: Binding<String>,
+        placeholder: String,
+        width: CGFloat,
+        alignment: NSTextAlignment,
+        fontSize: CGFloat
+    ) -> some View {
+        CompactStoryboardTextField(
+            text: text,
+            placeholder: placeholder,
+            font: .systemFont(ofSize: fontSize, weight: .medium),
+            alignment: alignment
+        )
+        .frame(width: width, height: 34)
+        .padding(.horizontal, 10)
+        .background(Color.white.opacity(0.88))
+        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .stroke(CinemaDesign.fineBorder, lineWidth: 0.6)
+        )
+        .shadow(color: .black.opacity(0.03), radius: 2, x: 0, y: 1)
+    }
+
+    private var actionToolbar: some View {
+        HStack(spacing: 6) {
+            toolbarButton(systemName: "sparkles", help: "AIで画面を生成", action: generate)
+                .disabled(isGenerating)
+
+            toolbarButton(systemName: "plus.square.on.square", help: "この後ろにカットを追加", action: addAfter)
+            toolbarButton(systemName: "trash", help: "このカットを削除", action: delete)
+        }
+        .padding(.trailing, 2)
+    }
+
+    private func toolbarButton(systemName: String, help: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(CinemaDesign.ink)
+                .frame(width: 18, height: 18)
+        }
+        .buttonStyle(.borderless)
+        .frame(width: 32, height: 32)
+        .background(Color.white.opacity(0.88))
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .stroke(CinemaDesign.fineBorder, lineWidth: 0.6)
+        )
+        .shadow(color: .black.opacity(0.03), radius: 2, x: 0, y: 1)
+        .help(help)
+        .pointingHandCursor()
+    }
+
+    private func deleteImage() {
+        guard let imageFileName = cut.imageFileName else { return }
+        cut.imageFileName = nil
+        deleteImageData(imageFileName)
+    }
+
+    private var cutNumberText: Binding<String> {
+        Binding {
+            String(cut.cutNumber)
+        } set: { newValue in
+            let digits = newValue.filter(\.isNumber)
+            if let number = Int(digits) {
+                cut.cutNumber = number
+            }
+        }
+    }
+
+    private func t(_ key: CinemaTextKey) -> String {
+        CinemaStrings.text(key, language: appLanguage)
+    }
+}
+
+private struct FocusedInspectorSplitHandle: View {
+    @State private var isHovering = false
+
+    var body: some View {
+        Rectangle()
+            .fill(Color.clear)
+            .overlay {
+                Rectangle()
+                    .fill(Color.black.opacity(isHovering ? 0.22 : 0.12))
+                    .frame(width: 1)
+            }
+            .contentShape(Rectangle())
+            .onHover { hovering in
+                guard hovering != isHovering else { return }
+                isHovering = hovering
+                if hovering {
+                    NSCursor.resizeLeftRight.push()
+                } else {
+                    NSCursor.pop()
+                }
+            }
+            .help("ドラッグしてプレビューと編集エリアの幅を調整")
+    }
 }
 
 private struct SplitDragHandle: View {
@@ -1141,6 +1530,26 @@ private struct PromptEditorPopover: View {
     @Binding var prompt: String
     @Binding var shotSettings: AIShotSettings
 
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("追加プロンプト")
+                    .font(.headline)
+
+                Spacer()
+            }
+
+            PromptEditorContent(prompt: $prompt, shotSettings: $shotSettings)
+            .frame(width: 500, height: 430)
+        }
+        .padding(12)
+    }
+}
+
+private struct PromptEditorContent: View {
+    @Binding var prompt: String
+    @Binding var shotSettings: AIShotSettings
+
     private let template = """
 ・被写体（Subject）
 「誰が、何が映っているのかを詳細に記述します。」
@@ -1166,77 +1575,75 @@ private struct PromptEditorPopover: View {
 """
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Text("追加プロンプト")
-                    .font(.headline)
-
-                Spacer()
-
-                Button("テンプレート") {
-                    if prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                        prompt = template
-                    } else {
-                        prompt += "\n\n" + template
-                    }
-                }
-                .buttonStyle(.bordered)
-            }
-
-            TabView {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 10) {
-                        shotField("ショットサイズ", text: $shotSettings.shotSize, prompt: "例: クローズアップ、ミディアム、ワイド")
-                        shotField("カメラアングル", text: $shotSettings.cameraAngle, prompt: "例: 目線の高さ、ローアングル")
-                        shotField("レンズ", text: $shotSettings.lens, prompt: "例: 50mm、広角、浅い被写界深度")
-                        shotField("カメラ移動", text: $shotSettings.cameraMovement, prompt: "例: ゆっくりドリーイン")
-                        shotField("被写体の動き", text: $shotSettings.subjectMovement, prompt: "例: 画面左から右へ歩く")
-                        shotField("開始状態", text: $shotSettings.startState, prompt: "人物位置、視線、姿勢、小道具")
-                        shotField("終了状態", text: $shotSettings.endState, prompt: "次のカットへ渡す状態")
-                        shotField("次への接続", text: $shotSettings.transition, prompt: "例: 動作つなぎ、カット、ディゾルブ")
-                        shotField("音・環境音", text: $shotSettings.soundDirection, prompt: "例: 雨音、遠くの電車")
-                        shotField("避ける要素", text: $shotSettings.negativePrompt, prompt: "例: 顔の変化、余分な人物、文字")
-
-                        HStack {
-                            Text("連続性")
-                                .frame(width: 92, alignment: .leading)
-                            Slider(value: $shotSettings.continuityStrength, in: 0...1)
-                            Text("\(Int((shotSettings.continuityStrength * 100).rounded()))%")
-                                .monospacedDigit()
-                                .frame(width: 42, alignment: .trailing)
-                        }
-
-                        HStack {
-                            Text("Seed")
-                                .frame(width: 92, alignment: .leading)
-                            TextField(
-                                "任意",
-                                value: $shotSettings.seed,
-                                format: .number
-                            )
-                            .textFieldStyle(.roundedBorder)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(alignment: .top) {
+                    Text("ショット設定")
+                        .font(.headline)
+                    Spacer()
+                    Button("テンプレート") {
+                        if prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                            prompt = template
+                        } else {
+                            prompt += "\n\n" + template
                         }
                     }
-                    .padding(8)
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .fixedSize()
                 }
-                .tabItem { Text("ショット設定") }
 
-                TextEditor(text: $prompt)
-                    .font(.system(size: 12))
-                    .foregroundStyle(.primary)
-                    .scrollContentBackground(.hidden)
-                    .padding(6)
-                    .background(Color(nsColor: .textBackgroundColor))
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 4)
-                            .stroke(Color(nsColor: .separatorColor), lineWidth: 0.8)
+                VStack(alignment: .leading, spacing: 10) {
+                    shotField("ショットサイズ", text: $shotSettings.shotSize, prompt: "例: クローズアップ、ミディアム、ワイド")
+                    shotField("カメラアングル", text: $shotSettings.cameraAngle, prompt: "例: 目線の高さ、ローアングル")
+                    shotField("レンズ", text: $shotSettings.lens, prompt: "例: 50mm、広角、浅い被写界深度")
+                    shotField("カメラ移動", text: $shotSettings.cameraMovement, prompt: "例: ゆっくりドリーイン")
+                    shotField("被写体の動き", text: $shotSettings.subjectMovement, prompt: "例: 画面左から右へ歩く")
+                    shotField("開始状態", text: $shotSettings.startState, prompt: "人物位置、視線、姿勢、小道具")
+                    shotField("終了状態", text: $shotSettings.endState, prompt: "次のカットへ渡す状態")
+                    shotField("次への接続", text: $shotSettings.transition, prompt: "例: 動作つなぎ、カット、ディゾルブ")
+                    shotField("音・環境音", text: $shotSettings.soundDirection, prompt: "例: 雨音、遠くの電車")
+                    shotField("避ける要素", text: $shotSettings.negativePrompt, prompt: "例: 顔の変化、余分な人物、文字")
+
+                    HStack {
+                        Text("連続性")
+                            .frame(width: 92, alignment: .leading)
+                        Slider(value: $shotSettings.continuityStrength, in: 0...1)
+                        Text("\(Int((shotSettings.continuityStrength * 100).rounded()))%")
+                            .monospacedDigit()
+                            .frame(width: 42, alignment: .trailing)
                     }
-                    .padding(8)
-                    .tabItem { Text("自由記述") }
+
+                    HStack {
+                        Text("Seed")
+                            .frame(width: 92, alignment: .leading)
+                        TextField(
+                            "任意",
+                            value: $shotSettings.seed,
+                            format: .number
+                        )
+                        .textFieldStyle(.roundedBorder)
+                    }
+                }
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("自由記述")
+                        .font(.headline)
+                    TextEditor(text: $prompt)
+                        .font(.system(size: 12))
+                        .foregroundStyle(.primary)
+                        .scrollContentBackground(.hidden)
+                        .padding(6)
+                        .background(Color(nsColor: .textBackgroundColor))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 4)
+                                .stroke(Color(nsColor: .separatorColor), lineWidth: 0.8)
+                        }
+                        .frame(minHeight: 220)
+                }
             }
-            .frame(width: 500, height: 430)
+            .padding(8)
         }
-        .padding(12)
     }
 
     private func shotField(_ title: String, text: Binding<String>, prompt: String) -> some View {

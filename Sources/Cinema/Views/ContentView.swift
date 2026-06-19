@@ -3,19 +3,12 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 private enum DocumentDisplayMode: String, CaseIterable, Identifiable {
+    case cutFocus
     case storyboard
     case script
 
     var id: String { rawValue }
 
-    var label: String {
-        switch self {
-        case .storyboard:
-            return "絵コンテ"
-        case .script:
-            return "台本"
-        }
-    }
 }
 
 private struct GenerationErrorAlert: Identifiable {
@@ -28,7 +21,7 @@ struct ContentView: View {
     @Binding var document: StoryboardDocument
 
     @AppStorage("geminiAPIKey") private var geminiAPIKey = ""
-    @AppStorage("geminiModelName") private var geminiModelName = "gemini-2.5-flash-image"
+    @AppStorage("geminiModelName") private var geminiModelName = "gemini-3.1-flash-image"
     @AppStorage("geminiVideoModelName") private var geminiVideoModelName = "veo-3.1-generate-preview"
     @AppStorage("imageGenerationProvider") private var imageGenerationProvider = "gemini"
     @AppStorage("videoGenerationProvider") private var videoGenerationProvider = "gemini"
@@ -49,6 +42,7 @@ struct ContentView: View {
     @AppStorage("appLanguage") private var appLanguage = AppLanguage.japanese.rawValue
 
     @State private var pageIndex = 0
+    @State private var focusedCutScrollPosition: Int? = 0
     @State private var generationStatus: String?
     @State private var generatingCutID: StoryboardCut.ID?
     @State private var generatingSceneTitle: String?
@@ -57,7 +51,7 @@ struct ContentView: View {
     @State private var selectedVideoCutIDs: Set<StoryboardCut.ID> = []
     @State private var zoomScale: CGFloat = 1.0
     @State private var pinchStartZoomScale: CGFloat?
-    @State private var displayMode: DocumentDisplayMode = .storyboard
+    @State private var displayMode: DocumentDisplayMode = .cutFocus
     @State private var showsDrawingSettings = false
     @State private var showsFullCanvas = false
     @State private var isInitialStoryboardFitPending = true
@@ -77,6 +71,9 @@ struct ContentView: View {
                 cuts: document.project.cuts,
                 pageIndex: $pageIndex,
                 pageCount: currentPageCount,
+                navigationSectionTitle: navigationSectionTitle,
+                navigationSummaries: navigationSummaries,
+                allowsDeleteNavigationItems: displayMode == .storyboard,
                 addCut: addCutAtEnd,
                 addSubtitle: addSubtitleAtEnd,
                 addCutAbove: addCutAbove,
@@ -107,13 +104,18 @@ struct ContentView: View {
                     toolbar
                     detailCanvas
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .layoutPriority(1)
+                .clipped()
 
                 if showsReferenceSidebar {
                     Divider()
                     ReferenceSidebarView(document: $document, appLanguage: appLanguage)
+                        .fixedSize(horizontal: false, vertical: false)
                         .transition(.move(edge: .trailing).combined(with: .opacity))
                 }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(CinemaDesign.canvasBackground)
             .animation(.easeInOut(duration: 0.18), value: showsReferenceSidebar)
         }
@@ -134,11 +136,23 @@ struct ContentView: View {
         }
         .onChange(of: document.project.cuts.count) { _, _ in
             pageIndex = min(pageIndex, max(currentPageCount - 1, 0))
+            if displayMode == .cutFocus {
+                focusedCutScrollPosition = pageIndex
+            }
             ensureSelectedVideoScene()
             ensureSelectedVideoCuts()
         }
         .onChange(of: displayMode) { _, _ in
             pageIndex = min(pageIndex, max(currentPageCount - 1, 0))
+            if displayMode == .cutFocus {
+                focusedCutScrollPosition = pageIndex
+                showsFullCanvas = false
+            }
+        }
+        .onChange(of: pageIndex) { _, newValue in
+            if displayMode == .cutFocus, focusedCutScrollPosition != newValue {
+                focusedCutScrollPosition = newValue
+            }
         }
         .onChange(of: selectedVideoSceneTitle) { _, _ in
             ensureSelectedVideoCuts(reset: true)
@@ -171,6 +185,8 @@ struct ContentView: View {
     private var currentPageCount: Int {
         if showsDrawingSettings { return 1 }
         switch displayMode {
+        case .cutFocus:
+            return max(document.project.cuts.count, 1)
         case .storyboard:
             return pageCount
         case .script:
@@ -180,10 +196,46 @@ struct ContentView: View {
 
     private var currentPageSize: CGSize {
         switch displayMode {
+        case .cutFocus:
+            return .zero
         case .storyboard:
             return StoryboardPageLayout.pageSize
         case .script:
             return ScriptPageLayout.pageSize
+        }
+    }
+
+    private var navigationSectionTitle: String {
+        displayMode == .cutFocus ? t(.cut) : t(.page)
+    }
+
+    private var navigationSummaries: [String] {
+        switch displayMode {
+        case .cutFocus:
+            return document.project.cuts.map { cut in
+                let name = cut.cutName.trimmingCharacters(in: .whitespacesAndNewlines)
+                let scene = cut.subtitle.trimmingCharacters(in: .whitespacesAndNewlines)
+                let title = name.isEmpty ? "Cut \(cut.cutNumber)" : "Cut \(cut.cutNumber) / \(name)"
+                return scene.isEmpty ? title : "\(title) / \(scene)"
+            }
+        case .storyboard:
+            return storyboardPageCutIDs.enumerated().map { index, ids in
+                let pageCuts = ids.compactMap { id in document.project.cuts.first(where: { $0.id == id }) }
+                let numbers = pageCuts.map(\.cutNumber)
+                let rangeText: String
+                if let first = numbers.first, let last = numbers.last {
+                    rangeText = first == last ? "Cut \(first)" : "Cut \(first)-\(last)"
+                } else {
+                    rangeText = "空き"
+                }
+                let sceneTitle = pageCuts.first?.subtitle.trimmingCharacters(in: .whitespacesAndNewlines)
+                if let sceneTitle, !sceneTitle.isEmpty {
+                    return CinemaStrings.pageSummary(page: index + 1, rangeText: rangeText, sceneTitle: sceneTitle, language: appLanguage)
+                }
+                return CinemaStrings.pageSummary(page: index + 1, rangeText: rangeText, sceneTitle: nil, language: appLanguage)
+            }
+        case .script:
+            return (0..<scriptPageCount).map { "Page \($0 + 1)" }
         }
     }
 
@@ -222,6 +274,25 @@ struct ContentView: View {
                 DrawingSettingsView(settings: $document.project.drawingSettings)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .background(Color(nsColor: .textBackgroundColor))
+            } else if displayMode == .cutFocus {
+                FocusedStoryboardCutScroller(
+                    cuts: $document.project.cuts,
+                    currentIndex: $pageIndex,
+                    scrollPosition: $focusedCutScrollPosition,
+                    referenceImages: document.project.referenceImages,
+                    imageData: document.imageData,
+                    screenAspectRatio: screenAspectRatioValue,
+                    showsGeneratePlaceholder: showsGeneratePlaceholder,
+                    screenBackgroundBrightness: CGFloat(screenBackgroundBrightness),
+                    textBaseFontSize: CGFloat(storyboardTextBaseFontSize),
+                    generatingCutID: generatingCutID,
+                    deleteImageData: { fileName in document.imageData[fileName] = nil },
+                    generate: generateImage,
+                    importImage: importImage,
+                    addAfter: addCutAfter,
+                    delete: deleteCut,
+                    appLanguage: appLanguage
+                )
             } else if showsFullCanvas {
                 GeometryReader { proxy in
                     ScrollView([.horizontal, .vertical], showsIndicators: false) {
@@ -256,6 +327,10 @@ struct ContentView: View {
 
     private var pageSurfaceBackground: Color {
         showsFullCanvas ? .clear : Color(nsColor: .textBackgroundColor)
+    }
+
+    private var screenAspectRatioValue: CGFloat {
+        ScreenAspectRatio.value(for: screenAspectRatioRawValue).ratio
     }
 
     private func fullCanvasPage(availableSize: CGSize) -> some View {
@@ -300,6 +375,8 @@ struct ContentView: View {
     @ViewBuilder
     private var currentPage: some View {
         switch displayMode {
+        case .cutFocus:
+            Color.clear
         case .storyboard:
             StoryboardPageView(
                 document: $document,
@@ -345,16 +422,18 @@ struct ContentView: View {
     }
 
     private var toolbar: some View {
-        VStack(alignment: .leading, spacing: 7) {
-            HStack(spacing: 12) {
-                HStack(spacing: 12) {
-                    Label(t(.storyboard), systemImage: "rectangle.grid.1x2")
-                        .font(.headline)
-                        .foregroundStyle(CinemaDesign.ink)
-                        .frame(width: 150, alignment: .leading)
-                        .onAppear {
-                            displayMode = .storyboard
-                        }
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 14) {
+                // Left group: mode, language, drawing settings
+                HStack(spacing: 10) {
+                    Picker("Display Mode", selection: $displayMode) {
+                        Label(t(.focusMode), systemImage: "rectangle.portrait.on.rectangle.portrait")
+                            .tag(DocumentDisplayMode.cutFocus)
+                        Label(t(.storyboard), systemImage: "rectangle.grid.1x2")
+                            .tag(DocumentDisplayMode.storyboard)
+                    }
+                    .pickerStyle(.segmented)
+                    .frame(width: 250)
 
                     Picker(t(.language), selection: $appLanguage) {
                         ForEach(AppLanguage.allCases) { language in
@@ -370,96 +449,115 @@ struct ContentView: View {
                         if showsDrawingSettings {
                             showsFullCanvas = false
                             zoomScale = 1.0
-                            pageIndex = 0
+                            focusedCutScrollPosition = displayMode == .cutFocus ? pageIndex : focusedCutScrollPosition
                         }
                     } label: {
                         Label(t(.drawingSettings), systemImage: "paintpalette")
                     }
-                    .buttonStyle(.bordered)
-                    .controlSize(.large)
-                    .tint(showsDrawingSettings ? .accentColor : nil)
-                    .padding(.leading, 12)
+                    .buttonStyle(CinemaToolbarButtonStyle(isActive: showsDrawingSettings))
+                    .padding(.leading, 4)
                 }
 
-                Spacer(minLength: 16)
+                Spacer(minLength: 12)
 
-                HStack(spacing: 12) {
+                // Center group: pagination & zoom
+                HStack(spacing: 10) {
                     Button {
                         pageIndex = max(pageIndex - 1, 0)
                     } label: {
                         Image(systemName: "chevron.left")
+                            .font(.system(size: 12, weight: .semibold))
                     }
+                    .buttonStyle(.borderless)
                     .help(t(.previousPage))
                     .disabled(showsDrawingSettings || pageIndex == 0)
 
                     Text("\(pageIndex + 1) / \(currentPageCount)")
-                        .font(.system(.headline, design: .rounded).monospacedDigit())
+                        .font(.system(size: 13, weight: .semibold, design: .rounded).monospacedDigit())
                         .foregroundStyle(CinemaDesign.ink)
-                        .frame(minWidth: 72)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 4)
+                        .background {
+                            Capsule(style: .continuous)
+                                .fill(Color.white.opacity(0.70))
+                        }
+                        .overlay {
+                            Capsule(style: .continuous)
+                                .stroke(CinemaDesign.fineBorder, lineWidth: 0.6)
+                        }
 
                     Button {
                         pageIndex = min(pageIndex + 1, currentPageCount - 1)
                     } label: {
                         Image(systemName: "chevron.right")
+                            .font(.system(size: 12, weight: .semibold))
                     }
+                    .buttonStyle(.borderless)
                     .help(t(.nextPage))
                     .disabled(showsDrawingSettings || pageIndex >= currentPageCount - 1)
 
-                    Button {
-                        toggleFullCanvas()
-                    } label: {
-                        Label(t(.fullCanvas), systemImage: showsFullCanvas ? "rectangle.inset.filled" : "rectangle.expand.vertical")
+                    if displayMode == .storyboard {
+                        Button {
+                            toggleFullCanvas()
+                        } label: {
+                            Label(t(.fullCanvas), systemImage: showsFullCanvas ? "rectangle.inset.filled" : "rectangle.expand.vertical")
+                        }
+                        .buttonStyle(CinemaToolbarButtonStyle(isActive: showsFullCanvas))
+                        .disabled(showsDrawingSettings)
                     }
-                    .buttonStyle(.bordered)
-                    .controlSize(.large)
-                    .tint(showsFullCanvas ? .accentColor : nil)
-                    .disabled(showsDrawingSettings)
 
-                    if !showsFullCanvas {
-                        Divider()
-                            .frame(height: 22)
+                    if displayMode == .storyboard && !showsFullCanvas {
+                        Rectangle()
+                            .fill(CinemaDesign.fineBorder)
+                            .frame(width: 1, height: 20)
+                            .padding(.horizontal, 2)
 
                         Button {
                             changeZoom(by: -zoomStep)
                         } label: {
                             Image(systemName: "minus.magnifyingglass")
+                                .font(.system(size: 12, weight: .medium))
                         }
+                        .buttonStyle(.borderless)
                         .help(t(.zoomOut))
                         .disabled(showsDrawingSettings || zoomScale <= minimumZoomScale)
 
                         Text(zoomPercentageText)
-                            .font(.callout.monospacedDigit())
-                            .foregroundStyle(.secondary)
-                            .frame(width: 52)
+                            .font(.system(size: 11, weight: .medium, design: .rounded).monospacedDigit())
+                            .foregroundStyle(CinemaDesign.mutedInk)
+                            .frame(width: 44)
 
                         Button {
                             changeZoom(by: zoomStep)
                         } label: {
                             Image(systemName: "plus.magnifyingglass")
+                                .font(.system(size: 12, weight: .medium))
                         }
+                        .buttonStyle(.borderless)
                         .help(t(.zoomIn))
                         .disabled(showsDrawingSettings || zoomScale >= maximumZoomScale)
 
                         Button {
                             zoomScale = 1.0
                         } label: {
-                            Label(t(.actualSize), systemImage: "1.magnifyingglass")
+                            Text("1:1")
+                                .font(.system(size: 10, weight: .bold, design: .rounded))
                         }
+                        .buttonStyle(CinemaToolbarButtonStyle())
                         .disabled(showsDrawingSettings || abs(zoomScale - 1.0) < 0.001)
                     }
                 }
 
-                Spacer(minLength: 16)
+                Spacer(minLength: 12)
 
-                HStack(spacing: 12) {
+                // Right group: reference, print
+                HStack(spacing: 8) {
                     Button {
                         showsReferenceSidebar.toggle()
                     } label: {
-                        Image(systemName: showsReferenceSidebar ? "sidebar.right" : "sidebar.right")
+                        Image(systemName: "sidebar.right")
                     }
-                    .buttonStyle(.bordered)
-                    .controlSize(.large)
-                    .tint(showsReferenceSidebar ? .accentColor : nil)
+                    .buttonStyle(CinemaToolbarButtonStyle(isActive: showsReferenceSidebar))
                     .help(showsReferenceSidebar ? t(.hideReference) : t(.showReference))
 
                     Button {
@@ -468,24 +566,30 @@ struct ContentView: View {
                         Label(t(.print), systemImage: "printer")
                     }
                     .buttonStyle(.borderedProminent)
-                    .controlSize(.large)
+                    .controlSize(.regular)
                     .disabled(showsDrawingSettings)
                 }
             }
+            .padding(.horizontal, 18)
+            .padding(.vertical, 10)
 
             if let generationStatus {
-                Text(generationStatus)
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
+                CinemaStatusPill(
+                    text: generationStatus,
+                    isAnimating: generatingCutID != nil || generatingSceneTitle != nil
+                )
+                .padding(.horizontal, 18)
+                .padding(.bottom, 8)
+                .transition(.asymmetric(
+                    insertion: .move(edge: .top).combined(with: .opacity),
+                    removal: .opacity
+                ))
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 11)
-        .background(.ultraThinMaterial)
+        .background(.regularMaterial)
+        .background(CinemaDesign.toolbarBackground)
         .overlay(alignment: .bottom) {
-            Rectangle()
-                .fill(CinemaDesign.fineBorder)
+            CinemaDesign.toolbarSeparator
                 .frame(height: 1)
         }
     }
@@ -512,6 +616,10 @@ struct ContentView: View {
 
     private func printCurrentPage() {
         switch displayMode {
+        case .cutFocus:
+            if let storyboardPage = storyboardPageIndex(containingCutAt: pageIndex) {
+                PrintService.printPage(document: document, pageIndex: storyboardPage)
+            }
         case .storyboard:
             PrintService.printPage(document: document, pageIndex: pageIndex)
         case .script:
@@ -571,6 +679,7 @@ struct ContentView: View {
     }
 
     private func deletePage(_ page: Int) {
+        guard displayMode == .storyboard else { return }
         guard pageCount > 1 else { return }
 
         guard storyboardPageCutIDs.indices.contains(page) else { return }
@@ -591,8 +700,15 @@ struct ContentView: View {
     }
 
     private func jumpToCut(_ cutID: StoryboardCut.ID) {
-        guard let page = storyboardPageCutIDs.firstIndex(where: { $0.contains(cutID) }) else { return }
-        pageIndex = page
+        guard let cutIndex = document.project.cuts.firstIndex(where: { $0.id == cutID }) else { return }
+        switch displayMode {
+        case .cutFocus:
+            pageIndex = cutIndex
+            focusedCutScrollPosition = cutIndex
+        case .storyboard, .script:
+            guard let page = storyboardPageCutIDs.firstIndex(where: { $0.contains(cutID) }) else { return }
+            pageIndex = page
+        }
     }
 
     private func moveCuts(_ source: IndexSet, _ destination: Int, in cutIDs: [StoryboardCut.ID]) {
@@ -669,6 +785,12 @@ struct ContentView: View {
     private func nextSubtitleName() -> String {
         let count = document.project.cuts.filter { !$0.subtitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }.count + 1
         return CinemaStrings.blockName(count, language: appLanguage)
+    }
+
+    private func storyboardPageIndex(containingCutAt cutIndex: Int) -> Int? {
+        guard document.project.cuts.indices.contains(cutIndex) else { return nil }
+        let cutID = document.project.cuts[cutIndex].id
+        return storyboardPageCutIDs.firstIndex(where: { $0.contains(cutID) })
     }
 
     private func generateSceneVideo(for title: String) {
@@ -1221,8 +1343,15 @@ struct ContentView: View {
     }
 
     private func migrateAIModelsIfNeeded() {
-        if geminiModelName.trimmingCharacters(in: .whitespacesAndNewlines) == "nano-banana-2" {
-            geminiModelName = "gemini-2.5-flash-image"
+        let currentGeminiImageModel = geminiModelName.trimmingCharacters(in: .whitespacesAndNewlines)
+        if [
+            "nano-banana-2",
+            "gemini-2.5-flash-image",
+            "imagen-4.0-generate-001",
+            "imagen-4.0-ultra-generate-001",
+            "imagen-4.0-fast-generate-001"
+        ].contains(currentGeminiImageModel) {
+            geminiModelName = "gemini-3.1-flash-image"
         }
         if ["dall-e-2", "dall-e-3"].contains(openAIModelName.trimmingCharacters(in: .whitespacesAndNewlines)) {
             openAIModelName = "gpt-image-2"

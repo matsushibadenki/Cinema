@@ -12,7 +12,7 @@ struct SettingsView: View {
     }
 
     @AppStorage("geminiAPIKey") private var geminiAPIKey = ""
-    @AppStorage("geminiModelName") private var geminiModelName = "gemini-2.5-flash-image"
+    @AppStorage("geminiModelName") private var geminiModelName = "gemini-3.1-flash-image"
     @AppStorage("geminiVideoModelName") private var geminiVideoModelName = "veo-3.1-generate-preview"
     @AppStorage("imageGenerationProvider") private var imageGenerationProvider = "gemini"
     @AppStorage("videoGenerationProvider") private var videoGenerationProvider = "gemini"
@@ -36,7 +36,7 @@ struct SettingsView: View {
 
     @State private var selection: SettingsTab = .ai
 
-    private let geminiImagePresets = ["gemini-2.5-flash-image"]
+    private let geminiImagePresets = ["gemini-3.1-flash-image"]
     private let geminiVideoPresets = ["veo-3.1-generate-preview"]
     private let openAIImagePresets = ["gpt-image-2", "gpt-image-1.5", "gpt-image-1-mini"]
     private let openAIVideoPresets = ["sora-2", "sora-2-pro"]
@@ -414,7 +414,7 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
             }
 
-            SettingsSection(t(.costLimiter)) {
+            SettingsSection(t(.costLimiter), icon: "gauge.with.dots.needle.67percent") {
                 Toggle(t(.enableCostLimit), isOn: $aiCostLimitEnabled)
 
                 SettingsFieldRow(t(.limitUSD)) {
@@ -423,20 +423,54 @@ struct SettingsView: View {
                         .disabled(!aiCostLimitEnabled)
                 }
 
-                HStack {
-                    Text(t(.currentEstimatedCost))
-                    Spacer()
-                    Text(costText(aiEstimatedCostUSD))
-                        .monospacedDigit()
+                if aiCostLimitEnabled {
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack {
+                            Text(t(.currentEstimatedCost))
+                            Spacer()
+                            Text(costText(aiEstimatedCostUSD))
+                                .monospacedDigit()
+                        }
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+
+                        GeometryReader { proxy in
+                            ZStack(alignment: .leading) {
+                                RoundedRectangle(cornerRadius: 3)
+                                    .fill(Color.black.opacity(0.06))
+
+                                RoundedRectangle(cornerRadius: 3)
+                                    .fill(
+                                        costRatio >= 0.9
+                                        ? Color.red
+                                        : (costRatio >= 0.7 ? Color.orange : Color.green)
+                                    )
+                                    .frame(width: proxy.size.width * min(costRatio, 1.0))
+                            }
+                        }
+                        .frame(height: 6)
+                    }
+                } else {
+                    HStack {
+                        Text(t(.currentEstimatedCost))
+                        Spacer()
+                        Text(costText(aiEstimatedCostUSD))
+                            .monospacedDigit()
+                    }
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
                 }
-                .font(.footnote)
-                .foregroundStyle(.secondary)
 
                 Text(t(.costLimiterHelp))
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
         }
+    }
+
+    private var costRatio: CGFloat {
+        guard aiCostLimitUSD > 0 else { return 0 }
+        return CGFloat(aiEstimatedCostUSD / aiCostLimitUSD)
     }
 
     private func costText(_ value: Double) -> String {
@@ -675,31 +709,42 @@ private struct SettingsDetailScrollView<Content: View>: View {
 
 private struct SettingsSection<Content: View>: View {
     var title: String
+    var icon: String?
     @ViewBuilder var content: Content
 
-    init(_ title: String, @ViewBuilder content: () -> Content) {
+    init(_ title: String, icon: String? = nil, @ViewBuilder content: () -> Content) {
         self.title = title
+        self.icon = icon
         self.content = content()
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(title)
-                .font(.headline)
-                .padding(.horizontal, 2)
+            HStack(spacing: 7) {
+                if let icon {
+                    Image(systemName: icon)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(CinemaDesign.aiSparkle)
+                }
+                Text(title)
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(CinemaDesign.ink)
+            }
+            .padding(.horizontal, 2)
 
             VStack(alignment: .leading, spacing: 10) {
                 content
             }
-            .padding(14)
+            .padding(16)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(Color(nsColor: .textBackgroundColor))
-            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
             .overlay {
-                RoundedRectangle(cornerRadius: 8)
-                    .stroke(Color(nsColor: .separatorColor).opacity(0.65), lineWidth: 0.8)
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .stroke(CinemaDesign.fineBorder, lineWidth: 0.6)
             }
-            .shadow(color: .black.opacity(0.06), radius: 6, x: 0, y: 2)
+            .shadow(color: .black.opacity(0.04), radius: 2, x: 0, y: 1)
+            .shadow(color: .black.opacity(0.04), radius: 8, x: 0, y: 4)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }

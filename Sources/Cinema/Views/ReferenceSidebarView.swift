@@ -18,7 +18,7 @@ struct ReferenceSidebarView: View {
     @State private var selectedTab: InspectorSidebarTab = .reference
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 14) {
             Picker("表示", selection: $selectedTab) {
                 ForEach(InspectorSidebarTab.allCases) { tab in
                     Text(tab.label(language: appLanguage)).tag(tab)
@@ -34,39 +34,46 @@ struct ReferenceSidebarView: View {
                 TextPropertiesPanel(appLanguage: appLanguage)
             }
         }
-        .padding(12)
-        .frame(minWidth: 220, idealWidth: 240, maxWidth: 280)
+        .padding(14)
+        .frame(width: 270)
+        .frame(maxHeight: .infinity)
         .background(CinemaDesign.panelBackground)
     }
 
     private var referencePanel: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 14) {
             HStack {
                 Label(t(.reference), systemImage: "photo.on.rectangle")
-                    .font(.headline)
+                    .font(.system(size: 14, weight: .bold))
                     .foregroundStyle(CinemaDesign.ink)
                 Spacer()
                 Button {
                     addReferenceImage()
                 } label: {
-                    Image(systemName: "plus")
+                    Image(systemName: "plus.circle.fill")
+                        .font(.system(size: 18))
+                        .foregroundStyle(Color.accentColor)
                 }
+                .buttonStyle(.borderless)
                 .help(t(.addPhoto))
             }
 
             if document.project.referenceImages.isEmpty {
-                VStack(spacing: 8) {
+                VStack(spacing: 10) {
                     Image(systemName: "photo.badge.plus")
-                        .font(.system(size: 28))
-                        .foregroundStyle(CinemaDesign.mutedInk)
+                        .font(.system(size: 32, weight: .light))
+                        .foregroundStyle(CinemaDesign.mutedInk.opacity(0.5))
                     Text(t(.noPhotos))
-                        .font(.callout)
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(CinemaDesign.mutedInk)
+                    Text(t(.addPhoto))
+                        .font(.caption)
                         .foregroundStyle(.secondary)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 ScrollView {
-                    LazyVStack(spacing: 10) {
+                    LazyVStack(spacing: 12) {
                         ForEach($document.project.referenceImages) { $reference in
                             ReferenceImageRow(
                                 reference: $reference,
@@ -127,11 +134,12 @@ private struct ReferenceImageRow: View {
     var image: NSImage?
     var delete: () -> Void
     @State private var showsDetails = false
+    @State private var isHovering = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             ZStack {
-                RoundedRectangle(cornerRadius: 6)
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
                     .fill(Color.white.opacity(0.92))
                 if let image {
                     Image(nsImage: image)
@@ -145,12 +153,17 @@ private struct ReferenceImageRow: View {
                 }
             }
             .frame(height: 120)
-            .clipShape(RoundedRectangle(cornerRadius: 6))
+            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
             .overlay {
-                RoundedRectangle(cornerRadius: 6)
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
                     .stroke(CinemaDesign.warmBorder, lineWidth: 0.7)
             }
-            .shadow(color: .black.opacity(0.06), radius: 6, y: 2)
+            .shadow(color: .black.opacity(isHovering ? 0.10 : 0.05), radius: isHovering ? 10 : 6, y: isHovering ? 4 : 2)
+            .scaleEffect(isHovering ? 1.02 : 1.0)
+            .animation(.easeOut(duration: 0.15), value: isHovering)
+            .onHover { hovering in
+                isHovering = hovering
+            }
 
             HStack(spacing: 6) {
                 TextField("名前", text: $reference.name)
@@ -170,7 +183,7 @@ private struct ReferenceImageRow: View {
                     .font(.subheadline.weight(.semibold))
             }
         }
-        .padding(8)
+        .padding(10)
         .cinemaPanel()
     }
 

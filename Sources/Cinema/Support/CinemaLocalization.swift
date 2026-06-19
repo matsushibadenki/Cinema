@@ -24,6 +24,7 @@ enum AppLanguage: String, CaseIterable, Identifiable {
 }
 
 enum CinemaTextKey: String {
+    case focusMode
     case storyboard
     case drawingSettings
     case previousPage
@@ -98,6 +99,7 @@ enum CinemaTextKey: String {
     case screenBackground
     case brightness
     case contentAndDialogue
+    case additionalPrompt
     case width
     case textSize
     case small
@@ -181,6 +183,7 @@ enum CinemaStrings {
     }
 
     private static let japanese: [CinemaTextKey: String] = [
+        .focusMode: "全画面",
         .storyboard: "絵コンテ",
         .drawingSettings: "描画設定",
         .previousPage: "前ページ",
@@ -255,6 +258,7 @@ enum CinemaStrings {
         .screenBackground: "画面背景",
         .brightness: "明度",
         .contentAndDialogue: "内容 / セリフ",
+        .additionalPrompt: "追加プロンプト",
         .width: "幅",
         .textSize: "文字サイズ",
         .small: "小",
@@ -284,6 +288,7 @@ enum CinemaStrings {
     ]
 
     private static let english: [CinemaTextKey: String] = [
+        .focusMode: "Fullscreen",
         .storyboard: "Storyboard",
         .drawingSettings: "Drawing Settings",
         .previousPage: "Previous Page",
@@ -358,6 +363,7 @@ enum CinemaStrings {
         .screenBackground: "Screen Background",
         .brightness: "Brightness",
         .contentAndDialogue: "Content / Dialogue",
+        .additionalPrompt: "Additional Prompt",
         .width: "Width",
         .textSize: "Text Size",
         .small: "Small",
@@ -387,6 +393,7 @@ enum CinemaStrings {
     ]
 
     private static let simplifiedChinese: [CinemaTextKey: String] = [
+        .focusMode: "全屏",
         .storyboard: "分镜",
         .drawingSettings: "绘图设置",
         .previousPage: "上一页",
@@ -461,6 +468,7 @@ enum CinemaStrings {
         .screenBackground: "画面背景",
         .brightness: "亮度",
         .contentAndDialogue: "内容 / 台词",
+        .additionalPrompt: "附加提示词",
         .width: "宽度",
         .textSize: "文字大小",
         .small: "小",
