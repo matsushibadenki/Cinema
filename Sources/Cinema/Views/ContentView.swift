@@ -252,11 +252,11 @@ struct ContentView: View {
                 .overlay {
                     if !showsFullCanvas {
                         RoundedRectangle(cornerRadius: 4)
-                            .stroke(CinemaDesign.warmBorder, lineWidth: 0.8)
+                            .stroke(CinemaDesign.fineBorder.opacity(0.72), lineWidth: 0.6)
                     }
                 }
-                .shadow(color: CinemaDesign.pageShadow.opacity(showsFullCanvas ? 0 : 1), radius: 24, x: 0, y: 12)
-                .shadow(color: Color.white.opacity(showsFullCanvas ? 0 : 0.75), radius: 1, x: 0, y: -1)
+                .shadow(color: CinemaDesign.pageShadow.opacity(showsFullCanvas ? 0 : 0.72), radius: 18, x: 0, y: 10)
+                .shadow(color: Color.white.opacity(showsFullCanvas ? 0 : 0.50), radius: 1, x: 0, y: -1)
                 .scaleEffect(zoomScale, anchor: .topLeading)
         }
         .frame(
@@ -326,7 +326,7 @@ struct ContentView: View {
     }
 
     private var pageSurfaceBackground: Color {
-        showsFullCanvas ? .clear : Color(nsColor: .textBackgroundColor)
+        showsFullCanvas ? .clear : CinemaDesign.editorSurface
     }
 
     private var screenAspectRatioValue: CGFloat {
@@ -336,18 +336,13 @@ struct ContentView: View {
     private func fullCanvasPage(availableSize: CGSize) -> some View {
         let horizontalPadding: CGFloat = 16
         let verticalPadding: CGFloat = 16
-        let availableWidth = max(availableSize.width - (horizontalPadding * 2), 1)
-        let scale = pixelAlignedScale(availableWidth / currentPageSize.width)
-        let fittedWidth = currentPageSize.width * scale
-        let fittedHeight = currentPageSize.height * scale
 
         return currentPage
             .frame(width: currentPageSize.width, height: currentPageSize.height)
-            .scaleEffect(scale, anchor: .topLeading)
-            .frame(width: fittedWidth, height: fittedHeight, alignment: .topLeading)
             .padding(.horizontal, horizontalPadding)
             .padding(.vertical, verticalPadding)
             .frame(maxWidth: .infinity, alignment: .topLeading)
+            .frame(minHeight: max(availableSize.height, currentPageSize.height + (verticalPadding * 2)), alignment: .topLeading)
     }
 
     private func applyInitialStoryboardFit(availableHeight: CGFloat, finalize: Bool = false) {

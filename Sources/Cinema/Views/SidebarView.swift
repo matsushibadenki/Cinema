@@ -45,132 +45,197 @@ struct SidebarView: View {
     private let cutsPerPage = 5
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            // Title field with underline accent
-            VStack(alignment: .leading, spacing: 4) {
-                TextField(t(.title), text: $title)
-                    .textFieldStyle(.plain)
-                    .font(.system(size: 16, weight: .bold))
-                    .foregroundStyle(CinemaDesign.ink)
-                    .padding(.horizontal, 14)
-                    .padding(.top, 14)
+        HStack(spacing: 0) {
+            commandRail
 
-                Rectangle()
-                    .fill(
-                        LinearGradient(
-                            colors: [CinemaDesign.aiSparkle.opacity(0.5), CinemaDesign.warmBorder],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                    )
-                    .frame(height: 1.5)
-                    .padding(.horizontal, 14)
+            VStack(alignment: .leading, spacing: 12) {
+                sidebarHeader
+                aiPanel
+                navigationList
+                bottomActions
+            }
+            .padding(.top, 12)
+            .frame(minWidth: 266)
+            .background(CinemaDesign.panelBackground)
+        }
+        .frame(minWidth: 326)
+        .background(CinemaDesign.canvasBackground)
+    }
+
+    private var commandRail: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "movieclapper.fill")
+                .font(.system(size: 19, weight: .semibold))
+                .foregroundStyle(.white)
+                .frame(width: 42, height: 42)
+                .background {
+                    RoundedRectangle(cornerRadius: 13, style: .continuous)
+                        .fill(Color.white.opacity(0.12))
+                }
+                .overlay {
+                    RoundedRectangle(cornerRadius: 13, style: .continuous)
+                        .stroke(Color.white.opacity(0.18), lineWidth: 0.7)
+                }
+                .padding(.top, 12)
+
+            Rectangle()
+                .fill(Color.white.opacity(0.12))
+                .frame(width: 28, height: 1)
+                .padding(.vertical, 2)
+
+            SidebarRailButton(systemName: "text.badge.plus", help: t(.addBlock), action: addSubtitle)
+            SidebarRailButton(systemName: "plus.square.on.square", help: t(.addCut), isProminent: true, action: addCut)
+
+            Spacer()
+
+            Image(systemName: "sparkles")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.78))
+                .frame(width: 38, height: 38)
+                .background {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(Color.white.opacity(0.08))
+                }
+                .padding(.bottom, 12)
+        }
+        .frame(width: 60)
+        .background(CinemaDesign.railBackground)
+        .overlay(alignment: .trailing) {
+            Rectangle()
+                .fill(Color.white.opacity(0.12))
+                .frame(width: 1)
+        }
+    }
+
+    private var sidebarHeader: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Cinema")
+                .font(.system(size: 11, weight: .bold, design: .rounded))
+                .foregroundStyle(CinemaDesign.quietInk)
+                .textCase(.uppercase)
+
+            TextField(t(.title), text: $title)
+                .textFieldStyle(.plain)
+                .font(.system(size: 20, weight: .semibold))
+                .foregroundStyle(CinemaDesign.ink)
+                .lineLimit(1)
+
+            HStack(spacing: 6) {
+                Image(systemName: "folder")
+                    .font(.system(size: 11, weight: .medium))
+                Text("\(cuts.count) \(t(.cut))")
+                    .font(.system(size: 12, weight: .medium))
+            }
+            .foregroundStyle(CinemaDesign.mutedInk)
+        }
+        .padding(.horizontal, 18)
+    }
+
+    private var navigationList: some View {
+        List(selection: $pageIndex) {
+            Section(navigationSectionTitle) {
+                ForEach(0..<pageCount, id: \.self) { index in
+                    let summary = navigationSummaries.indices.contains(index) ? navigationSummaries[index] : "\(navigationSectionTitle) \(index + 1)"
+                    Text(summary)
+                        .font(.system(size: 13, weight: pageIndex == index ? .semibold : .medium))
+                        .foregroundStyle(pageIndex == index ? CinemaDesign.ink : CinemaDesign.mutedInk)
+                        .tag(index)
+                        .contextMenu {
+                            if allowsDeleteNavigationItems {
+                                Button(t(.deletePage), role: .destructive) {
+                                    deletePage(index)
+                                }
+                                .disabled(pageCount <= 1)
+                            }
+                        }
+                }
             }
 
-            aiPanel
+            ForEach(cutSections) { section in
+                Section(section.title) {
+                    SceneSelectionRow(
+                        title: section.title,
+                        cutCount: section.cuts.count,
+                        isSelected: selectedVideoSceneTitle == section.title,
+                        isGenerating: generatingSceneTitle == section.title,
+                        hasVideo: sceneVideos.contains(where: { $0.title == section.title }),
+                        select: { selectedVideoSceneTitle = section.title }
+                    )
 
-            List(selection: $pageIndex) {
-                Section(navigationSectionTitle) {
-                    ForEach(0..<pageCount, id: \.self) { index in
-                        let summary = navigationSummaries.indices.contains(index) ? navigationSummaries[index] : "\(navigationSectionTitle) \(index + 1)"
-                        Text(summary)
-                            .tag(index)
-                            .contextMenu {
-                                if allowsDeleteNavigationItems {
-                                    Button(t(.deletePage), role: .destructive) {
-                                        deletePage(index)
-                                    }
-                                    .disabled(pageCount <= 1)
-                                }
+                    ForEach(section.cuts) { cut in
+                        CutSidebarRow(
+                            cut: cut,
+                            title: cutTitle(for: cut),
+                            cutName: cutNameBinding(for: cut.id),
+                            isVideoSceneSelected: selectedVideoSceneTitle == section.title,
+                            isCutSelectedForVideo: cutSelectionBinding(for: cut.id),
+                            isDragged: draggedCutID == cut.id,
+                            dropTargetPosition: hoveredDropTarget?.targetID == cut.id ? hoveredDropTarget?.position : nil,
+                            startDrag: {
+                                draggedCutID = cut.id
+                                return NSItemProvider(object: cut.id.uuidString as NSString)
                             }
-                    }
-                }
-
-                ForEach(cutSections) { section in
-                    Section(section.title) {
-                        SceneSelectionRow(
-                            title: section.title,
-                            cutCount: section.cuts.count,
-                            isSelected: selectedVideoSceneTitle == section.title,
-                            isGenerating: generatingSceneTitle == section.title,
-                            hasVideo: sceneVideos.contains(where: { $0.title == section.title }),
-                            select: { selectedVideoSceneTitle = section.title }
                         )
-
-                        ForEach(section.cuts) { cut in
-                            CutSidebarRow(
-                                cut: cut,
-                                title: cutTitle(for: cut),
-                                cutName: cutNameBinding(for: cut.id),
-                                isVideoSceneSelected: selectedVideoSceneTitle == section.title,
-                                isCutSelectedForVideo: cutSelectionBinding(for: cut.id),
-                                isDragged: draggedCutID == cut.id,
-                                dropTargetPosition: hoveredDropTarget?.targetID == cut.id ? hoveredDropTarget?.position : nil,
-                                startDrag: {
-                                    draggedCutID = cut.id
-                                    return NSItemProvider(object: cut.id.uuidString as NSString)
-                                }
+                        .onDrop(
+                            of: [UTType.text],
+                            delegate: CutDropDelegate(
+                                targetID: cut.id,
+                                draggedCutID: $draggedCutID,
+                                hoveredDropTarget: $hoveredDropTarget,
+                                moveCutRelativeToTarget: moveCutRelativeToTarget
                             )
-                            .onDrop(
-                                of: [UTType.text],
-                                delegate: CutDropDelegate(
-                                    targetID: cut.id,
-                                    draggedCutID: $draggedCutID,
-                                    hoveredDropTarget: $hoveredDropTarget,
-                                    moveCutRelativeToTarget: moveCutRelativeToTarget
-                                )
-                            )
-                            .contextMenu {
-                                Button(t(.goToCut)) {
-                                    jumpToCut(cut.id)
-                                }
+                        )
+                        .contextMenu {
+                            Button(t(.goToCut)) {
+                                jumpToCut(cut.id)
+                            }
 
-                                Divider()
+                            Divider()
 
-                                Button(t(.addCutAbove)) {
-                                    addCutAbove(cut.id)
-                                }
+                            Button(t(.addCutAbove)) {
+                                addCutAbove(cut.id)
+                            }
 
-                                Button(t(.addCutBelow)) {
-                                    addCutBelow(cut.id)
-                                }
+                            Button(t(.addCutBelow)) {
+                                addCutBelow(cut.id)
+                            }
 
-                                Divider()
+                            Divider()
 
-                                Button(t(.deleteCut), role: .destructive) {
-                                    deleteCut(cut.id)
-                                }
+                            Button(t(.deleteCut), role: .destructive) {
+                                deleteCut(cut.id)
                             }
                         }
                     }
                 }
             }
-            .listStyle(.sidebar)
-
-            VStack(spacing: 10) {
-                Button {
-                    addSubtitle()
-                } label: {
-                    Label(t(.addBlock), systemImage: "text.badge.plus")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.large)
-
-                Button {
-                    addCut()
-                } label: {
-                    Label(t(.addCut), systemImage: "plus")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
-            }
-            .padding(.horizontal, 14)
-            .padding(.bottom, 14)
         }
-        .frame(minWidth: 230)
-        .background(CinemaDesign.panelBackground)
+        .listStyle(.sidebar)
+        .scrollContentBackground(.hidden)
+    }
+
+    private var bottomActions: some View {
+        HStack(spacing: 10) {
+            Button {
+                addSubtitle()
+            } label: {
+                Label(t(.addBlock), systemImage: "text.badge.plus")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.large)
+
+            Button {
+                addCut()
+            } label: {
+                Label(t(.addCut), systemImage: "plus")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.large)
+        }
+        .padding(.horizontal, 18)
+        .padding(.bottom, 16)
     }
 
     private var aiPanel: some View {
@@ -453,6 +518,33 @@ private struct CutSidebarSection: Identifiable {
     var cuts: [StoryboardCut]
 }
 
+private struct SidebarRailButton: View {
+    var systemName: String
+    var help: String
+    var isProminent = false
+    var action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(isProminent ? CinemaDesign.ink : .white.opacity(0.88))
+                .frame(width: 38, height: 38)
+                .background {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(isProminent ? Color.white.opacity(0.94) : Color.white.opacity(0.08))
+                }
+                .overlay {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .stroke(Color.white.opacity(isProminent ? 0.0 : 0.14), lineWidth: 0.7)
+                }
+        }
+        .buttonStyle(.plain)
+        .shadow(color: .black.opacity(isProminent ? 0.22 : 0.0), radius: 8, x: 0, y: 4)
+        .help(help)
+    }
+}
+
 private struct CutSidebarRow: View {
     var cut: StoryboardCut
     var title: String
@@ -499,7 +591,7 @@ private struct CutSidebarRow: View {
         .overlay(alignment: .top) {
             if dropTargetPosition == .before {
                 Rectangle()
-                    .fill(Color.accentColor)
+                    .fill(CinemaDesign.keyColor)
                     .frame(height: 3)
                     .padding(.leading, 2)
             }
@@ -507,7 +599,7 @@ private struct CutSidebarRow: View {
         .overlay(alignment: .bottom) {
             if dropTargetPosition == .after {
                 Rectangle()
-                    .fill(Color.accentColor)
+                    .fill(CinemaDesign.keyColor)
                     .frame(height: 3)
                     .padding(.leading, 2)
             }
@@ -515,7 +607,7 @@ private struct CutSidebarRow: View {
         .overlay {
             if dropTargetPosition != nil {
                 RoundedRectangle(cornerRadius: 6)
-                    .stroke(Color.accentColor.opacity(0.7), lineWidth: 1)
+                    .stroke(CinemaDesign.keyColor.opacity(0.7), lineWidth: 1)
             }
         }
         .opacity(isDragged ? 0.65 : 1)
@@ -524,7 +616,7 @@ private struct CutSidebarRow: View {
     private var dragHandle: some View {
         ZStack {
             RoundedRectangle(cornerRadius: 4)
-                .fill(isDragged ? Color.accentColor.opacity(0.18) : Color.white.opacity(0.78))
+                .fill(isDragged ? CinemaDesign.keyColor.opacity(0.18) : Color.white.opacity(0.78))
                 .overlay {
                     RoundedRectangle(cornerRadius: 4)
                         .stroke(CinemaDesign.fineBorder, lineWidth: 0.6)
@@ -532,7 +624,7 @@ private struct CutSidebarRow: View {
 
             Image(systemName: "line.3.horizontal")
                 .font(.caption.weight(.semibold))
-                .foregroundStyle(isDragged ? Color.accentColor : Color.secondary.opacity(0.75))
+                .foregroundStyle(isDragged ? CinemaDesign.keyColor : Color.secondary.opacity(0.75))
         }
         .frame(width: 18, height: 28)
         .contentShape(RoundedRectangle(cornerRadius: 4))
@@ -544,7 +636,7 @@ private struct CutSidebarRow: View {
     private var rowBackground: some View {
         if dropTargetPosition != nil {
             RoundedRectangle(cornerRadius: 6)
-                .fill(Color.accentColor.opacity(0.16))
+                .fill(CinemaDesign.keyColor.opacity(0.16))
         } else if isDragged {
             RoundedRectangle(cornerRadius: 6)
                 .fill(Color.secondary.opacity(0.14))
@@ -687,11 +779,11 @@ private struct SceneSelectionRow: View {
             HStack(spacing: 8) {
                 // Accent bar for selected state
                 RoundedRectangle(cornerRadius: 1.5)
-                    .fill(isSelected ? Color.accentColor : Color.clear)
+                    .fill(isSelected ? CinemaDesign.keyColor : Color.clear)
                     .frame(width: 3, height: 24)
 
                 Image(systemName: isSelected ? "largecircle.fill.circle" : "circle")
-                    .foregroundStyle(isSelected ? Color.accentColor : .secondary)
+                    .foregroundStyle(isSelected ? CinemaDesign.keyColor : .secondary)
                     .font(.system(size: 13))
 
                 VStack(alignment: .leading, spacing: 2) {

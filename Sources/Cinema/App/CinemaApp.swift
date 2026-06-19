@@ -12,6 +12,7 @@ struct CinemaApp: App {
     var body: some Scene {
         DocumentGroup(newDocument: StoryboardDocument()) { file in
             ContentView(document: file.$document)
+                .tint(CinemaDesign.keyColor)
         }
         .commands {
             AppCommands(
@@ -24,6 +25,7 @@ struct CinemaApp: App {
 
         Window("設定", id: settingsWindowID) {
             SettingsView()
+                .tint(CinemaDesign.keyColor)
         }
         .defaultSize(width: 700, height: 700)
     }

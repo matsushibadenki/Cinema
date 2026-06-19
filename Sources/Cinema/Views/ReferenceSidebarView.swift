@@ -52,7 +52,7 @@ struct ReferenceSidebarView: View {
                 } label: {
                     Image(systemName: "plus.circle.fill")
                         .font(.system(size: 18))
-                        .foregroundStyle(Color.accentColor)
+                        .foregroundStyle(CinemaDesign.keyColor)
                 }
                 .buttonStyle(.borderless)
                 .help(t(.addPhoto))

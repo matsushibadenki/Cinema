@@ -386,6 +386,9 @@ private struct CompactPageTextField: NSViewRepresentable {
 
     func makeNSView(context: Context) -> CompactPageNSTextField {
         let field = CompactPageNSTextField(frame: .zero)
+        field.isEditable = true
+        field.isSelectable = true
+        field.isEnabled = true
         field.isBordered = false
         field.isBezeled = false
         field.drawsBackground = false

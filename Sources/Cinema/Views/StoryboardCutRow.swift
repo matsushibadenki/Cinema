@@ -11,6 +11,15 @@ private enum StoryboardTextPadding {
     static let vertical: CGFloat = 4
 }
 
+private enum FocusedEditorTextMetrics {
+    static let contentHorizontalPadding: CGFloat = 14
+    static let contentVerticalPadding: CGFloat = 12
+    static let contentLineSpacing: CGFloat = 3
+    static let dialogueHorizontalPadding: CGFloat = 12
+    static let dialogueVerticalPadding: CGFloat = 9
+    static let dialogueLineSpacing: CGFloat = 2
+}
+
 private struct PointingHandCursorModifier: ViewModifier {
     var isEnabled = true
 
@@ -35,6 +44,9 @@ private struct CompactStoryboardTextField: NSViewRepresentable {
     func makeNSView(context: Context) -> CompactNSTextField {
         let field = CompactNSTextField(frame: .zero)
         field.cell = VerticallyCenteredTextFieldCell(textCell: "")
+        field.isEditable = true
+        field.isSelectable = true
+        field.isEnabled = true
         field.isBordered = false
         field.isBezeled = false
         field.drawsBackground = false
@@ -134,6 +146,7 @@ private struct StoryboardTextView: NSViewRepresentable {
     var horizontalInset: CGFloat = StoryboardTextPadding.horizontal
     var verticalInset: CGFloat = StoryboardTextPadding.vertical
     var lineSpacing: CGFloat = 0
+
     var alignment: NSTextAlignment = .left
 
     func makeNSView(context: Context) -> NSScrollView {
@@ -305,7 +318,10 @@ private enum StoryboardTextFitter {
         height: CGFloat,
         base: CGFloat,
         minimum: CGFloat,
-        minimumRowHeight: CGFloat
+        minimumRowHeight: CGFloat,
+        horizontalInset: CGFloat = StoryboardTextPadding.horizontal,
+        verticalInset: CGFloat = StoryboardTextPadding.vertical,
+        lineSpacing: CGFloat = 0
     ) -> CGFloat {
         let availableHeight = max(height, 1)
         var size = base
@@ -316,7 +332,10 @@ private enum StoryboardTextFitter {
                 speakerWidth: speakerWidth,
                 dialogueWidth: dialogueWidth,
                 fontSize: size,
-                minimumRowHeight: minimumRowHeight
+                minimumRowHeight: minimumRowHeight,
+                horizontalInset: horizontalInset,
+                verticalInset: verticalInset,
+                lineSpacing: lineSpacing
             ) <= availableHeight {
                 return size
             }
@@ -331,21 +350,26 @@ private enum StoryboardTextFitter {
         speakerWidth: CGFloat,
         dialogueWidth: CGFloat,
         fontSize: CGFloat,
-        minimumRowHeight: CGFloat
+        minimumRowHeight: CGFloat,
+        horizontalInset: CGFloat = StoryboardTextPadding.horizontal,
+        verticalInset: CGFloat = StoryboardTextPadding.vertical,
+        lineSpacing: CGFloat = 0
     ) -> CGFloat {
         let activeLines = lines.isEmpty ? [DialogueLine()] : lines
         return activeLines.reduce(CGFloat.zero) { partial, line in
             let speakerHeight = estimatedHeight(
                 for: line.speaker,
-                width: speakerWidth - (StoryboardTextPadding.horizontal * 2),
-                fontSize: fontSize
+                width: speakerWidth - (horizontalInset * 2),
+                fontSize: fontSize,
+                lineSpacing: lineSpacing
             )
             let dialogueHeight = estimatedHeight(
                 for: line.dialogue,
-                width: dialogueWidth - (StoryboardTextPadding.horizontal * 2),
-                fontSize: fontSize
+                width: dialogueWidth - (horizontalInset * 2),
+                fontSize: fontSize,
+                lineSpacing: lineSpacing
             )
-            let rowHeight = max(speakerHeight, dialogueHeight) + (StoryboardTextPadding.vertical * 2)
+            let rowHeight = max(speakerHeight, dialogueHeight) + (verticalInset * 2)
             return partial + max(minimumRowHeight, rowHeight)
         }
     }
@@ -716,7 +740,15 @@ private struct FocusedStoryboardCutView: View {
 
             VStack(spacing: 0) {
                 header
-                    .frame(height: 76)
+                    .padding(.horizontal, headerHorizontalPadding)
+                    .padding(.vertical, 12)
+                    .background(CinemaDesign.editorSurface.opacity(0.72))
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .stroke(CinemaDesign.fineBorder.opacity(0.7), lineWidth: 0.5)
+                    }
+                    .padding(.bottom, 14)
 
                 HStack(spacing: contentSpacing) {
                     StoryboardScreenFrame(
@@ -732,14 +764,15 @@ private struct FocusedStoryboardCutView: View {
                     )
                     .frame(width: imageWidth)
                     .frame(maxHeight: .infinity)
-                    .background(Color.white.opacity(0.8))
-                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .background(CinemaDesign.editorSurface.opacity(0.76))
+                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .stroke(CinemaDesign.warmBorder, lineWidth: 0.8)
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .stroke(CinemaDesign.fineBorder.opacity(0.78), lineWidth: 0.6)
                     )
-                    .shadow(color: .black.opacity(0.04), radius: 2, x: 0, y: 1)
-                    .shadow(color: .black.opacity(0.08), radius: 16, x: 0, y: 8)
+                    .shadow(color: Color.white.opacity(0.42), radius: 1, x: 0, y: -1)
+                    .shadow(color: .black.opacity(0.035), radius: 2, x: 0, y: 1)
+                    .shadow(color: .black.opacity(0.055), radius: 14, x: 0, y: 8)
 
                     FocusedInspectorSplitHandle()
                         .frame(width: handleWidth)
@@ -766,14 +799,31 @@ private struct FocusedStoryboardCutView: View {
                         }
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                     }
+                    .padding(12)
                     .frame(width: inspectorWidth)
                     .frame(maxHeight: .infinity)
+                    .background(CinemaDesign.editorSurface.opacity(0.72))
+                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .stroke(CinemaDesign.fineBorder.opacity(0.72), lineWidth: 0.6)
+                    }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .padding(.horizontal, contentHorizontalPadding)
-                .padding(.bottom, 18)
             }
-            .padding(.top, 16)
+            .padding(16)
+            .background {
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(CinemaDesign.mainBlockSurface.opacity(0.94))
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .stroke(CinemaDesign.fineBorder.opacity(0.58), lineWidth: 0.6)
+            }
+            .shadow(color: Color.white.opacity(0.50), radius: 1, x: 0, y: -1)
+            .shadow(color: .black.opacity(0.045), radius: 18, x: 0, y: 10)
+            .padding(.horizontal, contentHorizontalPadding)
+            .padding(.vertical, 18)
             .background(CinemaDesign.canvasBackground)
         }
     }
@@ -785,11 +835,14 @@ private struct FocusedStoryboardCutView: View {
                 AutoSizingStoryboardTextEditor(
                     text: $cut.situation,
                     placeholder: "",
-                    baseFontSize: max(textBaseFontSize + 3, 13),
-                    minimumFontSize: 10,
-                    isPrinting: false
+                    baseFontSize: max(textBaseFontSize + 5, 16),
+                    minimumFontSize: 12,
+                    isPrinting: false,
+                    horizontalInset: FocusedEditorTextMetrics.contentHorizontalPadding,
+                    verticalInset: FocusedEditorTextMetrics.contentVerticalPadding,
+                    lineSpacing: FocusedEditorTextMetrics.contentLineSpacing
                 )
-                .background(Color.white)
+                .background(CinemaDesign.editorSurface)
             }
             .frame(maxHeight: max(contentHeight * 0.38, 180))
 
@@ -797,11 +850,14 @@ private struct FocusedStoryboardCutView: View {
                 DialogueSheetEditor(
                     lines: $cut.dialogueLines,
                     speakerRatio: $cut.dialogueSpeakerRatio,
-                    baseFontSize: max(textBaseFontSize + 2, 12),
+                    baseFontSize: max(textBaseFontSize + 4, 15),
                     showsLineControls: true,
-                    isPrinting: false
+                    isPrinting: false,
+                    horizontalInset: FocusedEditorTextMetrics.dialogueHorizontalPadding,
+                    verticalInset: FocusedEditorTextMetrics.dialogueVerticalPadding,
+                    lineSpacing: FocusedEditorTextMetrics.dialogueLineSpacing
                 )
-                .background(Color.white)
+                .background(CinemaDesign.editorSurface)
             }
             .frame(maxHeight: .infinity)
         }
@@ -819,21 +875,20 @@ private struct FocusedStoryboardCutView: View {
             actionToolbar
                 .fixedSize()
         }
-        .padding(.horizontal, headerHorizontalPadding)
     }
 
     private func panel<Content: View>(title: String, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(title)
-                .font(.system(size: 13, weight: .bold))
-                .foregroundStyle(CinemaDesign.sectionHeader)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(CinemaDesign.ink)
             content()
                 .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                 .overlay(
                     RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .stroke(CinemaDesign.warmBorder, lineWidth: 0.8)
+                        .stroke(CinemaDesign.fineBorder.opacity(0.72), lineWidth: 0.6)
                 )
-                .shadow(color: .black.opacity(0.03), radius: 1, x: 0, y: 1)
+                .shadow(color: .black.opacity(0.018), radius: 1, x: 0, y: 1)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
@@ -878,13 +933,13 @@ private struct FocusedStoryboardCutView: View {
         )
         .frame(width: width, height: 34)
         .padding(.horizontal, 10)
-        .background(Color.white.opacity(0.88))
+        .background(CinemaDesign.editorSurface.opacity(0.86))
         .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .stroke(CinemaDesign.fineBorder, lineWidth: 0.6)
+                .stroke(CinemaDesign.fineBorder.opacity(0.74), lineWidth: 0.5)
         )
-        .shadow(color: .black.opacity(0.03), radius: 2, x: 0, y: 1)
+        .shadow(color: .black.opacity(0.018), radius: 1, x: 0, y: 1)
     }
 
     private var actionToolbar: some View {
@@ -907,13 +962,13 @@ private struct FocusedStoryboardCutView: View {
         }
         .buttonStyle(.borderless)
         .frame(width: 32, height: 32)
-        .background(Color.white.opacity(0.88))
+        .background(CinemaDesign.editorSurface.opacity(0.86))
         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .stroke(CinemaDesign.fineBorder, lineWidth: 0.6)
+                .stroke(CinemaDesign.fineBorder.opacity(0.74), lineWidth: 0.5)
         )
-        .shadow(color: .black.opacity(0.03), radius: 2, x: 0, y: 1)
+        .shadow(color: .black.opacity(0.018), radius: 1, x: 0, y: 1)
         .help(help)
         .pointingHandCursor()
     }
@@ -1002,15 +1057,18 @@ private struct DialogueSheetEditor: View {
     var baseFontSize: CGFloat
     var showsLineControls: Bool
     var isPrinting: Bool
+    var horizontalInset: CGFloat = StoryboardTextPadding.horizontal
+    var verticalInset: CGFloat = StoryboardTextPadding.vertical
+    var lineSpacing: CGFloat = 0
 
     private let minimumRowHeight: CGFloat = 18
     private let splitHandleWidth: CGFloat = 3
-    private let buttonWidth: CGFloat = 14
+    private let buttonWidth: CGFloat = 18
     private let minimumSpeakerWidth: CGFloat = 24
     private let minimumDialogueWidth: CGFloat = 26
 
     private var fontSize: CGFloat {
-        max(baseFontSize - 1, 8)
+        isPrinting ? max(baseFontSize - 1, 8) : max(baseFontSize - 1, 13)
     }
 
     var body: some View {
@@ -1029,7 +1087,10 @@ private struct DialogueSheetEditor: View {
                             height: proxy.size.height,
                             base: fontSize,
                             minimum: 5.5,
-                            minimumRowHeight: minimumRowHeight
+                            minimumRowHeight: minimumRowHeight,
+                            horizontalInset: horizontalInset,
+                            verticalInset: verticalInset,
+                            lineSpacing: lineSpacing
                         )
                         : fontSize
 
@@ -1052,6 +1113,9 @@ private struct DialogueSheetEditor: View {
                                     dialogueWidth: dialogueWidth,
                                     splitHandleWidth: splitHandleWidth,
                                     buttonWidth: buttonWidth,
+                                    horizontalInset: horizontalInset,
+                                    verticalInset: verticalInset,
+                                    lineSpacing: lineSpacing,
                                     showsLineControls: showsLineControls,
                                     isPrinting: isPrinting,
                                     canDelete: lines.count > 1,
@@ -1066,11 +1130,11 @@ private struct DialogueSheetEditor: View {
                     }
                     .scrollIndicators(.never)
                 } else {
-                    Color.white
+                    CinemaDesign.editorSurface
                 }
             }
         }
-        .background(Color.white)
+        .background(CinemaDesign.editorSurface)
         .onAppear(perform: ensureLine)
     }
 
@@ -1103,15 +1167,17 @@ private struct DialogueSheetEditor: View {
     ) -> CGFloat {
         let speakerHeight = StoryboardTextFitter.estimatedHeight(
             for: line.speaker,
-            width: speakerWidth - (StoryboardTextPadding.horizontal * 2),
-            fontSize: fontSize
+            width: speakerWidth - (horizontalInset * 2),
+            fontSize: fontSize,
+            lineSpacing: lineSpacing
         )
         let dialogueHeight = StoryboardTextFitter.estimatedHeight(
             for: line.dialogue,
-            width: dialogueWidth - (StoryboardTextPadding.horizontal * 2),
-            fontSize: fontSize
+            width: dialogueWidth - (horizontalInset * 2),
+            fontSize: fontSize,
+            lineSpacing: lineSpacing
         )
-        let textHeight = max(speakerHeight, dialogueHeight) + (StoryboardTextPadding.vertical * 2)
+        let textHeight = max(speakerHeight, dialogueHeight) + (verticalInset * 2)
         return max(minimumRowHeight, ceil(textHeight))
     }
 
@@ -1132,6 +1198,9 @@ private struct DialogueSheetRow: View {
     var dialogueWidth: CGFloat
     var splitHandleWidth: CGFloat
     var buttonWidth: CGFloat
+    var horizontalInset: CGFloat
+    var verticalInset: CGFloat
+    var lineSpacing: CGFloat
     var showsLineControls: Bool
     var isPrinting: Bool
     var canDelete: Bool
@@ -1151,7 +1220,7 @@ private struct DialogueSheetRow: View {
             dialogueCell
         }
         .frame(height: rowHeight, alignment: .topLeading)
-        .background(Color.white)
+        .background(CinemaDesign.editorSurface)
         .overlay(alignment: .bottomLeading) {
             if showsLineControls {
                 Button(action: showsAddButton ? add : delete) {
@@ -1159,13 +1228,13 @@ private struct DialogueSheetRow: View {
                 }
                 .buttonStyle(.borderless)
                 .controlSize(.mini)
-                .font(.system(size: 8))
+                .font(.system(size: 9, weight: .semibold))
                 .frame(width: buttonWidth, height: buttonWidth)
                 .opacity(showsAddButton || canDelete ? 0.7 : 0.25)
                 .pointingHandCursor(isEnabled: showsAddButton || canDelete)
                 .disabled(!showsAddButton && !canDelete)
                 .help(showsAddButton ? "会話行を追加" : "会話行を削除")
-                .offset(x: 2, y: -2)
+                .offset(x: 4, y: -4)
             }
         }
         .overlay(alignment: .bottom) {
@@ -1181,12 +1250,18 @@ private struct DialogueSheetRow: View {
                 .foregroundStyle(.black)
                 .multilineTextAlignment(.leading)
                 .lineLimit(nil)
-                .padding(.horizontal, StoryboardTextPadding.horizontal)
-                .padding(.vertical, StoryboardTextPadding.vertical)
+                .padding(.horizontal, horizontalInset)
+                .padding(.vertical, verticalInset)
                 .frame(width: speakerWidth, alignment: .topLeading)
                 .frame(height: rowHeight, alignment: .topLeading)
         } else {
-            StoryboardTextView(text: $line.speaker, fontSize: fontSize)
+            StoryboardTextView(
+                text: $line.speaker,
+                fontSize: fontSize,
+                horizontalInset: horizontalInset,
+                verticalInset: verticalInset,
+                lineSpacing: lineSpacing
+            )
                 .frame(width: speakerWidth, alignment: .topLeading)
                 .frame(height: rowHeight, alignment: .topLeading)
         }
@@ -1198,12 +1273,22 @@ private struct DialogueSheetRow: View {
             StoryboardStaticTextView(
                 text: line.dialogue,
                 fontSize: fontSize,
+                horizontalInset: horizontalInset,
+                verticalInset: verticalInset,
+                lineSpacing: lineSpacing,
                 alignment: .justified
             )
                 .frame(width: dialogueWidth, alignment: .topLeading)
                 .frame(height: rowHeight, alignment: .topLeading)
         } else {
-            StoryboardTextView(text: $line.dialogue, fontSize: fontSize, alignment: .justified)
+            StoryboardTextView(
+                text: $line.dialogue,
+                fontSize: fontSize,
+                horizontalInset: horizontalInset,
+                verticalInset: verticalInset,
+                lineSpacing: lineSpacing,
+                alignment: .justified
+            )
                 .frame(width: dialogueWidth, alignment: .topLeading)
                 .frame(height: rowHeight, alignment: .topLeading)
         }
@@ -1728,6 +1813,9 @@ private struct AutoSizingStoryboardTextEditor: View {
     var baseFontSize: CGFloat
     var minimumFontSize: CGFloat
     var isPrinting: Bool
+    var horizontalInset: CGFloat = StoryboardTextPadding.horizontal
+    var verticalInset: CGFloat = StoryboardTextPadding.vertical
+    var lineSpacing: CGFloat = 0
 
     private var fontSize: CGFloat {
         let lines = max(text.components(separatedBy: .newlines).count, 1)
@@ -1745,20 +1833,28 @@ private struct AutoSizingStoryboardTextEditor: View {
         }
     }
 
+    private var editingLineSpacing: CGFloat {
+        lineSpacing > 0 ? lineSpacing : (fontSize <= 8 ? 0 : 1)
+    }
+
     var body: some View {
         GeometryReader { proxy in
             if isPrinting {
                 let printFontSize = StoryboardTextFitter.fontSize(
                     for: text,
-                    width: proxy.size.width - (StoryboardTextPadding.horizontal * 2),
-                    height: proxy.size.height - (StoryboardTextPadding.vertical * 2),
+                    width: proxy.size.width - (horizontalInset * 2),
+                    height: proxy.size.height - (verticalInset * 2),
                     base: fontSize,
-                    minimum: 5.5
+                    minimum: 5.5,
+                    lineSpacing: editingLineSpacing
                 )
 
                 StoryboardStaticTextView(
                     text: text,
                     fontSize: printFontSize,
+                    horizontalInset: horizontalInset,
+                    verticalInset: verticalInset,
+                    lineSpacing: editingLineSpacing,
                     alignment: .justified
                 )
                     .frame(width: proxy.size.width, height: proxy.size.height, alignment: .topLeading)
@@ -1766,7 +1862,9 @@ private struct AutoSizingStoryboardTextEditor: View {
                 StoryboardTextView(
                     text: $text,
                     fontSize: fontSize,
-                    lineSpacing: fontSize <= 8 ? 0 : 1,
+                    horizontalInset: horizontalInset,
+                    verticalInset: verticalInset,
+                    lineSpacing: editingLineSpacing,
                     alignment: .justified
                 )
                     .overlay(alignment: .topLeading) {
@@ -1774,8 +1872,8 @@ private struct AutoSizingStoryboardTextEditor: View {
                             Text(placeholder)
                                 .font(.system(size: 11))
                                 .foregroundStyle(.gray)
-                                .padding(.leading, StoryboardTextPadding.horizontal)
-                                .padding(.top, StoryboardTextPadding.vertical)
+                                .padding(.leading, horizontalInset)
+                                .padding(.top, verticalInset)
                         }
                     }
             }
