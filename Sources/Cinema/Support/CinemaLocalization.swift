@@ -46,6 +46,7 @@ enum CinemaTextKey: String {
     case dialogue
     case seconds
     case page
+    case structure
     case deletePage
     case goToCut
     case addCutAbove
@@ -205,13 +206,14 @@ enum CinemaStrings {
         .dialogue: "セリフ",
         .seconds: "秒",
         .page: "Page",
+        .structure: "構成",
         .deletePage: "このページを削除",
         .goToCut: "このカットへ移動",
         .addCutAbove: "この上にカットを追加",
         .addCutBelow: "この下にカットを追加",
         .deleteCut: "このカットを削除",
-        .addBlock: "ブロックを追加",
-        .addCut: "カットを追加",
+        .addBlock: "ブロック追加",
+        .addCut: "カット追加",
         .ai: "AI",
         .costLimitExceeded: "推定料金が上限を超えています",
         .drawingPreset: "描画プリセット",
@@ -310,6 +312,7 @@ enum CinemaStrings {
         .dialogue: "Dialogue",
         .seconds: "Sec",
         .page: "Page",
+        .structure: "Structure",
         .deletePage: "Delete This Page",
         .goToCut: "Go to This Cut",
         .addCutAbove: "Add Cut Above",
@@ -415,6 +418,7 @@ enum CinemaStrings {
         .dialogue: "台词",
         .seconds: "秒",
         .page: "页",
+        .structure: "结构",
         .deletePage: "删除此页",
         .goToCut: "跳转到此镜头",
         .addCutAbove: "在上方添加镜头",

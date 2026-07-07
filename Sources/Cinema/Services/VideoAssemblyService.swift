@@ -137,6 +137,32 @@ enum VideoAssemblyService {
         }
         return data
     }
+
+    static func previewImage(from fileURL: URL) async throws -> NSImage {
+        let asset = AVURLAsset(url: fileURL)
+        let duration = try await asset.load(.duration)
+        let requestedTime: CMTime
+        if duration.seconds.isFinite && duration.seconds > 0 {
+            requestedTime = CMTimeMultiplyByFloat64(duration, multiplier: 0.2)
+        } else {
+            requestedTime = .zero
+        }
+
+        let generator = AVAssetImageGenerator(asset: asset)
+        generator.appliesPreferredTrackTransform = true
+
+        let image = try await withCheckedThrowingContinuation { continuation in
+            generator.generateCGImageAsynchronously(for: requestedTime) { image, _, error in
+                if let image {
+                    continuation.resume(returning: image)
+                } else {
+                    continuation.resume(throwing: error ?? AssemblyError.frameExtractionFailed)
+                }
+            }
+        }
+
+        return NSImage(cgImage: image, size: .zero)
+    }
 }
 
 private final class SendableExportSession: @unchecked Sendable {

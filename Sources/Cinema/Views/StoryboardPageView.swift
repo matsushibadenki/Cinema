@@ -1,6 +1,8 @@
 import AppKit
 import SwiftUI
 
+private let storyboardPageTextColor = NSColor(calibratedWhite: 0.10, alpha: 1.0)
+
 enum StoryboardPageLayout {
     static let pageSize = CGSize(width: 595, height: 842)
     static let pageMargin: CGFloat = 42.52
@@ -114,7 +116,7 @@ struct StoryboardPageView: View {
                 Spacer()
                 Text("\(pageIndex + 1)")
                     .font(.system(size: 11, weight: .medium, design: .serif))
-                    .foregroundStyle(.black)
+                    .foregroundStyle(CinemaDesign.storyboardInk)
                 Spacer()
             }
             .frame(height: StoryboardPageLayout.footerHeight)
@@ -122,7 +124,7 @@ struct StoryboardPageView: View {
         .padding(StoryboardPageLayout.pageMargin)
         .background(
             LinearGradient(
-                colors: [.white, Color(red: 0.995, green: 0.992, blue: 0.982)],
+                colors: [CinemaDesign.storyboardPaper, CinemaDesign.storyboardPaperAccent],
                 startPoint: .top,
                 endPoint: .bottom
             )
@@ -135,14 +137,16 @@ struct StoryboardPageView: View {
             CompactPageTextField(
                 text: $document.project.title,
                 placeholder: t(.title),
-                font: .systemFont(ofSize: 15, weight: .semibold)
+                font: .systemFont(ofSize: 15, weight: .semibold),
+                textColor: storyboardPageTextColor
             )
                 .frame(minWidth: 120, maxWidth: 160)
 
             CompactPageTextField(
                 text: pageSubtitle,
                 placeholder: t(.block),
-                font: .systemFont(ofSize: 12, weight: .medium)
+                font: .systemFont(ofSize: 12, weight: .medium),
+                textColor: storyboardPageTextColor
             )
                 .frame(width: 120)
                 .padding(.leading, 8)
@@ -150,7 +154,8 @@ struct StoryboardPageView: View {
             CompactPageTextField(
                 text: pageScriptHeading,
                 placeholder: t(.sequence),
-                font: .systemFont(ofSize: 12, weight: .medium)
+                font: .systemFont(ofSize: 12, weight: .medium),
+                textColor: storyboardPageTextColor
             )
                 .frame(width: 120)
                 .padding(.leading, 8)
@@ -158,7 +163,8 @@ struct StoryboardPageView: View {
             CompactPageTextField(
                 text: pageSceneName,
                 placeholder: t(.scene),
-                font: .systemFont(ofSize: 12, weight: .medium)
+                font: .systemFont(ofSize: 12, weight: .medium),
+                textColor: storyboardPageTextColor
             )
                 .frame(width: 110)
                 .padding(.leading, 8)
@@ -166,7 +172,7 @@ struct StoryboardPageView: View {
             Spacer()
         }
         .frame(height: StoryboardPageLayout.titleHeight)
-        .foregroundStyle(CinemaDesign.ink)
+        .foregroundStyle(CinemaDesign.storyboardInk)
     }
 
     private var pageSubtitle: Binding<String> {
@@ -351,7 +357,7 @@ struct StoryboardPageView: View {
 private struct GapCell: View {
     var body: some View {
         Rectangle()
-            .fill(Color(red: 0.98, green: 0.975, blue: 0.955))
+            .fill(CinemaDesign.storyboardPaperAccent)
             .frame(width: StoryboardPageLayout.cutImageGap)
     }
 }
@@ -383,6 +389,7 @@ private struct CompactPageTextField: NSViewRepresentable {
 
     var placeholder: String
     var font: NSFont
+    var textColor: NSColor = .labelColor
 
     func makeNSView(context: Context) -> CompactPageNSTextField {
         let field = CompactPageNSTextField(frame: .zero)
@@ -404,10 +411,16 @@ private struct CompactPageTextField: NSViewRepresentable {
         if nsView.stringValue != text {
             nsView.stringValue = text
         }
-        nsView.placeholderString = placeholder
         nsView.font = font
-        nsView.textColor = .black
+        nsView.textColor = textColor
         nsView.alignment = .left
+        nsView.placeholderAttributedString = NSAttributedString(
+            string: placeholder,
+            attributes: [
+                .foregroundColor: textColor.withAlphaComponent(0.38),
+                .font: font
+            ]
+        )
     }
 
     func makeCoordinator() -> Coordinator {
@@ -533,7 +546,7 @@ struct StoryboardTableGrid: View {
     var imageColumnWidth: CGFloat
     var contentColumnWidth: CGFloat
     var actionColumnWidth: CGFloat
-    var color: Color = .black
+    var color: Color = CinemaDesign.storyboardGrid
     var lineWidth: CGFloat = StoryboardPageLayout.tableLineWidth
 
     var body: some View {
@@ -598,7 +611,7 @@ private struct HeaderCell: View {
     var body: some View {
         CrispHeaderText(title: title)
             .frame(width: width, height: 28)
-            .background(Color(red: 0.985, green: 0.98, blue: 0.962))
+            .background(CinemaDesign.storyboardPaperAccent)
     }
 }
 
@@ -625,7 +638,7 @@ private final class CrispHeaderContainerView: NSView {
         field.drawsBackground = false
         field.cell?.usesSingleLineMode = true
         field.cell?.lineBreakMode = .byClipping
-        field.font = .systemFont(ofSize: 10.5, weight: .heavy)
+        field.font = .systemFont(ofSize: 9, weight: .bold)
         field.textColor = NSColor.labelColor
         field.translatesAutoresizingMaskIntoConstraints = true
         field.autoresizingMask = [.width, .height]
@@ -645,7 +658,7 @@ private final class CrispHeaderContainerView: NSView {
 
     override func layout() {
         super.layout()
-        label.frame = bounds.insetBy(dx: 3, dy: 5)
+        label.frame = bounds.insetBy(dx: 1, dy: 5)
     }
 
     override var intrinsicContentSize: NSSize {
@@ -654,6 +667,7 @@ private final class CrispHeaderContainerView: NSView {
 
     func update(title: String) {
         label.stringValue = title
+        label.textColor = storyboardPageTextColor
         needsLayout = true
     }
 }

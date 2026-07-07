@@ -71,7 +71,7 @@ struct DrawingSettingsView: View {
         }
         .padding(.horizontal, 24)
         .padding(.vertical, 16)
-        .background(.ultraThinMaterial)
+        .background(CinemaDesign.toolbarBackground)
     }
 
     private func presetEditor(index: Int) -> some View {
@@ -160,7 +160,7 @@ struct DrawingSettingsView: View {
                 .scrollContentBackground(.hidden)
                 .padding(8)
                 .frame(minHeight: 88)
-                .background(Color.white.opacity(0.94))
+                .background(CinemaDesign.insetSurface.opacity(0.96))
                 .clipShape(RoundedRectangle(cornerRadius: 6))
                 .overlay {
                     RoundedRectangle(cornerRadius: 6)

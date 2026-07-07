@@ -9,6 +9,7 @@ struct StoryboardProject: Codable, Equatable {
     var drawingSettings: DrawingSettings
     var referenceImages: [ReferenceImage]
     var sceneVideos: [SceneVideo]
+    var generatedCutVideos: [GeneratedCutVideo]
     var cuts: [StoryboardCut]
 
     init(
@@ -16,12 +17,14 @@ struct StoryboardProject: Codable, Equatable {
         drawingSettings: DrawingSettings = DrawingSettings(),
         referenceImages: [ReferenceImage] = [],
         sceneVideos: [SceneVideo] = [],
+        generatedCutVideos: [GeneratedCutVideo] = [],
         cuts: [StoryboardCut] = StoryboardProject.defaultCuts()
     ) {
         self.title = title
         self.drawingSettings = drawingSettings
         self.referenceImages = referenceImages
         self.sceneVideos = sceneVideos
+        self.generatedCutVideos = generatedCutVideos
         self.cuts = cuts
     }
 
@@ -30,6 +33,7 @@ struct StoryboardProject: Codable, Equatable {
         case drawingSettings
         case referenceImages
         case sceneVideos
+        case generatedCutVideos
         case cuts
     }
 
@@ -39,6 +43,7 @@ struct StoryboardProject: Codable, Equatable {
         drawingSettings = try container.decodeIfPresent(DrawingSettings.self, forKey: .drawingSettings) ?? DrawingSettings()
         referenceImages = try container.decodeIfPresent([ReferenceImage].self, forKey: .referenceImages) ?? []
         sceneVideos = try container.decodeIfPresent([SceneVideo].self, forKey: .sceneVideos) ?? []
+        generatedCutVideos = try container.decodeIfPresent([GeneratedCutVideo].self, forKey: .generatedCutVideos) ?? []
         cuts = try container.decode([StoryboardCut].self, forKey: .cuts)
     }
 
@@ -370,6 +375,28 @@ struct SceneVideo: Codable, Identifiable, Equatable {
     init(id: UUID = UUID(), title: String, videoFileName: String, generatedAt: Date = Date()) {
         self.id = id
         self.title = title
+        self.videoFileName = videoFileName
+        self.generatedAt = generatedAt
+    }
+}
+
+struct GeneratedCutVideo: Codable, Identifiable, Equatable {
+    var id: UUID
+    var sceneTitle: String
+    var cutID: StoryboardCut.ID
+    var videoFileName: String
+    var generatedAt: Date
+
+    init(
+        id: UUID = UUID(),
+        sceneTitle: String,
+        cutID: StoryboardCut.ID,
+        videoFileName: String,
+        generatedAt: Date = Date()
+    ) {
+        self.id = id
+        self.sceneTitle = sceneTitle
+        self.cutID = cutID
         self.videoFileName = videoFileName
         self.generatedAt = generatedAt
     }

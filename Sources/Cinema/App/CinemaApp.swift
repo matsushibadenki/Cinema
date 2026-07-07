@@ -7,12 +7,21 @@ struct CinemaApp: App {
     @AppStorage("showsCutActionControls") private var showsCutActionControls = true
     @AppStorage("storyboardTextBaseFontSize") private var storyboardTextBaseFontSize = 11.0
     @AppStorage("appLanguage") private var appLanguage = AppLanguage.japanese.rawValue
+    @AppStorage("appThemeMode") private var appThemeMode = AppThemeMode.system.rawValue
     private let settingsWindowID = "settings-window"
+
+    private var themeMode: AppThemeMode {
+        AppThemeMode(rawValue: appThemeMode) ?? .system
+    }
 
     var body: some Scene {
         DocumentGroup(newDocument: StoryboardDocument()) { file in
-            ContentView(document: file.$document)
+            ContentView(
+                document: file.$document,
+                documentURL: file.fileURL
+            )
                 .tint(CinemaDesign.keyColor)
+                .preferredColorScheme(themeMode.preferredColorScheme)
         }
         .commands {
             AppCommands(
@@ -26,6 +35,7 @@ struct CinemaApp: App {
         Window("設定", id: settingsWindowID) {
             SettingsView()
                 .tint(CinemaDesign.keyColor)
+                .preferredColorScheme(themeMode.preferredColorScheme)
         }
         .defaultSize(width: 700, height: 700)
     }

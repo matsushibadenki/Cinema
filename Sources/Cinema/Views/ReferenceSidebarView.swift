@@ -140,7 +140,7 @@ private struct ReferenceImageRow: View {
         VStack(alignment: .leading, spacing: 8) {
             ZStack {
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(Color.white.opacity(0.92))
+                    .fill(CinemaDesign.insetSurface.opacity(0.96))
                 if let image {
                     Image(nsImage: image)
                         .resizable()
@@ -225,11 +225,11 @@ private struct ReferenceImageRow: View {
                                 .scrollContentBackground(.hidden)
                                 .frame(minHeight: 64)
                                 .padding(6)
-                                .background(Color(nsColor: .textBackgroundColor))
+                                .background(CinemaDesign.insetSurface)
                                 .clipShape(RoundedRectangle(cornerRadius: 5))
                                 .overlay {
                                     RoundedRectangle(cornerRadius: 5)
-                                        .stroke(Color(nsColor: .separatorColor), lineWidth: 0.5)
+                                        .stroke(CinemaDesign.cardStroke, lineWidth: 0.5)
                                 }
                         }
                     }

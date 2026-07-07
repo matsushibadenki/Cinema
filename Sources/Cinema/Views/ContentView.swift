@@ -17,8 +17,20 @@ private struct GenerationErrorAlert: Identifiable {
     var message: String
 }
 
+private enum SceneVideoStorageError: LocalizedError {
+    case documentMustBeSaved
+
+    var errorDescription: String? {
+        switch self {
+        case .documentMustBeSaved:
+            return "動画を書き出す前に、ドキュメントを保存してください。"
+        }
+    }
+}
+
 struct ContentView: View {
     @Binding var document: StoryboardDocument
+    var documentURL: URL?
 
     @AppStorage("geminiAPIKey") private var geminiAPIKey = ""
     @AppStorage("geminiModelName") private var geminiModelName = "gemini-3.1-flash-image"
@@ -69,6 +81,7 @@ struct ContentView: View {
                 title: $document.project.title,
                 drawingSettings: $document.project.drawingSettings,
                 cuts: document.project.cuts,
+                imageData: document.imageData,
                 pageIndex: $pageIndex,
                 pageCount: currentPageCount,
                 navigationSectionTitle: navigationSectionTitle,
@@ -273,12 +286,14 @@ struct ContentView: View {
             if showsDrawingSettings {
                 DrawingSettingsView(settings: $document.project.drawingSettings)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(Color(nsColor: .textBackgroundColor))
+                    .background(CinemaDesign.canvasBackground)
             } else if displayMode == .cutFocus {
                 FocusedStoryboardCutScroller(
                     cuts: $document.project.cuts,
                     currentIndex: $pageIndex,
                     scrollPosition: $focusedCutScrollPosition,
+                    generatedVideoColumns: generatedVideoStripColumns,
+                    selectedVideoSceneTitle: selectedVideoSceneTitle,
                     referenceImages: document.project.referenceImages,
                     imageData: document.imageData,
                     screenAspectRatio: screenAspectRatioValue,
@@ -474,7 +489,7 @@ struct ContentView: View {
                         .padding(.vertical, 4)
                         .background {
                             Capsule(style: .continuous)
-                                .fill(Color.white.opacity(0.70))
+                                .fill(CinemaDesign.insetSurface.opacity(0.96))
                         }
                         .overlay {
                             Capsule(style: .continuous)
@@ -581,7 +596,6 @@ struct ContentView: View {
                 ))
             }
         }
-        .background(.regularMaterial)
         .background(CinemaDesign.toolbarBackground)
         .overlay(alignment: .bottom) {
             CinemaDesign.toolbarSeparator
@@ -670,6 +684,7 @@ struct ContentView: View {
             document.imageData[imageFileName] = nil
         }
         document.project.cuts.removeAll { $0.id == cutID }
+        document.project.generatedCutVideos.removeAll { $0.cutID == cutID }
         document.renumberCuts()
     }
 
@@ -687,6 +702,7 @@ struct ContentView: View {
         }
 
         document.project.cuts.removeAll { removedCutIDs.contains($0.id) }
+        document.project.generatedCutVideos.removeAll { removedCutIDs.contains($0.cutID) }
         if document.project.cuts.isEmpty {
             document.project.cuts.append(StoryboardCut(cutNumber: 1))
         }
@@ -871,13 +887,25 @@ struct ContentView: View {
                     }
                 }
                 let videoData = try await VideoAssemblyService.concatenate(clips)
+                let generatedAt = Date()
+                let storedVideos = try persistGeneratedSceneVideos(
+                    sceneTitle: title,
+                    cuts: cuts,
+                    clips: clips,
+                    combinedVideoData: videoData,
+                    generatedAt: generatedAt
+                )
 
                 await MainActor.run {
-                    let safeTitle = safeFileComponent(title)
-                    let fileName = "Videos/\(safeTitle)-\(UUID().uuidString).mp4"
-                    document.videoData[fileName] = videoData
                     document.project.sceneVideos.removeAll { $0.title == title }
-                    document.project.sceneVideos.append(SceneVideo(title: title, videoFileName: fileName))
+                    document.project.sceneVideos.append(
+                        SceneVideo(
+                            title: title,
+                            videoFileName: storedVideos.sceneVideoPath,
+                            generatedAt: generatedAt
+                        )
+                    )
+                    document.project.generatedCutVideos.append(contentsOf: storedVideos.cutVideos)
                     recordAIUsage(
                         prompt: prompt,
                         kind: .video(
@@ -1013,6 +1041,34 @@ struct ContentView: View {
         return ratio < 1 ? "9:16" : "16:9"
     }
 
+    private var generatedVideoStripColumns: [GeneratedVideoStripColumn] {
+        guard let selectedVideoSceneTitle else { return [] }
+
+        return cutsForScene(title: selectedVideoSceneTitle).map { cut in
+            let versions = document.project.generatedCutVideos
+                .filter { $0.sceneTitle == selectedVideoSceneTitle && $0.cutID == cut.id }
+                .sorted { $0.generatedAt > $1.generatedAt }
+                .compactMap { video -> GeneratedVideoStripVersion? in
+                    guard let fileURL = movieFileURL(for: video.videoFileName),
+                          FileManager.default.fileExists(atPath: fileURL.path) else {
+                        return nil
+                    }
+                    return GeneratedVideoStripVersion(
+                        id: video.id,
+                        generatedAt: video.generatedAt,
+                        fileURL: fileURL
+                    )
+                }
+
+            return GeneratedVideoStripColumn(
+                cutID: cut.id,
+                cutNumber: cut.cutNumber,
+                cutName: cut.cutName.trimmingCharacters(in: .whitespacesAndNewlines),
+                versions: versions
+            )
+        }
+    }
+
     private func openAIVideoReferenceImage(from image: GeminiReferenceImage?, aspectRatio: String) -> OpenAIVideoReferenceImage? {
         guard let image else { return nil }
         let size = aspectRatio == "9:16" ? (width: 720, height: 1280) : (width: 1280, height: 720)
@@ -1030,8 +1086,86 @@ struct ContentView: View {
         return result.isEmpty ? "scene" : result
     }
 
+    private func sanitizedPathComponent(_ value: String, fallback: String) -> String {
+        let invalidCharacters = CharacterSet(charactersIn: "\\/:*?\"<>|")
+        let sanitized = value
+            .components(separatedBy: invalidCharacters)
+            .joined(separator: "-")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return sanitized.isEmpty ? fallback : sanitized
+    }
+
+    private func timestampFileComponent(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        formatter.dateFormat = "yyyyMMdd-HHmmss"
+        return formatter.string(from: date)
+    }
+
+    private func moviesDirectoryURL() -> URL? {
+        guard let documentURL else { return nil }
+        return documentURL.deletingLastPathComponent().appendingPathComponent("movies", isDirectory: true)
+    }
+
+    private func movieFileURL(for storedPath: String) -> URL? {
+        let moviePath = storedPath.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !moviePath.isEmpty else { return nil }
+        guard let moviesDirectoryURL = moviesDirectoryURL() else { return nil }
+        return moviesDirectoryURL.appendingPathComponent(moviePath)
+    }
+
+    private func persistGeneratedSceneVideos(
+        sceneTitle: String,
+        cuts: [StoryboardCut],
+        clips: [Data],
+        combinedVideoData: Data,
+        generatedAt: Date
+    ) throws -> (sceneVideoPath: String, cutVideos: [GeneratedCutVideo]) {
+        guard let moviesDirectoryURL = moviesDirectoryURL() else {
+            throw SceneVideoStorageError.documentMustBeSaved
+        }
+
+        let fileManager = FileManager.default
+        try fileManager.createDirectory(at: moviesDirectoryURL, withIntermediateDirectories: true)
+
+        let sceneFolderName = sanitizedPathComponent(sceneTitle, fallback: "scene")
+        let sceneDirectoryURL = moviesDirectoryURL.appendingPathComponent(sceneFolderName, isDirectory: true)
+        try fileManager.createDirectory(at: sceneDirectoryURL, withIntermediateDirectories: true)
+
+        let timestamp = timestampFileComponent(generatedAt)
+        var cutVideos: [GeneratedCutVideo] = []
+
+        for (cut, clip) in zip(cuts, clips) {
+            let fileName = "cut-\(String(format: "%03d", cut.cutNumber))-\(timestamp)-\(UUID().uuidString).mp4"
+            let fileURL = sceneDirectoryURL.appendingPathComponent(fileName)
+            try clip.write(to: fileURL, options: .atomic)
+            cutVideos.append(
+                GeneratedCutVideo(
+                    sceneTitle: sceneTitle,
+                    cutID: cut.id,
+                    videoFileName: "\(sceneFolderName)/\(fileName)",
+                    generatedAt: generatedAt
+                )
+            )
+        }
+
+        let sceneFileName = "scene-\(timestamp)-\(UUID().uuidString).mp4"
+        let sceneFileURL = sceneDirectoryURL.appendingPathComponent(sceneFileName)
+        try combinedVideoData.write(to: sceneFileURL, options: .atomic)
+
+        return ("\(sceneFolderName)/\(sceneFileName)", cutVideos)
+    }
+
     private func saveSceneVideo(_ video: SceneVideo) {
-        guard let data = document.videoData[video.videoFileName] else {
+        let data: Data
+        if let externalURL = movieFileURL(for: video.videoFileName),
+           let externalData = try? Data(contentsOf: externalURL) {
+            data = externalData
+        } else if let embeddedData = document.videoData[video.videoFileName] {
+            data = embeddedData
+        } else {
             generationStatus = "動画データが見つかりません"
             return
         }

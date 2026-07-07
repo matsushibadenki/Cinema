@@ -1,77 +1,104 @@
-// file:///Users/Shared/Program/Xcode/Cinema/Sources/Cinema/Support/CinemaDesign.swift
-// CinemaDesign.swift
-// Cinema アプリ全体のデザインシステム。カラーパレット、パネルスタイル、ボタンスタイル、アニメーション定数を管理する。
-// 参考デザイン: 白基調のコマンドセンター、細いダークレール、極薄ボーダー、ソフトシャドウ。
-
+import AppKit
 import SwiftUI
 
 enum CinemaDesign {
-    // MARK: - Canvas & Panel Backgrounds
+    // MARK: - Base Theme
 
-    /// メインキャンバス背景: ほぼ白のクールグレーグラデーション
-    static let canvasBackground = LinearGradient(
-        colors: [
-            Color(red: 0.936, green: 0.944, blue: 0.950),
-            Color(red: 0.920, green: 0.932, blue: 0.940)
-        ],
-        startPoint: .topLeading,
-        endPoint: .bottomTrailing
+    static let keyColor = dynamicColor(
+        light: (0.41, 0.29, 0.96, 1.0),
+        dark: (0.47, 0.34, 1.0, 1.0)
     )
 
-    /// パネル背景: ほぼ白、わずかにクールグレー
-    static let panelBackground = LinearGradient(
-        colors: [
-            Color(red: 0.985, green: 0.990, blue: 0.995).opacity(0.98),
-            Color(red: 0.945, green: 0.960, blue: 0.972).opacity(0.94)
-        ],
-        startPoint: .topLeading,
-        endPoint: .bottomTrailing
+    static let keyColorSoft = dynamicColor(
+        light: (0.41, 0.29, 0.96, 0.12),
+        dark: (0.47, 0.34, 1.0, 0.18)
     )
 
-    static let railBackground = LinearGradient(
-        colors: [
-            Color(red: 0.115, green: 0.115, blue: 0.115),
-            Color(red: 0.235, green: 0.235, blue: 0.235)
-        ],
-        startPoint: .top,
-        endPoint: .bottom
+    static let canvasBackground = dynamicColor(
+        light: (0.965, 0.970, 0.978, 1.0),
+        dark: (0.095, 0.100, 0.112, 1.0)
     )
 
-    /// カード表面: ほぼピュアホワイト
-    static let cardSurface = Color(red: 0.955, green: 0.962, blue: 0.968)
-    static let mainBlockSurface = Color(red: 0.935, green: 0.944, blue: 0.950)
-    static let editorSurface = Color(red: 0.965, green: 0.970, blue: 0.975)
+    static let panelBackground = dynamicColor(
+        light: (0.978, 0.982, 0.990, 0.99),
+        dark: (0.110, 0.115, 0.128, 0.99)
+    )
+
+    static let railBackground = dynamicColor(
+        light: (0.972, 0.976, 0.985, 0.99),
+        dark: (0.102, 0.106, 0.118, 1.0)
+    )
+
+    static let cardSurface = dynamicColor(
+        light: (0.990, 0.993, 0.998, 1.0),
+        dark: (0.135, 0.140, 0.152, 1.0)
+    )
+
+    static let mainBlockSurface = dynamicColor(
+        light: (0.968, 0.973, 0.980, 1.0),
+        dark: (0.126, 0.130, 0.140, 1.0)
+    )
+
+    static let editorSurface = dynamicColor(
+        light: (0.967, 0.972, 0.979, 1.0),
+        dark: (0.129, 0.133, 0.143, 1.0)
+    )
+
+    static let insetSurface = dynamicColor(
+        light: (0.958, 0.964, 0.974, 1.0),
+        dark: (0.136, 0.140, 0.151, 1.0)
+    )
 
     // MARK: - Semantic Colors
 
-    static let pageShadow = Color(red: 0.48, green: 0.54, blue: 0.62).opacity(0.12)
-    /// 極薄ボーダー: ほとんど見えない程度
-    static let fineBorder = Color(red: 0.62, green: 0.66, blue: 0.70).opacity(0.28)
-    /// 暖色ボーダー（ストーリーボード用紙周り）
-    static let warmBorder = Color(red: 0.72, green: 0.62, blue: 0.42).opacity(0.22)
-    /// メインインク: ダークネイビー
-    static let ink = Color(red: 0.07, green: 0.075, blue: 0.085)
-    /// 補助テキスト: ライトグレー
-    static let mutedInk = Color(red: 0.40, green: 0.45, blue: 0.50)
-    static let quietInk = Color(red: 0.62, green: 0.66, blue: 0.70)
+    static let pageShadow = dynamicColor(
+        light: (0.26, 0.30, 0.36, 0.08),
+        dark: (0.0, 0.0, 0.0, 0.18)
+    )
 
-    // MARK: - Accent & AI Colors
+    static let fineBorder = dynamicColor(
+        light: (0.45, 0.49, 0.58, 0.19),
+        dark: (1.0, 1.0, 1.0, 0.08)
+    )
 
-    /// キーカラー: 黒100%
-    static let keyColor = Color.black
-    static let aiSparkle = Color.black
-    static let aiSparkleLight = Color.black.opacity(0.06)
+    static let strongBorder = dynamicColor(
+        light: (0.40, 0.44, 0.52, 0.24),
+        dark: (1.0, 1.0, 1.0, 0.14)
+    )
 
-    // MARK: - Section / Header
+    static let warmBorder = dynamicColor(
+        light: (0.41, 0.29, 0.96, 0.24),
+        dark: (0.47, 0.34, 1.0, 0.34)
+    )
 
-    static let sectionHeader = Color(red: 0.16, green: 0.18, blue: 0.24)
+    static let ink = dynamicColor(
+        light: (0.08, 0.09, 0.12, 1.0),
+        dark: (0.94, 0.95, 0.98, 1.0)
+    )
 
-    // MARK: - Toolbar
+    static let mutedInk = dynamicColor(
+        light: (0.40, 0.43, 0.50, 1.0),
+        dark: (0.66, 0.69, 0.78, 1.0)
+    )
+
+    static let quietInk = dynamicColor(
+        light: (0.56, 0.60, 0.67, 1.0),
+        dark: (0.48, 0.52, 0.60, 1.0)
+    )
+
+    static let inverseInk = dynamicColor(
+        light: (1.0, 1.0, 1.0, 1.0),
+        dark: (0.96, 0.97, 1.0, 1.0)
+    )
+
+    static let aiSparkle = keyColor
+    static let aiSparkleLight = keyColorSoft
+    static let sectionHeader = ink
 
     static let toolbarBackground = LinearGradient(
         colors: [
-            Color.white.opacity(0.78),
-            Color(red: 0.94, green: 0.955, blue: 0.968).opacity(0.86)
+            dynamicColor(light: (0.985, 0.988, 0.994, 0.94), dark: (0.112, 0.116, 0.128, 0.96)),
+            dynamicColor(light: (0.978, 0.982, 0.989, 0.94), dark: (0.108, 0.112, 0.124, 0.96))
         ],
         startPoint: .top,
         endPoint: .bottom
@@ -79,17 +106,73 @@ enum CinemaDesign {
 
     static let toolbarSeparator = LinearGradient(
         colors: [
-            Color(red: 0.78, green: 0.82, blue: 0.86).opacity(0.0),
-            Color(red: 0.78, green: 0.82, blue: 0.86).opacity(0.30),
-            Color(red: 0.78, green: 0.82, blue: 0.86).opacity(0.30),
-            Color(red: 0.78, green: 0.82, blue: 0.86).opacity(0.0)
+            fineBorder.opacity(0.0),
+            fineBorder.opacity(0.9),
+            fineBorder.opacity(0.9),
+            fineBorder.opacity(0.0)
         ],
         startPoint: .leading,
         endPoint: .trailing
     )
-}
 
-// MARK: - Panel Modifier
+    static let raisedShadow = dynamicColor(
+        light: (0.26, 0.30, 0.38, 0.05),
+        dark: (0.0, 0.0, 0.0, 0.18)
+    )
+
+    static let topHighlight = dynamicColor(
+        light: (1.0, 1.0, 1.0, 0.34),
+        dark: (1.0, 1.0, 1.0, 0.03)
+    )
+
+    static let railIconBackground = dynamicColor(
+        light: (0.955, 0.962, 0.985, 0.92),
+        dark: (1.0, 1.0, 1.0, 0.08)
+    )
+
+    static let railIconStroke = dynamicColor(
+        light: (0.42, 0.46, 0.56, 0.10),
+        dark: (1.0, 1.0, 1.0, 0.12)
+    )
+
+    static let selectedRowSurface = dynamicColor(
+        light: (0.41, 0.29, 0.96, 0.10),
+        dark: (0.47, 0.34, 1.0, 0.20)
+    )
+
+    static let cardStroke = dynamicColor(
+        light: (0.44, 0.48, 0.58, 0.13),
+        dark: (1.0, 1.0, 1.0, 0.09)
+    )
+
+    static let storyboardPaper = Color(red: 0.996, green: 0.994, blue: 0.986)
+    static let storyboardPaperAccent = Color(red: 0.985, green: 0.980, blue: 0.962)
+    static let storyboardInk = Color(red: 0.10, green: 0.10, blue: 0.11)
+    static let storyboardGrid = Color(red: 0.14, green: 0.14, blue: 0.16).opacity(0.92)
+    static let storyboardFrameBorder = Color.black.opacity(0.12)
+    static let storyboardScreenColumn = Color(red: 0.33, green: 0.33, blue: 0.34)
+    static let storyboardDialogueColumn = storyboardPaper
+    static let storyboardToolChrome = Color.black.opacity(0.22)
+    static let storyboardToolIcon = Color.black.opacity(0.82)
+
+    private static func dynamicColor(
+        light: (CGFloat, CGFloat, CGFloat, CGFloat),
+        dark: (CGFloat, CGFloat, CGFloat, CGFloat)
+    ) -> Color {
+        Color(
+            nsColor: NSColor(name: nil) { appearance in
+                let isDark = appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+                let components = isDark ? dark : light
+                return NSColor(
+                    calibratedRed: components.0,
+                    green: components.1,
+                    blue: components.2,
+                    alpha: components.3
+                )
+            }
+        )
+    }
+}
 
 struct CinemaPanelModifier: ViewModifier {
     var cornerRadius: CGFloat = 12
@@ -99,21 +182,17 @@ struct CinemaPanelModifier: ViewModifier {
         content
             .background(
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .fill(CinemaDesign.cardSurface.opacity(isHighlighted ? 0.96 : 0.88))
+                    .fill(CinemaDesign.cardSurface.opacity(isHighlighted ? 0.98 : 0.92))
             )
             .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
             .overlay {
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                     .stroke(
-                        isHighlighted
-                            ? CinemaDesign.fineBorder.opacity(0.6)
-                            : CinemaDesign.fineBorder.opacity(0.3),
-                        lineWidth: 0.5
+                        isHighlighted ? CinemaDesign.warmBorder : CinemaDesign.cardStroke,
+                        lineWidth: isHighlighted ? 0.9 : 0.6
                     )
             }
-            .shadow(color: Color.white.opacity(0.58), radius: 1, x: 0, y: -1)
-            .shadow(color: Color(red: 0.48, green: 0.54, blue: 0.62).opacity(0.055), radius: 2, x: 0, y: 1)
-            .shadow(color: Color(red: 0.48, green: 0.54, blue: 0.62).opacity(0.075), radius: 14, x: 0, y: 7)
+            .shadow(color: CinemaDesign.raisedShadow.opacity(0.5), radius: 4, x: 0, y: 1)
     }
 }
 
@@ -123,15 +202,17 @@ extension View {
     }
 }
 
-// MARK: - Toolbar Button Style
-
 struct CinemaToolbarButtonStyle: ButtonStyle {
     var isActive: Bool = false
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.system(size: 13, weight: .medium))
-            .foregroundStyle(isActive ? CinemaDesign.ink : CinemaDesign.mutedInk)
+            .foregroundStyle(
+                isActive
+                ? CinemaDesign.inverseInk
+                : CinemaDesign.ink
+            )
             .lineLimit(1)
             .fixedSize(horizontal: true, vertical: false)
             .padding(.horizontal, 10)
@@ -140,28 +221,24 @@ struct CinemaToolbarButtonStyle: ButtonStyle {
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
                     .fill(
                         isActive
-                        ? Color.white.opacity(0.96)
+                        ? CinemaDesign.keyColor
                         : (configuration.isPressed
-                           ? Color.white.opacity(0.70)
-                           : Color.white.opacity(0.58))
+                           ? CinemaDesign.insetSurface.opacity(0.95)
+                           : CinemaDesign.cardSurface.opacity(0.84))
                     )
             }
             .overlay {
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
                     .stroke(
-                        isActive
-                        ? CinemaDesign.fineBorder.opacity(0.5)
-                        : CinemaDesign.fineBorder.opacity(0.2),
-                        lineWidth: 0.5
+                        isActive ? CinemaDesign.keyColor.opacity(0.95) : CinemaDesign.cardStroke,
+                        lineWidth: isActive ? 0.9 : 0.6
                     )
             }
-            .shadow(color: Color(red: 0.65, green: 0.70, blue: 0.78).opacity(isActive ? 0.10 : 0.04), radius: isActive ? 6 : 2, x: 0, y: isActive ? 3 : 1)
+            .shadow(color: isActive ? CinemaDesign.keyColor.opacity(0.14) : CinemaDesign.raisedShadow.opacity(0.22), radius: isActive ? 5 : 2, x: 0, y: 1)
             .scaleEffect(configuration.isPressed ? 0.97 : 1.0)
             .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
     }
 }
-
-// MARK: - Status Pill
 
 struct CinemaStatusPill: View {
     var text: String
@@ -173,6 +250,7 @@ struct CinemaStatusPill: View {
             if isAnimating {
                 ProgressView()
                     .controlSize(.mini)
+                    .tint(CinemaDesign.keyColor)
                     .scaleEffect(0.7)
             } else if let icon {
                 Image(systemName: icon)
@@ -188,12 +266,12 @@ struct CinemaStatusPill: View {
         .padding(.vertical, 5)
         .background {
             Capsule(style: .continuous)
-                .fill(Color.white.opacity(0.80))
+                .fill(CinemaDesign.insetSurface.opacity(0.94))
         }
         .overlay {
             Capsule(style: .continuous)
-                .stroke(CinemaDesign.fineBorder.opacity(0.25), lineWidth: 0.5)
+                .stroke(CinemaDesign.cardStroke, lineWidth: 0.6)
         }
-        .shadow(color: Color(red: 0.65, green: 0.70, blue: 0.78).opacity(0.06), radius: 4, x: 0, y: 2)
+        .shadow(color: CinemaDesign.raisedShadow.opacity(0.3), radius: 4, x: 0, y: 2)
     }
 }
