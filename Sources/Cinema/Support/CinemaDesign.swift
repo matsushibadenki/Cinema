@@ -48,6 +48,21 @@ enum CinemaDesign {
         dark: (0.120, 0.120, 0.126, 1.0)
     )
 
+    static let focusedCutShellSurface = dynamicColor(
+        light: (0.905, 0.910, 0.920, 1.0),
+        dark: (0.154, 0.154, 0.162, 1.0)
+    )
+
+    static let focusedCutPanelSurface = dynamicColor(
+        light: (0.868, 0.875, 0.888, 1.0),
+        dark: (0.166, 0.166, 0.174, 1.0)
+    )
+
+    static let focusedCutEditorSurface = dynamicColor(
+        light: (0.844, 0.852, 0.868, 1.0),
+        dark: (0.178, 0.178, 0.186, 1.0)
+    )
+
     static let insetSurface = dynamicColor(
         light: (0.944, 0.944, 0.950, 1.0),
         dark: (0.136, 0.136, 0.142, 1.0)
@@ -70,6 +85,11 @@ enum CinemaDesign {
         dark: (1.0, 1.0, 1.0, 0.13)
     )
 
+    static let focusedCutBorder = dynamicColor(
+        light: (0.24, 0.25, 0.30, 0.40),
+        dark: (1.0, 1.0, 1.0, 0.18)
+    )
+
     static let warmBorder = dynamicColor(
         light: (0.42, 0.34, 0.74, 0.22),
         dark: (0.55, 0.50, 0.84, 0.30)
@@ -88,6 +108,11 @@ enum CinemaDesign {
     static let quietInk = dynamicColor(
         light: (0.56, 0.57, 0.61, 1.0),
         dark: (0.46, 0.47, 0.52, 1.0)
+    )
+
+    static let placeholderInk = dynamicColor(
+        light: (0.58, 0.59, 0.63, 1.0),
+        dark: (0.38, 0.39, 0.43, 1.0)
     )
 
     static let inverseInk = dynamicColor(

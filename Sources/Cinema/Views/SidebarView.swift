@@ -18,6 +18,8 @@ struct SidebarView: View {
     var allowsDeleteNavigationItems: Bool
     var addCut: () -> Void
     var addSubtitle: () -> Void
+    var addBlockAfterSection: (String) -> Void
+    var deleteBlockSection: (String) -> Void
     var addCutAbove: (StoryboardCut.ID) -> Void
     var addCutBelow: (StoryboardCut.ID) -> Void
     var deleteCut: (StoryboardCut.ID) -> Void
@@ -52,7 +54,6 @@ struct SidebarView: View {
                 sidebarHeader
                 aiPanel
                 navigationList
-                bottomActions
             }
             .padding(.top, 12)
             .frame(minWidth: 266)
@@ -176,30 +177,6 @@ struct SidebarView: View {
             .padding(.horizontal, 14)
             .padding(.bottom, 8)
         }
-    }
-
-    private var bottomActions: some View {
-        HStack(spacing: 10) {
-            Button {
-                addSubtitle()
-            } label: {
-                Label(t(.addBlock), systemImage: "text.badge.plus")
-                    .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.bordered)
-            .controlSize(.large)
-
-            Button {
-                addCut()
-            } label: {
-                Label(t(.addCut), systemImage: "plus")
-                    .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.large)
-        }
-        .padding(.horizontal, 18)
-        .padding(.bottom, 16)
     }
 
     private var aiPanel: some View {
@@ -508,6 +485,18 @@ struct SidebarView: View {
                             hasVideo: sceneVideos.contains(where: { $0.title == section.title }),
                             select: { selectedVideoSceneTitle = section.title }
                         )
+                        .contextMenu {
+                            Button(t(.addBlock)) {
+                                addBlockAfterSection(section.title)
+                            }
+
+                            Divider()
+
+                            Button(t(.deleteSection), role: .destructive) {
+                                deleteBlockSection(section.title)
+                            }
+                            .disabled(cutSections.count <= 1)
+                        }
 
                         VStack(spacing: 6) {
                             ForEach(section.cuts) { cut in
@@ -697,15 +686,7 @@ private struct CutSidebarRow: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 7) {
-            dragHandle
-
-            if isVideoSceneSelected {
-                Toggle("", isOn: $isCutSelectedForVideo)
-                    .toggleStyle(.checkbox)
-                    .labelsHidden()
-                    .help("このカットを動画化に含める")
-                    .padding(.top, 8)
-            }
+            controlColumn
 
             HStack(alignment: .top, spacing: 10) {
                 previewThumbnail
@@ -766,6 +747,24 @@ private struct CutSidebarRow: View {
         .onTapGesture(perform: openCut)
     }
 
+    @ViewBuilder
+    private var controlColumn: some View {
+        VStack(spacing: 6) {
+            dragHandle
+
+            if isVideoSceneSelected {
+                Toggle("", isOn: $isCutSelectedForVideo)
+                    .toggleStyle(.checkbox)
+                    .labelsHidden()
+                    .help("このカットを動画化に含める")
+                    .controlSize(.small)
+                    .frame(width: 18, height: 18)
+            }
+        }
+        .frame(width: 18, alignment: .top)
+        .padding(.top, 2)
+    }
+
     private var dragHandle: some View {
         ZStack {
             RoundedRectangle(cornerRadius: 4)
@@ -779,7 +778,7 @@ private struct CutSidebarRow: View {
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(isDragged ? CinemaDesign.keyColor : Color.secondary.opacity(0.75))
         }
-        .frame(width: 18, height: 28)
+        .frame(width: 18, height: 22)
         .contentShape(RoundedRectangle(cornerRadius: 4))
         .help("ドラッグしてカットを並べ替え")
         .onDrag(startDrag)
@@ -840,7 +839,7 @@ private struct CutSidebarRow: View {
                 }
             }
         }
-        .frame(width: 54, height: 36)
+        .frame(width: 68, height: 44)
         .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
@@ -1023,6 +1022,19 @@ private struct SceneSelectionRow: View {
             }
         }
         .buttonStyle(.plain)
+        .pointingHandCursor()
+    }
+}
+
+private extension View {
+    func pointingHandCursor() -> some View {
+        onHover { hovering in
+            if hovering {
+                NSCursor.pointingHand.push()
+            } else {
+                NSCursor.pop()
+            }
+        }
     }
 }
 

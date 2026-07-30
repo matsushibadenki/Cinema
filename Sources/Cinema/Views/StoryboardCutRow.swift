@@ -845,6 +845,7 @@ private struct FocusedStoryboardCutView: View {
     private let contentHorizontalPadding: CGFloat = 18
     private let contentSpacing: CGFloat = 14
     private let canvasInset: CGFloat = 18
+    private let setCornerRadius: CGFloat = 18
     var body: some View {
         GeometryReader { proxy in
             let isCompactWidth = proxy.size.width < 1380
@@ -852,15 +853,17 @@ private struct FocusedStoryboardCutView: View {
             let innerInset = isCompactWidth ? 10.0 : 12.0
             let sectionSpacing = isCompactWidth ? 6.0 : 8.0
             let contentBottomInset = isCompactWidth ? 10.0 : 12.0
+            let bodyPanelInset = isCompactWidth ? 10.0 : 12.0
             let contentColumnWidth = max(proxy.size.width - (innerInset * 2), 320)
+            let contentAreaWidth = max(contentColumnWidth - (bodyPanelInset * 2), 320)
             let contentHeight = max(proxy.size.height - 108 - contentBottomInset, isCompactWidth ? 320 : 420)
             let inspectorWidth = clampedInspectorWidth(
-                totalWidth: contentColumnWidth,
+                totalWidth: contentAreaWidth,
                 ratio: inspectorWidthRatio
             )
             let handleWidth: CGFloat = 2
             let availableContentWidth = max(
-                contentColumnWidth,
+                contentAreaWidth,
                 320
             )
             let imageWidth = max(
@@ -869,12 +872,17 @@ private struct FocusedStoryboardCutView: View {
             )
 
             ZStack {
-                CinemaDesign.mainBlockSurface
+                Rectangle()
+                    .fill(CinemaDesign.focusedCutShellSurface.opacity(0.98))
+                Rectangle()
+                    .stroke(CinemaDesign.focusedCutBorder.opacity(0.96), lineWidth: 0.9)
+                Rectangle()
+                    .stroke(CinemaDesign.topHighlight.opacity(0.65), lineWidth: 0.8)
+                    .padding(0.5)
 
-                VStack(spacing: 0) {
+                VStack(spacing: sectionSpacing) {
                     headerPanel(compact: isCompactWidth)
                         .frame(width: contentColumnWidth, alignment: .leading)
-                        .padding(.bottom, sectionSpacing)
 
                     Group {
                         if isVeryCompactWidth {
@@ -896,7 +904,7 @@ private struct FocusedStoryboardCutView: View {
                                 FocusedInspectorSplitHandle()
                                     .frame(width: handleWidth)
                                     .frame(maxHeight: .infinity)
-                                    .gesture(inspectorWidthGesture(totalWidth: contentColumnWidth))
+                                    .gesture(inspectorWidthGesture(totalWidth: contentAreaWidth))
 
                                 inspectorPanel(contentHeight: contentHeight)
                                     .frame(width: inspectorWidth)
@@ -904,8 +912,17 @@ private struct FocusedStoryboardCutView: View {
                             }
                         }
                     }
+                    .padding(bodyPanelInset)
                     .frame(width: contentColumnWidth, alignment: .leading)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(
+                        RoundedRectangle(cornerRadius: setCornerRadius - 4, style: .continuous)
+                            .fill(CinemaDesign.focusedCutPanelSurface.opacity(0.98))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: setCornerRadius - 4, style: .continuous)
+                            .stroke(CinemaDesign.focusedCutBorder.opacity(0.8), lineWidth: 0.8)
+                    )
                     .padding(.bottom, contentBottomInset)
                 }
                 .padding(innerInset)
@@ -930,7 +947,7 @@ private struct FocusedStoryboardCutView: View {
                     verticalInset: FocusedEditorTextMetrics.contentVerticalPadding,
                     lineSpacing: FocusedEditorTextMetrics.contentLineSpacing
                 )
-                .background(CinemaDesign.editorSurface)
+                .background(CinemaDesign.focusedCutEditorSurface)
             }
             .frame(maxHeight: max(contentHeight * 0.38, 180))
 
@@ -946,7 +963,7 @@ private struct FocusedStoryboardCutView: View {
                     verticalInset: FocusedEditorTextMetrics.dialogueVerticalPadding,
                     lineSpacing: FocusedEditorTextMetrics.dialogueLineSpacing
                 )
-                .background(CinemaDesign.editorSurface)
+                .background(CinemaDesign.focusedCutEditorSurface)
             }
             .frame(maxHeight: .infinity)
         }
@@ -992,42 +1009,53 @@ private struct FocusedStoryboardCutView: View {
             .padding(.horizontal, compact ? 10 : 12)
             .padding(.vertical, compact ? 8 : 10)
             .background(
-                Rectangle()
-                    .fill(CinemaDesign.mainBlockSurface)
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(CinemaDesign.focusedCutPanelSurface.opacity(0.98))
             )
             .overlay(
-                Rectangle()
-                    .stroke(CinemaDesign.strongBorder.opacity(0.9), lineWidth: 0.8)
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .stroke(CinemaDesign.focusedCutBorder.opacity(0.88), lineWidth: 0.8)
             )
     }
 
     private var previewPanel: some View {
-        StoryboardScreenFrame(
-            imageData: imageData,
-            image: image,
-            aspectRatio: screenAspectRatio,
-            showsGeneratePlaceholder: showsGeneratePlaceholder,
-            backgroundBrightness: screenBackgroundBrightness,
-            isGenerating: isGenerating,
-            cutNumber: cut.cutNumber,
-            importImage: importImage,
-            deleteImage: deleteImage
-        )
-        .background(CinemaDesign.mainBlockSurface)
-        .clipShape(Rectangle())
+        VStack(alignment: .leading, spacing: 8) {
+            sectionLabel(t(.screen))
+
+            StoryboardScreenFrame(
+                imageData: imageData,
+                image: image,
+                aspectRatio: screenAspectRatio,
+                showsGeneratePlaceholder: showsGeneratePlaceholder,
+                backgroundBrightness: screenBackgroundBrightness,
+                isGenerating: isGenerating,
+                cutNumber: cut.cutNumber,
+                importImage: importImage,
+                deleteImage: deleteImage
+            )
+        }
+        .padding(8)
+        .background(CinemaDesign.focusedCutPanelSurface)
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         .overlay(
-            Rectangle()
-                .stroke(CinemaDesign.strongBorder.opacity(0.92), lineWidth: 0.8)
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(CinemaDesign.focusedCutBorder.opacity(0.9), lineWidth: 0.8)
         )
     }
 
     private func inspectorPanel(contentHeight: CGFloat) -> some View {
         VStack(spacing: 10) {
-            Picker("Inspector", selection: $selectedTab) {
-                Text(t(.contentAndDialogue)).tag(InspectorTab.contentDialogue)
-                Text(t(.additionalPrompt)).tag(InspectorTab.additionalPrompt)
+            VStack(alignment: .leading, spacing: 8) {
+                sectionLabel("Inspector")
+
+                Picker("Inspector", selection: $selectedTab) {
+                    Text(t(.contentAndDialogue)).tag(InspectorTab.contentDialogue)
+                    Text(t(.additionalPrompt)).tag(InspectorTab.additionalPrompt)
+                }
+                .pickerStyle(.segmented)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .pickerStyle(.segmented)
+            .frame(maxWidth: .infinity, alignment: .leading)
 
             Group {
                 switch selectedTab {
@@ -1043,11 +1071,11 @@ private struct FocusedStoryboardCutView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
         .padding(8)
-        .background(CinemaDesign.mainBlockSurface)
-        .clipShape(Rectangle())
+        .background(CinemaDesign.focusedCutPanelSurface)
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         .overlay {
-            Rectangle()
-                .stroke(CinemaDesign.strongBorder.opacity(0.92), lineWidth: 0.8)
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(CinemaDesign.focusedCutBorder.opacity(0.9), lineWidth: 0.8)
         }
     }
 
@@ -1060,10 +1088,18 @@ private struct FocusedStoryboardCutView: View {
                 .clipShape(Rectangle())
                 .overlay(
                     Rectangle()
-                        .stroke(CinemaDesign.strongBorder.opacity(0.88), lineWidth: 0.8)
+                        .stroke(CinemaDesign.focusedCutBorder.opacity(0.9), lineWidth: 0.8)
                 )
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    private func sectionLabel(_ title: String) -> some View {
+        Text(title)
+            .font(.system(size: 11, weight: .bold, design: .rounded))
+            .foregroundStyle(CinemaDesign.quietInk)
+            .textCase(.uppercase)
+            .tracking(0.4)
     }
 
     private func clampedInspectorWidth(totalWidth: CGFloat, ratio: Double) -> CGFloat {
@@ -1110,38 +1146,42 @@ private struct FocusedStoryboardCutView: View {
         .clipShape(Rectangle())
         .overlay(
             Rectangle()
-                .stroke(CinemaDesign.strongBorder.opacity(0.9), lineWidth: 0.8)
+                .stroke(CinemaDesign.focusedCutBorder.opacity(0.92), lineWidth: 0.8)
         )
     }
 
     private var actionToolbar: some View {
-        HStack(spacing: 6) {
-            toolbarButton(systemName: "sparkles", help: "AIで画面を生成", action: generate)
-                .disabled(isGenerating)
-
-            toolbarButton(systemName: "plus.square.on.square", help: "この後ろにカットを追加", action: addAfter)
-            toolbarButton(systemName: "trash", help: "このカットを削除", action: delete)
-        }
+        aiGenerateButton
         .padding(.trailing, 2)
     }
 
-    private func toolbarButton(systemName: String, help: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: systemName)
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(CinemaDesign.ink)
-                .frame(width: 18, height: 18)
+    private var aiGenerateButton: some View {
+        Button(action: generate) {
+            HStack(spacing: 8) {
+                Image(systemName: isGenerating ? "sparkles.square.filled.on.square" : "sparkles")
+                    .font(.system(size: 14, weight: .bold))
+
+                Text("AIで画面を作成")
+                    .font(.system(size: 13, weight: .bold))
+                    .lineLimit(1)
+            }
+            .foregroundStyle(CinemaDesign.inverseInk)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 9)
+            .background {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(isGenerating ? CinemaDesign.keyColor.opacity(0.78) : CinemaDesign.keyColor)
+            }
+            .overlay(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(CinemaDesign.keyColor.opacity(0.92), lineWidth: 1)
+            )
+            .shadow(color: CinemaDesign.keyColor.opacity(0.24), radius: 10, x: 0, y: 4)
         }
-        .buttonStyle(.borderless)
-        .frame(width: 32, height: 32)
-        .background(CinemaDesign.editorSurface.opacity(0.86))
-        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .stroke(CinemaDesign.fineBorder.opacity(0.74), lineWidth: 0.5)
-        )
-        .help(help)
-        .pointingHandCursor()
+        .buttonStyle(.plain)
+        .disabled(isGenerating)
+        .help(isGenerating ? "AIで画面を生成中" : "AIで画面を生成")
+        .pointingHandCursor(isEnabled: !isGenerating)
     }
 
     private func deleteImage() {
@@ -1305,11 +1345,11 @@ private struct DialogueSheetEditor: View {
                     }
                     .scrollIndicators(.never)
                 } else {
-                    usesClassicStoryboardChrome ? CinemaDesign.storyboardPaper : CinemaDesign.editorSurface
+                    usesClassicStoryboardChrome ? CinemaDesign.storyboardPaper : CinemaDesign.focusedCutEditorSurface
                 }
             }
         }
-        .background(usesClassicStoryboardChrome ? CinemaDesign.storyboardPaper : CinemaDesign.editorSurface)
+        .background(usesClassicStoryboardChrome ? CinemaDesign.storyboardPaper : CinemaDesign.focusedCutEditorSurface)
         .onAppear(perform: ensureLine)
     }
 
@@ -1398,8 +1438,8 @@ private struct DialogueSheetRow: View {
         }
 
         return isAlternatingRow
-            ? CinemaDesign.insetSurface.opacity(0.98)
-            : CinemaDesign.mainBlockSurface.opacity(0.94)
+            ? CinemaDesign.focusedCutEditorSurface.opacity(0.98)
+            : CinemaDesign.focusedCutPanelSurface.opacity(0.96)
     }
 
     private var rowBorderColor: Color {
@@ -1416,8 +1456,8 @@ private struct DialogueSheetRow: View {
         }
 
         return isAlternatingRow
-            ? Color.white.opacity(0.035)
-            : Color.black.opacity(0.035)
+            ? Color.white.opacity(0.032)
+            : Color.black.opacity(0.018)
     }
 
     private var dialogueCellFill: Color {
@@ -1428,8 +1468,8 @@ private struct DialogueSheetRow: View {
         }
 
         return isAlternatingRow
-            ? Color.black.opacity(0.02)
-            : Color.white.opacity(0.015)
+            ? Color.black.opacity(0.012)
+            : Color.white.opacity(0.012)
     }
 
     private var contextMenuActions: StoryboardTextContextMenuActions {
@@ -2022,8 +2062,17 @@ private struct PromptEditorContent: View {
         HStack(alignment: .firstTextBaseline) {
             Text(title)
                 .frame(width: 92, alignment: .leading)
-            TextField(prompt, text: text)
-                .textFieldStyle(.roundedBorder)
+            ZStack(alignment: .leading) {
+                TextField("", text: text)
+                    .textFieldStyle(.roundedBorder)
+
+                if text.wrappedValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    Text(prompt)
+                        .foregroundStyle(CinemaDesign.placeholderInk)
+                        .padding(.leading, 9)
+                        .allowsHitTesting(false)
+                }
+            }
         }
     }
 }

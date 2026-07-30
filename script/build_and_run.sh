@@ -8,6 +8,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DIST_DIR="$ROOT_DIR/dist"
 BUNDLE_PATH="$DIST_DIR/$APP_NAME.app"
 EXECUTABLE_PATH="$ROOT_DIR/.build/$CONFIGURATION/$APP_NAME"
+QUIET_LOG_PATH="${TMPDIR:-/tmp}/cinema-launch.log"
 
 cd "$ROOT_DIR"
 
@@ -83,9 +84,17 @@ cat > "$BUNDLE_PATH/Contents/Info.plist" <<PLIST
 </plist>
 PLIST
 
+launch_quietly() {
+  (
+    cd "$ROOT_DIR"
+    OS_ACTIVITY_MODE=disable "$BUNDLE_PATH/Contents/MacOS/$APP_NAME" \
+      >"$QUIET_LOG_PATH" 2>&1
+  ) &
+}
+
 case "${1:-}" in
   --verify)
-    /usr/bin/open -n "$BUNDLE_PATH"
+    launch_quietly
     sleep 2
     pgrep -x "$APP_NAME" >/dev/null
     echo "$APP_NAME is running."
@@ -95,6 +104,6 @@ case "${1:-}" in
     /usr/bin/log stream --style compact --predicate "process == '$APP_NAME'"
     ;;
   *)
-    /usr/bin/open -n "$BUNDLE_PATH"
+    launch_quietly
     ;;
 esac

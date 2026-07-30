@@ -93,6 +93,8 @@ struct ContentView: View {
                 allowsDeleteNavigationItems: displayMode == .storyboard,
                 addCut: addCutAtEnd,
                 addSubtitle: addSubtitleAtEnd,
+                addBlockAfterSection: addBlockAfterSection,
+                deleteBlockSection: deleteBlockSection,
                 addCutAbove: addCutAbove,
                 addCutBelow: addCutAfter,
                 deleteCut: deleteCut,
@@ -656,6 +658,25 @@ struct ContentView: View {
         jumpToCut(cut.id)
     }
 
+    private func addBlockAfterSection(_ title: String) {
+        let sections = sceneSections()
+        guard let section = sections.first(where: { $0.title == title }),
+              let lastCut = section.cuts.last,
+              let index = document.project.cuts.firstIndex(where: { $0.id == lastCut.id }) else {
+            addSubtitleAtEnd()
+            return
+        }
+
+        let cut = StoryboardCut(
+            cutNumber: index + 2,
+            subtitle: nextSubtitleName()
+        )
+        document.project.cuts.insert(cut, at: index + 1)
+        selectedVideoCutIDs.insert(cut.id)
+        document.renumberCuts()
+        jumpToCut(cut.id)
+    }
+
     private func addCutAbove(_ cutID: StoryboardCut.ID) {
         guard let index = document.project.cuts.firstIndex(where: { $0.id == cutID }) else { return }
         var cut = StoryboardCut(cutNumber: index + 1)
@@ -690,6 +711,30 @@ struct ContentView: View {
         document.project.cuts.removeAll { $0.id == cutID }
         document.project.generatedCutVideos.removeAll { $0.cutID == cutID }
         document.renumberCuts()
+    }
+
+    private func deleteBlockSection(_ title: String) {
+        let sections = sceneSections()
+        guard sections.count > 1,
+              let section = sections.first(where: { $0.title == title }) else { return }
+
+        let removedIDs = Set(section.cuts.map(\.id))
+        for cut in section.cuts {
+            if let imageFileName = cut.imageFileName {
+                document.imageData[imageFileName] = nil
+            }
+        }
+
+        document.project.cuts.removeAll { removedIDs.contains($0.id) }
+        document.project.generatedCutVideos.removeAll { removedIDs.contains($0.cutID) }
+
+        if document.project.cuts.isEmpty {
+            document.project.cuts.append(StoryboardCut(cutNumber: 1))
+        }
+
+        document.renumberCuts()
+        ensureSelectedVideoScene()
+        ensureSelectedVideoCuts(reset: true)
     }
 
     private func deletePage(_ page: Int) {
