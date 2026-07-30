@@ -1,6 +1,6 @@
 // file:///Users/Shared/Program/Xcode/Cinema/Sources/Cinema/Support/CinemaLocalization.swift
 // CinemaLocalization.swift
-// アプリ全体の多言語対応（日本語、英語、簡体字中国語）の文字列リソースを集中管理するファイルです。
+// アプリ全体の多言語対応（日本語、英語、簡体字中国語）の「文字列リソース」を集中管理するファイルです。
 
 import Foundation
 
