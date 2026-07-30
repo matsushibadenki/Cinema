@@ -1,3 +1,7 @@
+// file:///Users/Shared/Program/Xcode/Cinema/Sources/Cinema/Support/CinemaLocalization.swift
+// CinemaLocalization.swift
+// アプリ全体の多言語対応（日本語、英語、簡体字中国語）の文字列リソースを集中管理するファイルです。
+
 import Foundation
 
 enum AppLanguage: String, CaseIterable, Identifiable {
@@ -114,6 +118,10 @@ enum CinemaTextKey: String {
     case videoGenerationService
     case getGoogleAIStudio
     case getOpenAIPlatform
+    case editDialogueLine
+    case addDialogueLineAbove
+    case addDialogueLineBelow
+    case deleteDialogueLine
     case fetchingModels
     case refreshModels
     case recommendedModels
@@ -274,6 +282,10 @@ enum CinemaStrings {
         .videoGenerationService: "動画生成サービス",
         .getGoogleAIStudio: "Google AI Studioで取得",
         .getOpenAIPlatform: "OpenAI Platformで取得",
+        .editDialogueLine: "行を編集",
+        .addDialogueLineAbove: "この行の上に追加",
+        .addDialogueLineBelow: "この行の下に追加",
+        .deleteDialogueLine: "この行を削除",
         .fetchingModels: "モデル一覧を取得中...",
         .refreshModels: "モデル一覧を更新",
         .recommendedModels: "推奨モデル",
@@ -380,6 +392,10 @@ enum CinemaStrings {
         .videoGenerationService: "Video Generation Service",
         .getGoogleAIStudio: "Get from Google AI Studio",
         .getOpenAIPlatform: "Get from OpenAI Platform",
+        .editDialogueLine: "Edit Line",
+        .addDialogueLineAbove: "Add Above This Line",
+        .addDialogueLineBelow: "Add Below This Line",
+        .deleteDialogueLine: "Delete This Line",
         .fetchingModels: "Fetching models...",
         .refreshModels: "Refresh Models",
         .recommendedModels: "Recommended Models",
@@ -486,6 +502,10 @@ enum CinemaStrings {
         .videoGenerationService: "视频生成服务",
         .getGoogleAIStudio: "从 Google AI Studio 获取",
         .getOpenAIPlatform: "从 OpenAI Platform 获取",
+        .editDialogueLine: "编辑此行",
+        .addDialogueLineAbove: "在此行上方添加",
+        .addDialogueLineBelow: "在此行下方添加",
+        .deleteDialogueLine: "删除此行",
         .fetchingModels: "正在获取模型列表...",
         .refreshModels: "刷新模型列表",
         .recommendedModels: "推荐模型",

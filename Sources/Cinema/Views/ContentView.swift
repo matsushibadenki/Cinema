@@ -1,3 +1,7 @@
+// file:///Users/Shared/Program/Xcode/Cinema/Sources/Cinema/Views/ContentView.swift
+// ContentView.swift
+// 絵コンテアプリのメインビュー。ドキュメントキャンバス、ツールバー、サイドバー、各種モーダル・アラートの調整を行います。
+
 import AppKit
 import SwiftUI
 import UniformTypeIdentifiers

@@ -1,3 +1,7 @@
+// file:///Users/Shared/Program/Xcode/Cinema/Sources/Cinema/Support/TextSelectionStyle.swift
+// TextSelectionStyle.swift
+// テキスト編集コンテキストにおいて選択テキストのフォント・カラー・装飾属性を適用するユーティリティです。
+
 import AppKit
 
 struct TextSelectionStyle {

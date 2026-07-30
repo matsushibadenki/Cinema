@@ -1,3 +1,7 @@
+// file:///Users/Shared/Program/Xcode/Cinema/Sources/Cinema/Views/PrintablePageView.swift
+// PrintablePageView.swift
+// 絵コンテページの印刷用レイアウトを生成・表示するビューです。
+
 import SwiftUI
 
 struct PrintablePageView: View {

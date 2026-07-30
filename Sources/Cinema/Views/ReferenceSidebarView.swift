@@ -1,3 +1,7 @@
+// file:///Users/Shared/Program/Xcode/Cinema/Sources/Cinema/Views/ReferenceSidebarView.swift
+// ReferenceSidebarView.swift
+// 絵コンテアプリの右サイドバービュー。リファレンス画像管理およびテキスト属性プロパティパネルを表示します。
+
 import AppKit
 import SwiftUI
 

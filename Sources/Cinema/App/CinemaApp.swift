@@ -1,3 +1,7 @@
+// file:///Users/Shared/Program/Xcode/Cinema/Sources/Cinema/App/CinemaApp.swift
+// CinemaApp.swift
+// Cinemaアプリケーションのエントリーポイント。ドキュメントグループ設定やメニューコマンド、ウィンドウ構築を行います。
+
 import SwiftUI
 import UniformTypeIdentifiers
 

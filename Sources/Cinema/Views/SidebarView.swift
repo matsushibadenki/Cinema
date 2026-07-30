@@ -654,23 +654,30 @@ private struct SidebarRailButton: View {
     var isProminent = false
     var action: () -> Void
 
+    @State private var isHovered = false
+
     var body: some View {
         Button(action: action) {
             Image(systemName: systemName)
                 .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(isProminent ? CinemaDesign.inverseInk : CinemaDesign.keyColor.opacity(0.86))
+                .foregroundStyle(isProminent ? CinemaDesign.inverseInk : (isHovered ? CinemaDesign.keyColor : CinemaDesign.keyColor.opacity(0.86)))
                 .frame(width: 38, height: 38)
                 .background {
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(isProminent ? CinemaDesign.keyColor : CinemaDesign.railIconBackground)
+                        .fill(isProminent ? CinemaDesign.keyColor : (isHovered ? CinemaDesign.keyColorSoft.opacity(0.8) : CinemaDesign.railIconBackground))
                 }
                 .overlay {
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .stroke(isProminent ? CinemaDesign.keyColor.opacity(0.9) : CinemaDesign.railIconStroke, lineWidth: 0.7)
+                        .stroke(isProminent ? CinemaDesign.keyColor.opacity(0.95) : (isHovered ? CinemaDesign.warmBorder : CinemaDesign.railIconStroke), lineWidth: 0.8)
                 }
         }
         .buttonStyle(.plain)
-        .shadow(color: isProminent ? CinemaDesign.keyColor.opacity(0.22) : CinemaDesign.raisedShadow.opacity(0.28), radius: isProminent ? 10 : 4, x: 0, y: isProminent ? 5 : 2)
+        .scaleEffect(isHovered ? 1.05 : 1.0)
+        .shadow(color: isProminent ? CinemaDesign.keyColor.opacity(0.28) : CinemaDesign.raisedShadow.opacity(isHovered ? 0.4 : 0.22), radius: isProminent ? 10 : (isHovered ? 6 : 3), x: 0, y: isProminent ? 5 : 2)
+        .animation(.spring(response: 0.22, dampingFraction: 0.7), value: isHovered)
+        .onHover { hovering in
+            isHovered = hovering
+        }
         .help(help)
     }
 }

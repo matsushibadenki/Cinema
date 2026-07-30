@@ -1,3 +1,7 @@
+// file:///Users/Shared/Program/Xcode/Cinema/Sources/Cinema/Views/GeneratedVideoFilmstripView.swift
+// GeneratedVideoFilmstripView.swift
+// 生成されたシーン動画の各カットバージョンをフィルムストリップ形式で並べて再生・確認するビューです。
+
 import AppKit
 import SwiftUI
 

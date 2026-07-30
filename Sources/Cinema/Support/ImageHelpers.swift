@@ -1,3 +1,7 @@
+// file:///Users/Shared/Program/Xcode/Cinema/Sources/Cinema/Support/ImageHelpers.swift
+// ImageHelpers.swift
+// 画像のリサイズ、アスペクト比クロップ、PNG相互変換ヘルパーユーティリティです。
+
 import AppKit
 import Foundation
 

@@ -1,3 +1,7 @@
+// file:///Users/Shared/Program/Xcode/Cinema/Sources/Cinema/Views/DrawingSettingsView.swift
+// DrawingSettingsView.swift
+// 絵コンテ生成時に適用される描画プリセット（画風、プロンプト指示等）の編集・管理を行うビューです。
+
 import SwiftUI
 
 struct DrawingSettingsView: View {

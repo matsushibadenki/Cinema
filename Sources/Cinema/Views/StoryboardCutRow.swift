@@ -148,6 +148,29 @@ private final class CompactProgressIndicator: NSProgressIndicator {
     }
 }
 
+private struct StoryboardTextContextMenuActions {
+    var menuTitle: String
+    var addAboveTitle: String
+    var addBelowTitle: String
+    var deleteTitle: String
+    var canDelete: Bool
+    var addAbove: () -> Void
+    var addBelow: () -> Void
+    var delete: () -> Void
+}
+
+private protocol StoryboardTextContextMenuHandling: AnyObject {
+    func makeContextMenu(from baseMenu: NSMenu?) -> NSMenu?
+}
+
+private final class ContextMenuTextView: NSTextView {
+    weak var contextMenuHandler: StoryboardTextContextMenuHandling?
+
+    override func menu(for event: NSEvent) -> NSMenu? {
+        contextMenuHandler?.makeContextMenu(from: super.menu(for: event)) ?? super.menu(for: event)
+    }
+}
+
 private struct StoryboardTextView: NSViewRepresentable {
     @Binding var text: String
 
@@ -158,6 +181,7 @@ private struct StoryboardTextView: NSViewRepresentable {
 
     var alignment: NSTextAlignment = .left
     var textColor: NSColor = .labelColor
+    var contextMenuActions: StoryboardTextContextMenuActions?
 
     func makeNSView(context: Context) -> NSScrollView {
         let scrollView = NSScrollView()
@@ -167,7 +191,7 @@ private struct StoryboardTextView: NSViewRepresentable {
         scrollView.hasHorizontalScroller = false
         scrollView.autohidesScrollers = true
 
-        let textView = NSTextView()
+        let textView = ContextMenuTextView()
         textView.drawsBackground = false
         textView.isRichText = true
         textView.isEditable = true
@@ -185,6 +209,7 @@ private struct StoryboardTextView: NSViewRepresentable {
 
         scrollView.documentView = textView
         context.coordinator.textView = textView
+        textView.contextMenuHandler = context.coordinator
         applyStyle(to: textView)
         textView.string = text
         return scrollView
@@ -195,11 +220,13 @@ private struct StoryboardTextView: NSViewRepresentable {
         if textView.string != text {
             textView.string = text
         }
+        context.coordinator.contextMenuActions = contextMenuActions
+        textView.contextMenuHandler = context.coordinator
         applyStyle(to: textView)
     }
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(text: $text)
+        Coordinator(text: $text, contextMenuActions: contextMenuActions)
     }
 
     private func applyStyle(to textView: NSTextView) {
@@ -219,12 +246,14 @@ private struct StoryboardTextView: NSViewRepresentable {
         textView.textContainer?.lineFragmentPadding = 0
     }
 
-    final class Coordinator: NSObject, NSTextViewDelegate {
+    final class Coordinator: NSObject, NSTextViewDelegate, StoryboardTextContextMenuHandling {
         @Binding var text: String
-        weak var textView: NSTextView?
+        weak var textView: ContextMenuTextView?
+        var contextMenuActions: StoryboardTextContextMenuActions?
 
-        init(text: Binding<String>) {
+        init(text: Binding<String>, contextMenuActions: StoryboardTextContextMenuActions?) {
             _text = text
+            self.contextMenuActions = contextMenuActions
         }
 
         func textDidChange(_ notification: Notification) {
@@ -241,6 +270,49 @@ private struct StoryboardTextView: NSViewRepresentable {
         func textDidBeginEditing(_ notification: Notification) {
             guard let textView = notification.object as? NSTextView else { return }
             TextSelectionStyleApplicator.activeTextView = textView
+        }
+
+        func makeContextMenu(from baseMenu: NSMenu?) -> NSMenu? {
+            guard let contextMenuActions else { return baseMenu }
+
+            let menu = baseMenu?.copy() as? NSMenu ?? NSMenu()
+            if menu.items.isEmpty == false {
+                menu.addItem(.separator())
+            }
+
+            let submenu = NSMenu(title: contextMenuActions.menuTitle)
+            let addAboveItem = NSMenuItem(title: contextMenuActions.addAboveTitle, action: #selector(handleAddAbove), keyEquivalent: "")
+            addAboveItem.target = self
+            submenu.addItem(addAboveItem)
+
+            let addBelowItem = NSMenuItem(title: contextMenuActions.addBelowTitle, action: #selector(handleAddBelow), keyEquivalent: "")
+            addBelowItem.target = self
+            submenu.addItem(addBelowItem)
+
+            let deleteItem = NSMenuItem(title: contextMenuActions.deleteTitle, action: #selector(handleDelete), keyEquivalent: "")
+            deleteItem.target = self
+            deleteItem.isEnabled = contextMenuActions.canDelete
+            submenu.addItem(deleteItem)
+
+            let rootItem = NSMenuItem(title: contextMenuActions.menuTitle, action: nil, keyEquivalent: "")
+            menu.setSubmenu(submenu, for: rootItem)
+            menu.addItem(rootItem)
+            return menu
+        }
+
+        @objc
+        private func handleAddAbove() {
+            contextMenuActions?.addAbove()
+        }
+
+        @objc
+        private func handleAddBelow() {
+            contextMenuActions?.addBelow()
+        }
+
+        @objc
+        private func handleDelete() {
+            contextMenuActions?.delete()
         }
     }
 }
@@ -429,6 +501,7 @@ struct StoryboardCutRow: View {
     var actionColumnWidth: CGFloat
     var textBaseFontSize: CGFloat
     var isGenerating: Bool
+    var appLanguage: String = AppLanguage.japanese.rawValue
     var generate: () -> Void
     var importImage: () -> Void
     var deleteImageData: (String) -> Void
@@ -628,6 +701,7 @@ struct StoryboardCutRow: View {
         DialogueSheetEditor(
             lines: $cut.dialogueLines,
             speakerRatio: $cut.dialogueSpeakerRatio,
+            appLanguage: appLanguage,
             baseFontSize: textBaseFontSize,
             showsLineControls: showsCutActionControls,
             isPrinting: isPrintingStoryboard,
@@ -864,6 +938,7 @@ private struct FocusedStoryboardCutView: View {
                 DialogueSheetEditor(
                     lines: $cut.dialogueLines,
                     speakerRatio: $cut.dialogueSpeakerRatio,
+                    appLanguage: appLanguage,
                     baseFontSize: max(textBaseFontSize + 4, 15),
                     showsLineControls: true,
                     isPrinting: false,
@@ -1150,6 +1225,7 @@ private struct DialogueSheetEditor: View {
     @Binding var lines: [DialogueLine]
     @Binding var speakerRatio: Double
 
+    var appLanguage = AppLanguage.japanese.rawValue
     var baseFontSize: CGFloat
     var showsLineControls: Bool
     var isPrinting: Bool
@@ -1161,13 +1237,8 @@ private struct DialogueSheetEditor: View {
 
     private let minimumRowHeight: CGFloat = 18
     private let splitHandleWidth: CGFloat = 3
-    private let buttonWidth: CGFloat = 18
     private let minimumSpeakerWidth: CGFloat = 24
     private let minimumDialogueWidth: CGFloat = 26
-
-    private var controlGutterWidth: CGFloat {
-        max(buttonWidth + (horizontalInset * 2), buttonWidth + 8)
-    }
 
     private var fontSize: CGFloat {
         isPrinting ? max(baseFontSize - 1, 8) : max(baseFontSize - 1, 13)
@@ -1179,10 +1250,8 @@ private struct DialogueSheetEditor: View {
                 let minimumEditorWidth = minimumSpeakerWidth + splitHandleWidth + minimumDialogueWidth
 
                 if proxy.size.width >= minimumEditorWidth {
-                    let controlLaneWidth = showsLineControls ? controlGutterWidth : 0
-                    let editableWidth = max(proxy.size.width - controlLaneWidth, minimumEditorWidth)
-                    let speakerWidth = speakerWidth(totalWidth: editableWidth)
-                    let dialogueWidth = max(editableWidth - speakerWidth - splitHandleWidth, minimumDialogueWidth)
+                    let speakerWidth = speakerWidth(totalWidth: proxy.size.width)
+                    let dialogueWidth = max(proxy.size.width - speakerWidth - splitHandleWidth, minimumDialogueWidth)
                     let rowFontSize = isPrinting
                         ? StoryboardTextFitter.dialogueFontSize(
                             for: lines,
@@ -1208,6 +1277,7 @@ private struct DialogueSheetEditor: View {
                                     fontSize: rowFontSize
                                 )
                                 DialogueSheetRow(
+                                    rowIndex: index,
                                     line: $line,
                                     speakerRatio: $speakerRatio,
                                     fontSize: rowFontSize,
@@ -1216,18 +1286,16 @@ private struct DialogueSheetEditor: View {
                                     speakerWidth: speakerWidth,
                                     dialogueWidth: dialogueWidth,
                                     splitHandleWidth: splitHandleWidth,
-                                    buttonWidth: buttonWidth,
-                                    controlGutterWidth: controlLaneWidth,
                                     horizontalInset: horizontalInset,
                                     verticalInset: verticalInset,
                                     lineSpacing: lineSpacing,
+                                    appLanguage: appLanguage,
                                     usesClassicStoryboardChrome: usesClassicStoryboardChrome,
                                     textColor: textColor,
-                                    showsLineControls: showsLineControls,
                                     isPrinting: isPrinting,
                                     canDelete: lines.count > 1,
-                                    showsAddButton: index == lines.count - 1,
-                                    add: addLine,
+                                    addAbove: { insertLine(at: index) },
+                                    addBelow: { insertLine(at: index + 1) },
                                     delete: { deleteLine(id: line.id) }
                                 )
                             }
@@ -1251,8 +1319,9 @@ private struct DialogueSheetEditor: View {
         }
     }
 
-    private func addLine() {
-        lines.append(DialogueLine())
+    private func insertLine(at index: Int) {
+        let clampedIndex = min(max(index, 0), lines.count)
+        lines.insert(DialogueLine(), at: clampedIndex)
     }
 
     private func deleteLine(id: DialogueLine.ID) {
@@ -1294,6 +1363,7 @@ private struct DialogueSheetEditor: View {
 }
 
 private struct DialogueSheetRow: View {
+    var rowIndex: Int
     @Binding var line: DialogueLine
     @Binding var speakerRatio: Double
     @State private var speakerDragStartRatio: Double?
@@ -1304,26 +1374,79 @@ private struct DialogueSheetRow: View {
     var speakerWidth: CGFloat
     var dialogueWidth: CGFloat
     var splitHandleWidth: CGFloat
-    var buttonWidth: CGFloat
-    var controlGutterWidth: CGFloat
     var horizontalInset: CGFloat
     var verticalInset: CGFloat
     var lineSpacing: CGFloat
+    var appLanguage: String
     var usesClassicStoryboardChrome: Bool
     var textColor: NSColor
-    var showsLineControls: Bool
     var isPrinting: Bool
     var canDelete: Bool
-    var showsAddButton: Bool
-    var add: () -> Void
+    var addAbove: () -> Void
+    var addBelow: () -> Void
     var delete: () -> Void
+
+    private var isAlternatingRow: Bool {
+        rowIndex.isMultiple(of: 2) == false
+    }
+
+    private var rowBackgroundFill: Color {
+        if usesClassicStoryboardChrome {
+            return isAlternatingRow
+                ? CinemaDesign.storyboardPaperAccent.opacity(0.52)
+                : CinemaDesign.storyboardPaper
+        }
+
+        return isAlternatingRow
+            ? CinemaDesign.insetSurface.opacity(0.98)
+            : CinemaDesign.mainBlockSurface.opacity(0.94)
+    }
+
+    private var rowBorderColor: Color {
+        usesClassicStoryboardChrome
+            ? Color.black.opacity(isAlternatingRow ? 0.26 : 0.18)
+            : CinemaDesign.strongBorder.opacity(isAlternatingRow ? 0.92 : 0.78)
+    }
+
+    private var speakerCellFill: Color {
+        if usesClassicStoryboardChrome {
+            return isAlternatingRow
+                ? Color.white.opacity(0.22)
+                : Color.white.opacity(0.10)
+        }
+
+        return isAlternatingRow
+            ? Color.white.opacity(0.035)
+            : Color.black.opacity(0.035)
+    }
+
+    private var dialogueCellFill: Color {
+        if usesClassicStoryboardChrome {
+            return isAlternatingRow
+                ? Color.white.opacity(0.12)
+                : Color.white.opacity(0.03)
+        }
+
+        return isAlternatingRow
+            ? Color.black.opacity(0.02)
+            : Color.white.opacity(0.015)
+    }
+
+    private var contextMenuActions: StoryboardTextContextMenuActions {
+        StoryboardTextContextMenuActions(
+            menuTitle: t(.editDialogueLine),
+            addAboveTitle: t(.addDialogueLineAbove),
+            addBelowTitle: t(.addDialogueLineBelow),
+            deleteTitle: t(.deleteDialogueLine),
+            canDelete: canDelete,
+            addAbove: addAbove,
+            addBelow: addBelow,
+            delete: delete
+        )
+    }
 
     var body: some View {
         HStack(alignment: .top, spacing: 0) {
-            if showsLineControls {
-                controlGutter
-            }
-
             speakerCell
 
             DialogueColumnSplitHandle()
@@ -1337,54 +1460,31 @@ private struct DialogueSheetRow: View {
         .background {
             if usesClassicStoryboardChrome {
                 Rectangle()
-                    .fill(CinemaDesign.storyboardPaper)
+                    .fill(rowBackgroundFill)
             } else {
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(CinemaDesign.insetSurface.opacity(0.94))
+                    .fill(rowBackgroundFill)
             }
         }
         .overlay {
             if usesClassicStoryboardChrome {
                 Rectangle()
-                    .stroke(Color.black.opacity(0.18), lineWidth: 0.8)
+                    .stroke(rowBorderColor, lineWidth: 0.85)
             } else {
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .stroke(CinemaDesign.strongBorder.opacity(0.75), lineWidth: 0.7)
+                    .stroke(rowBorderColor, lineWidth: 0.8)
             }
         }
         .overlay(alignment: .bottom) {
             DialogueSheetRowDivider(usesClassicStoryboardChrome: usesClassicStoryboardChrome)
         }
-    }
-
-    @ViewBuilder
-    private var controlGutter: some View {
-        VStack {
-            Button(action: showsAddButton ? add : delete) {
-                Image(systemName: showsAddButton ? "plus" : "minus")
-                    .foregroundStyle(showsAddButton || canDelete ? CinemaDesign.storyboardToolIcon : CinemaDesign.storyboardToolIcon.opacity(0.45))
-            }
-            .buttonStyle(.borderless)
-            .controlSize(.mini)
-            .font(.system(size: 9, weight: .semibold))
-            .frame(width: buttonWidth, height: buttonWidth)
-            .background {
-                RoundedRectangle(cornerRadius: usesClassicStoryboardChrome ? 8 : 6, style: .continuous)
-                    .fill(usesClassicStoryboardChrome ? CinemaDesign.storyboardPaperAccent : (showsAddButton ? CinemaDesign.keyColor : CinemaDesign.insetSurface))
-            }
-            .overlay {
-                RoundedRectangle(cornerRadius: usesClassicStoryboardChrome ? 8 : 6, style: .continuous)
-                    .stroke(usesClassicStoryboardChrome ? Color.black.opacity(0.18) : (showsAddButton ? CinemaDesign.keyColor.opacity(0.95) : CinemaDesign.strongBorder.opacity(0.9)), lineWidth: 0.7)
-            }
-            .opacity(showsAddButton || canDelete ? 1.0 : 0.45)
-            .pointingHandCursor(isEnabled: showsAddButton || canDelete)
-            .disabled(!showsAddButton && !canDelete)
-            .help(showsAddButton ? "会話行を追加" : "会話行を削除")
-
-            Spacer(minLength: 0)
+        .contextMenu {
+            Button(t(.addDialogueLineAbove), action: addAbove)
+            Button(t(.addDialogueLineBelow), action: addBelow)
+            Divider()
+            Button(t(.deleteDialogueLine), role: .destructive, action: delete)
+                .disabled(!canDelete)
         }
-        .frame(width: controlGutterWidth, height: rowHeight, alignment: .top)
-        .padding(.top, verticalInset)
     }
 
     @ViewBuilder
@@ -1399,6 +1499,12 @@ private struct DialogueSheetRow: View {
                 .padding(.vertical, verticalInset)
                 .frame(width: speakerWidth, alignment: .topLeading)
                 .frame(height: rowHeight, alignment: .topLeading)
+                .background(speakerCellFill)
+                .overlay(alignment: .trailing) {
+                    Rectangle()
+                        .fill(rowBorderColor.opacity(0.82))
+                        .frame(width: 0.8)
+                }
         } else {
             StoryboardTextView(
                 text: $line.speaker,
@@ -1406,10 +1512,17 @@ private struct DialogueSheetRow: View {
                 horizontalInset: horizontalInset,
                 verticalInset: verticalInset,
                 lineSpacing: lineSpacing,
-                textColor: textColor
+                textColor: textColor,
+                contextMenuActions: contextMenuActions
             )
-                .frame(width: speakerWidth, alignment: .topLeading)
-                .frame(height: rowHeight, alignment: .topLeading)
+            .frame(width: speakerWidth, alignment: .topLeading)
+            .frame(height: rowHeight, alignment: .topLeading)
+            .background(speakerCellFill)
+            .overlay(alignment: .trailing) {
+                Rectangle()
+                    .fill(rowBorderColor.opacity(0.8))
+                    .frame(width: 0.8)
+            }
         }
     }
 
@@ -1425,8 +1538,16 @@ private struct DialogueSheetRow: View {
                 alignment: .justified,
                 textColor: textColor
             )
-                .frame(width: dialogueWidth, alignment: .topLeading)
-                .frame(height: rowHeight, alignment: .topLeading)
+            .frame(width: dialogueWidth, alignment: .topLeading)
+            .frame(height: rowHeight, alignment: .topLeading)
+            .background(dialogueCellFill)
+            .overlay(alignment: .top) {
+                if usesClassicStoryboardChrome {
+                    Rectangle()
+                        .fill(Color.black.opacity(0.05))
+                        .frame(height: 0.6)
+                }
+            }
         } else {
             StoryboardTextView(
                 text: $line.dialogue,
@@ -1435,10 +1556,19 @@ private struct DialogueSheetRow: View {
                 verticalInset: verticalInset,
                 lineSpacing: lineSpacing,
                 alignment: .justified,
-                textColor: textColor
+                textColor: textColor,
+                contextMenuActions: contextMenuActions
             )
-                .frame(width: dialogueWidth, alignment: .topLeading)
-                .frame(height: rowHeight, alignment: .topLeading)
+            .frame(width: dialogueWidth, alignment: .topLeading)
+            .frame(height: rowHeight, alignment: .topLeading)
+            .background(dialogueCellFill)
+            .overlay(alignment: .top) {
+                if usesClassicStoryboardChrome {
+                    Rectangle()
+                        .fill(Color.black.opacity(0.05))
+                        .frame(height: 0.6)
+                }
+            }
         }
     }
 
@@ -1461,6 +1591,10 @@ private struct DialogueSheetRow: View {
 
     private func clampedSpeakerRatio(_ ratio: Double) -> Double {
         min(max(ratio, 0.16), 0.55)
+    }
+
+    private func t(_ key: CinemaTextKey) -> String {
+        CinemaStrings.text(key, language: appLanguage)
     }
 }
 

@@ -1,3 +1,7 @@
+// file:///Users/Shared/Program/Xcode/Cinema/Sources/Cinema/Views/StoryboardPageView.swift
+// StoryboardPageView.swift
+// 絵コンテページのグリッドレイアウトおよび印刷用ベース表示を定義するビューです。
+
 import AppKit
 import SwiftUI
 
@@ -250,6 +254,7 @@ struct StoryboardPageView: View {
                         actionColumnWidth: actionColumnWidth,
                         textBaseFontSize: textBaseFontSize,
                         isGenerating: generatingCutID == cut.wrappedValue.id,
+                        appLanguage: appLanguage,
                         generate: { generate(cut.wrappedValue.id) },
                         importImage: { importImage(cut.wrappedValue.id) },
                         deleteImageData: { fileName in document.imageData[fileName] = nil },

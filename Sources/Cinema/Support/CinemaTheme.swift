@@ -1,3 +1,7 @@
+// file:///Users/Shared/Program/Xcode/Cinema/Sources/Cinema/Support/CinemaTheme.swift
+// CinemaTheme.swift
+// アプリケーションの外観モード（システム、ライト、ダーク）を定義・管理する定義ファイルです。
+
 import SwiftUI
 
 enum AppThemeMode: String, CaseIterable, Identifiable {
