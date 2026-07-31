@@ -3,6 +3,9 @@ import Foundation
 enum AIImageGenerationProvider: String, CaseIterable, Identifiable {
     case gemini
     case openAI = "openai"
+    case deepInfra = "deepinfra"
+    case novita
+    case hyperbolic
 
     var id: String { rawValue }
 
@@ -12,6 +15,12 @@ enum AIImageGenerationProvider: String, CaseIterable, Identifiable {
             return "Gemini"
         case .openAI:
             return "OpenAI"
+        case .deepInfra:
+            return "DeepInfra"
+        case .novita:
+            return "Novita"
+        case .hyperbolic:
+            return "Hyperbolic"
         }
     }
 
@@ -23,6 +32,8 @@ enum AIImageGenerationProvider: String, CaseIterable, Identifiable {
 enum AIVideoGenerationProvider: String, CaseIterable, Identifiable {
     case gemini
     case openAI = "openai"
+    case deepInfra = "deepinfra"
+    case novita
 
     var id: String { rawValue }
 
@@ -32,6 +43,10 @@ enum AIVideoGenerationProvider: String, CaseIterable, Identifiable {
             return "Gemini / Veo"
         case .openAI:
             return "OpenAI / Sora"
+        case .deepInfra:
+            return "DeepInfra"
+        case .novita:
+            return "Novita"
         }
     }
 

@@ -44,6 +44,14 @@ struct ContentView: View {
     @AppStorage("openAIAPIKey") private var openAIAPIKey = ""
     @AppStorage("openAIModelName") private var openAIModelName = "gpt-image-2"
     @AppStorage("openAIVideoModelName") private var openAIVideoModelName = "sora-2"
+    @AppStorage("deepInfraAPIKey") private var deepInfraAPIKey = ""
+    @AppStorage("deepInfraModelName") private var deepInfraModelName = "black-forest-labs/FLUX-1-schnell"
+    @AppStorage("deepInfraVideoModelName") private var deepInfraVideoModelName = "Wan-AI/Wan2.1-T2V-14B"
+    @AppStorage("novitaAPIKey") private var novitaAPIKey = ""
+    @AppStorage("novitaModelName") private var novitaModelName = "sd_xl_base_1.0.safetensors"
+    @AppStorage("novitaVideoModelName") private var novitaVideoModelName = "darkSushiMixMix_225D_64380.safetensors"
+    @AppStorage("hyperbolicAPIKey") private var hyperbolicAPIKey = ""
+    @AppStorage("hyperbolicModelName") private var hyperbolicModelName = "SDXL1.0-base"
     @AppStorage("screenAspectRatio") private var screenAspectRatioRawValue = ScreenAspectRatio.television169.rawValue
     @AppStorage("showsGeneratePlaceholder") private var showsGeneratePlaceholder = true
     @AppStorage("showsCutActionControls") private var showsCutActionControls = true
@@ -926,6 +934,16 @@ struct ContentView: View {
                                 aspectRatio: videoAspectRatio
                             )
                         )
+                    case .deepInfra:
+                        let service = DeepInfraVideoService(apiKey: deepInfraAPIKey, model: deepInfraVideoModelName)
+                        clip = try await service.generateSceneVideo(prompt: cutPrompt)
+                    case .novita:
+                        let service = NovitaVideoService(apiKey: novitaAPIKey, model: novitaVideoModelName)
+                        clip = try await service.generateSceneVideo(
+                            prompt: cutPrompt,
+                            durationSeconds: durationSeconds,
+                            aspectRatio: videoAspectRatio
+                        )
                     }
 
                     clips.append(clip)
@@ -959,7 +977,7 @@ struct ContentView: View {
                         prompt: prompt,
                         kind: .video(
                             provider: provider.rawValue,
-                            model: provider == .openAI ? openAIVideoModelName : geminiVideoModelName,
+                            model: currentVideoModelName(for: provider),
                             seconds: totalDurationSeconds
                         )
                     )
@@ -1377,6 +1395,32 @@ struct ContentView: View {
                         aspectRatio: aspectRatio,
                         referenceImages: referenceImagesForGeneration(for: cut)
                     )
+                case .deepInfra:
+                    let service = OpenAICompatibleImageService(
+                        providerName: "DeepInfra",
+                        apiKey: deepInfraAPIKey,
+                        model: deepInfraModelName,
+                        baseURL: "https://api.deepinfra.com/v1/openai"
+                    )
+                    data = try await service.generateStoryboardImage(
+                        drawingPrompt: drawingPromptForGeneration(references: referencesForCut(cut)),
+                        cutPrompt: prompt,
+                        aspectRatio: aspectRatio
+                    )
+                case .novita:
+                    let service = NovitaImageService(apiKey: novitaAPIKey, model: novitaModelName)
+                    data = try await service.generateStoryboardImage(
+                        drawingPrompt: drawingPromptForGeneration(references: referencesForCut(cut)),
+                        cutPrompt: prompt,
+                        aspectRatio: aspectRatio
+                    )
+                case .hyperbolic:
+                    let service = HyperbolicImageService(apiKey: hyperbolicAPIKey, model: hyperbolicModelName)
+                    data = try await service.generateStoryboardImage(
+                        drawingPrompt: drawingPromptForGeneration(references: referencesForCut(cut)),
+                        cutPrompt: prompt,
+                        aspectRatio: aspectRatio
+                    )
                 }
                 let fittedData = ImageHelpers.pngDataByCropping(data, toAspectRatio: aspectRatio)
                 await MainActor.run {
@@ -1392,9 +1436,7 @@ struct ContentView: View {
                         ].joined(separator: "\n"),
                         kind: .image(
                             provider: imageGenerationProvider,
-                            model: AIImageGenerationProvider.value(for: imageGenerationProvider) == .openAI
-                                ? openAIModelName
-                                : geminiModelName,
+                            model: currentImageModelName(),
                             referenceCount: referencesForCut(cut).count
                         )
                     )
@@ -1609,6 +1651,34 @@ struct ContentView: View {
 
         guard !details.isEmpty else { return "" }
         return "Reference image details:\n\(details)"
+    }
+
+    private func currentImageModelName() -> String {
+        switch AIImageGenerationProvider.value(for: imageGenerationProvider) {
+        case .gemini:
+            return geminiModelName
+        case .openAI:
+            return openAIModelName
+        case .deepInfra:
+            return deepInfraModelName
+        case .novita:
+            return novitaModelName
+        case .hyperbolic:
+            return hyperbolicModelName
+        }
+    }
+
+    private func currentVideoModelName(for provider: AIVideoGenerationProvider) -> String {
+        switch provider {
+        case .gemini:
+            return geminiVideoModelName
+        case .openAI:
+            return openAIVideoModelName
+        case .deepInfra:
+            return deepInfraVideoModelName
+        case .novita:
+            return novitaVideoModelName
+        }
     }
 
     private func mimeType(for fileName: String) -> String {

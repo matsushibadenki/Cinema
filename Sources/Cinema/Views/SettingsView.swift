@@ -19,6 +19,14 @@ struct SettingsView: View {
     @AppStorage("openAIAPIKey") private var openAIAPIKey = ""
     @AppStorage("openAIModelName") private var openAIModelName = "gpt-image-2"
     @AppStorage("openAIVideoModelName") private var openAIVideoModelName = "sora-2"
+    @AppStorage("deepInfraAPIKey") private var deepInfraAPIKey = ""
+    @AppStorage("deepInfraModelName") private var deepInfraModelName = "black-forest-labs/FLUX-1-schnell"
+    @AppStorage("deepInfraVideoModelName") private var deepInfraVideoModelName = "Wan-AI/Wan2.1-T2V-14B"
+    @AppStorage("novitaAPIKey") private var novitaAPIKey = ""
+    @AppStorage("novitaModelName") private var novitaModelName = "sd_xl_base_1.0.safetensors"
+    @AppStorage("novitaVideoModelName") private var novitaVideoModelName = "darkSushiMixMix_225D_64380.safetensors"
+    @AppStorage("hyperbolicAPIKey") private var hyperbolicAPIKey = ""
+    @AppStorage("hyperbolicModelName") private var hyperbolicModelName = "SDXL1.0-base"
     @AppStorage("screenAspectRatio") private var screenAspectRatioRawValue = ScreenAspectRatio.television169.rawValue
     @AppStorage("showsGeneratePlaceholder") private var showsGeneratePlaceholder = true
     @AppStorage("screenBackgroundBrightness") private var screenBackgroundBrightness = 0.0
@@ -40,18 +48,32 @@ struct SettingsView: View {
     private let geminiVideoPresets = ["veo-3.1-generate-preview"]
     private let openAIImagePresets = ["gpt-image-2", "gpt-image-1.5", "gpt-image-1-mini"]
     private let openAIVideoPresets = ["sora-2", "sora-2-pro"]
+    private let deepInfraImagePresets = ["black-forest-labs/FLUX-1-schnell", "black-forest-labs/FLUX-1-dev"]
+    private let deepInfraVideoPresets = ["Wan-AI/Wan2.1-T2V-14B"]
+    private let novitaImagePresets = ["sd_xl_base_1.0.safetensors"]
+    private let novitaVideoPresets = ["darkSushiMixMix_225D_64380.safetensors"]
+    private let hyperbolicImagePresets = ["SDXL1.0-base", "FLUX.1-dev"]
 
     @State private var geminiImageSelection: String = "custom"
     @State private var geminiVideoSelection: String = "custom"
     @State private var openAIImageSelection: String = "custom"
     @State private var openAIVideoSelection: String = "custom"
+    @State private var deepInfraImageSelection: String = "custom"
+    @State private var deepInfraVideoSelection: String = "custom"
+    @State private var novitaImageSelection: String = "custom"
+    @State private var novitaVideoSelection: String = "custom"
+    @State private var hyperbolicImageSelection: String = "custom"
 
     @State private var geminiFetchedModels: [String] = []
     @State private var openAIFetchedModels: [String] = []
+    @State private var deepInfraFetchedImageModels: [String] = []
+    @State private var deepInfraFetchedVideoModels: [String] = []
     @State private var isFetchingGemini = false
     @State private var isFetchingOpenAI = false
+    @State private var isFetchingDeepInfra = false
     @State private var geminiFetchError: String? = nil
     @State private var openAIFetchError: String? = nil
+    @State private var deepInfraFetchError: String? = nil
 
     private func initializeSelections() {
         if geminiImagePresets.contains(geminiModelName) {
@@ -85,35 +107,47 @@ struct SettingsView: View {
         } else {
             openAIVideoSelection = "custom"
         }
+
+        if deepInfraImagePresets.contains(deepInfraModelName) {
+            deepInfraImageSelection = deepInfraModelName
+        } else if deepInfraFetchedImageModels.contains(deepInfraModelName) {
+            deepInfraImageSelection = deepInfraModelName
+        } else {
+            deepInfraImageSelection = "custom"
+        }
+
+        if deepInfraVideoPresets.contains(deepInfraVideoModelName) {
+            deepInfraVideoSelection = deepInfraVideoModelName
+        } else if deepInfraFetchedVideoModels.contains(deepInfraVideoModelName) {
+            deepInfraVideoSelection = deepInfraVideoModelName
+        } else {
+            deepInfraVideoSelection = "custom"
+        }
+
+        novitaImageSelection = novitaImagePresets.contains(novitaModelName) ? novitaModelName : "custom"
+        novitaVideoSelection = novitaVideoPresets.contains(novitaVideoModelName) ? novitaVideoModelName : "custom"
+        hyperbolicImageSelection = hyperbolicImagePresets.contains(hyperbolicModelName) ? hyperbolicModelName : "custom"
     }
 
     var body: some View {
-        NavigationSplitView {
-            List(selection: $selection) {
-                Label(t(.aiGeneration), systemImage: "sparkles")
-                    .tag(SettingsTab.ai)
-                Label(t(.displaySettings), systemImage: "rectangle.inset.filled")
-                    .tag(SettingsTab.display)
-            }
-            .listStyle(.sidebar)
-            .navigationSplitViewColumnWidth(200)
-        } detail: {
-            switch selection {
-            case .ai:
-                aiSettings
-            case .display:
-                displaySettings
-            }
-        }
-        .frame(minWidth: 700, maxWidth: 700, minHeight: 360, maxHeight: .infinity)
-        .background(SettingsWindowConfigurator())
-        .onAppear {
-            initializeSelections()
-            Task {
-                await fetchGeminiModels()
-                await fetchOpenAIModels()
-            }
-        }
+        settingsWindow
+    }
+
+    private var settingsWindow: some View {
+        settingsWindowFetchObservers
+    }
+
+    private var settingsWindowBase: AnyView {
+        AnyView(
+            settingsSplitView
+                .frame(minWidth: 820, maxWidth: 820, minHeight: 420, maxHeight: .infinity)
+                .background(SettingsWindowConfigurator())
+        )
+    }
+
+    private var settingsWindowSelectionObservers: some View {
+        settingsWindowBase
+        .onAppear(perform: handleAppear)
         .onChange(of: geminiImageSelection) { _, newValue in
             if newValue != "custom" {
                 geminiModelName = newValue
@@ -134,6 +168,35 @@ struct SettingsView: View {
                 openAIVideoModelName = newValue
             }
         }
+        .onChange(of: deepInfraImageSelection) { _, newValue in
+            if newValue != "custom" {
+                deepInfraModelName = newValue
+            }
+        }
+        .onChange(of: deepInfraVideoSelection) { _, newValue in
+            if newValue != "custom" {
+                deepInfraVideoModelName = newValue
+            }
+        }
+        .onChange(of: novitaImageSelection) { _, newValue in
+            if newValue != "custom" {
+                novitaModelName = newValue
+            }
+        }
+        .onChange(of: novitaVideoSelection) { _, newValue in
+            if newValue != "custom" {
+                novitaVideoModelName = newValue
+            }
+        }
+        .onChange(of: hyperbolicImageSelection) { _, newValue in
+            if newValue != "custom" {
+                hyperbolicModelName = newValue
+            }
+        }
+    }
+
+    private var settingsWindowModelObservers: some View {
+        settingsWindowSelectionObservers
         .onChange(of: geminiModelName) { _, newValue in
             if geminiImagePresets.contains(newValue) || geminiFetchedModels.contains(newValue) {
                 geminiImageSelection = newValue
@@ -162,6 +225,33 @@ struct SettingsView: View {
                 openAIVideoSelection = "custom"
             }
         }
+        .onChange(of: deepInfraModelName) { _, newValue in
+            if deepInfraImagePresets.contains(newValue) || deepInfraFetchedImageModels.contains(newValue) {
+                deepInfraImageSelection = newValue
+            } else {
+                deepInfraImageSelection = "custom"
+            }
+        }
+        .onChange(of: deepInfraVideoModelName) { _, newValue in
+            if deepInfraVideoPresets.contains(newValue) || deepInfraFetchedVideoModels.contains(newValue) {
+                deepInfraVideoSelection = newValue
+            } else {
+                deepInfraVideoSelection = "custom"
+            }
+        }
+        .onChange(of: novitaModelName) { _, newValue in
+            novitaImageSelection = novitaImagePresets.contains(newValue) ? newValue : "custom"
+        }
+        .onChange(of: novitaVideoModelName) { _, newValue in
+            novitaVideoSelection = novitaVideoPresets.contains(newValue) ? newValue : "custom"
+        }
+        .onChange(of: hyperbolicModelName) { _, newValue in
+            hyperbolicImageSelection = hyperbolicImagePresets.contains(newValue) ? newValue : "custom"
+        }
+    }
+
+    private var settingsWindowFetchObservers: some View {
+        settingsWindowModelObservers
         .onChange(of: geminiAPIKey) { _, _ in
             Task {
                 await fetchGeminiModels()
@@ -172,26 +262,55 @@ struct SettingsView: View {
                 await fetchOpenAIModels()
             }
         }
+        .onChange(of: deepInfraAPIKey) { _, _ in
+            Task {
+                await fetchDeepInfraModels()
+            }
+        }
+    }
+
+    private var settingsSplitView: some View {
+        NavigationSplitView {
+            List(selection: $selection) {
+                Label(t(.aiGeneration), systemImage: "sparkles")
+                    .tag(SettingsTab.ai)
+                Label(t(.displaySettings), systemImage: "rectangle.inset.filled")
+                    .tag(SettingsTab.display)
+            }
+            .listStyle(.sidebar)
+            .navigationSplitViewColumnWidth(200)
+        } detail: {
+            switch selection {
+            case .ai:
+                aiSettings
+            case .display:
+                displaySettings
+            }
+        }
     }
 
     private var aiSettings: some View {
         SettingsDetailScrollView {
-            SettingsSection(t(.imageGenerationService)) {
-                Picker("Provider", selection: $imageGenerationProvider) {
-                    ForEach(AIImageGenerationProvider.allCases) { provider in
-                        Text(provider.label).tag(provider.rawValue)
+            SettingsSection(t(.imageGenerationService), icon: "photo.on.rectangle.angled") {
+                SettingsFieldRow("Provider") {
+                    Picker("", selection: $imageGenerationProvider) {
+                        ForEach(AIImageGenerationProvider.allCases) { provider in
+                            Text(provider.label).tag(provider.rawValue)
+                        }
                     }
+                    .pickerStyle(.menu)
                 }
-                .pickerStyle(.segmented)
             }
 
-            SettingsSection(t(.videoGenerationService)) {
-                Picker("Provider", selection: $videoGenerationProvider) {
-                    ForEach(AIVideoGenerationProvider.allCases) { provider in
-                        Text(provider.label).tag(provider.rawValue)
+            SettingsSection(t(.videoGenerationService), icon: "film.stack") {
+                SettingsFieldRow("Provider") {
+                    Picker("", selection: $videoGenerationProvider) {
+                        ForEach(AIVideoGenerationProvider.allCases) { provider in
+                            Text(provider.label).tag(provider.rawValue)
+                        }
                     }
+                    .pickerStyle(.menu)
                 }
-                .pickerStyle(.segmented)
             }
 
             SettingsSection("Gemini") {
@@ -414,6 +533,128 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
             }
 
+            SettingsSection("DeepInfra") {
+                providerSummaryRow(imageReady: true, videoReady: true)
+
+                SettingsFieldRow("API Key") {
+                    VStack(alignment: .leading, spacing: 6) {
+                        APIKeyField(
+                            text: $deepInfraAPIKey,
+                            linkTitle: "DeepInfra Dashboard",
+                            linkURL: URL(string: "https://deepinfra.com/dash/api_keys")!
+                        )
+
+                        HStack(spacing: 8) {
+                            if isFetchingDeepInfra {
+                                ProgressView()
+                                    .controlSize(.small)
+                                Text(t(.fetchingModels))
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            } else {
+                                Button(action: {
+                                    Task {
+                                        await fetchDeepInfraModels()
+                                    }
+                                }) {
+                                    Label(t(.refreshModels), systemImage: "arrow.clockwise")
+                                        .font(.caption)
+                                }
+                                .buttonStyle(.borderless)
+
+                                if let error = deepInfraFetchError {
+                                    Text(CinemaStrings.fetchError(error, language: appLanguage))
+                                        .font(.caption)
+                                        .foregroundStyle(.red)
+                                        .lineLimit(1)
+                                } else if !deepInfraFetchedImageModels.isEmpty || !deepInfraFetchedVideoModels.isEmpty {
+                                    Text(CinemaStrings.fetchComplete(count: deepInfraFetchedImageModels.count + deepInfraFetchedVideoModels.count, language: appLanguage))
+                                        .font(.caption)
+                                        .foregroundStyle(.green)
+                                }
+                            }
+                        }
+                    }
+                }
+
+                SettingsFieldRow("Image Model") {
+                    modelPicker(
+                        selection: $deepInfraImageSelection,
+                        customValue: $deepInfraModelName,
+                        presets: deepInfraImagePresets,
+                        fetchedModels: deepInfraFetchedImageModels
+                    )
+                }
+
+                SettingsFieldRow("Video Model") {
+                    modelPicker(
+                        selection: $deepInfraVideoSelection,
+                        customValue: $deepInfraVideoModelName,
+                        presets: deepInfraVideoPresets,
+                        fetchedModels: deepInfraFetchedVideoModels
+                    )
+                }
+            }
+
+            SettingsSection("Novita") {
+                providerSummaryRow(imageReady: true, videoReady: true)
+
+                SettingsFieldRow("API Key") {
+                    APIKeyField(
+                        text: $novitaAPIKey,
+                        linkTitle: "Novita Console",
+                        linkURL: URL(string: "https://novita.ai/settings")!
+                    )
+                }
+
+                SettingsFieldRow("Image Model") {
+                    modelPicker(
+                        selection: $novitaImageSelection,
+                        customValue: $novitaModelName,
+                        presets: novitaImagePresets,
+                        fetchedModels: []
+                    )
+                }
+
+                SettingsFieldRow("Video Model") {
+                    modelPicker(
+                        selection: $novitaVideoSelection,
+                        customValue: $novitaVideoModelName,
+                        presets: novitaVideoPresets,
+                        fetchedModels: []
+                    )
+                }
+
+                Text("Novita は画像・動画とも非同期APIです。必要に応じてモデル名を直接入力して切り替えられます。")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+
+            SettingsSection("Hyperbolic") {
+                providerSummaryRow(imageReady: true, videoReady: false)
+
+                SettingsFieldRow("API Key") {
+                    APIKeyField(
+                        text: $hyperbolicAPIKey,
+                        linkTitle: "Hyperbolic Settings",
+                        linkURL: URL(string: "https://app.hyperbolic.xyz/settings")!
+                    )
+                }
+
+                SettingsFieldRow("Image Model") {
+                    modelPicker(
+                        selection: $hyperbolicImageSelection,
+                        customValue: $hyperbolicModelName,
+                        presets: hyperbolicImagePresets,
+                        fetchedModels: []
+                    )
+                }
+
+                Text("Hyperbolic はこのアプリでは画像生成に対応しています。動画生成は未接続です。")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+
             SettingsSection(t(.costLimiter), icon: "gauge.with.dots.needle.67percent") {
                 Toggle(t(.enableCostLimit), isOn: $aiCostLimitEnabled)
 
@@ -540,6 +781,45 @@ struct SettingsView: View {
                 self.isFetchingOpenAI = false
             }
         }
+    }
+
+    private func fetchDeepInfraModels() async {
+        isFetchingDeepInfra = true
+        deepInfraFetchError = nil
+
+        do {
+            async let imageModels = DeepInfraCatalogService.fetchImageModels()
+            async let videoModels = DeepInfraCatalogService.fetchVideoModels()
+            let (images, videos) = try await (imageModels, videoModels)
+            await MainActor.run {
+                self.deepInfraFetchedImageModels = images
+                self.deepInfraFetchedVideoModels = videos
+                self.isFetchingDeepInfra = false
+                initializeSelections()
+            }
+        } catch {
+            await MainActor.run {
+                self.deepInfraFetchError = error.localizedDescription
+                self.isFetchingDeepInfra = false
+            }
+        }
+    }
+
+    private func loadAIModels() async {
+        await fetchGeminiModels()
+        await fetchOpenAIModels()
+        await fetchDeepInfraModels()
+    }
+
+    private func startLoadingAIModels() {
+        Task {
+            await loadAIModels()
+        }
+    }
+
+    private func handleAppear() {
+        initializeSelections()
+        startLoadingAIModels()
     }
 
     private var displaySettings: some View {
@@ -684,6 +964,53 @@ struct SettingsView: View {
 
     private var showsScriptSettings: Bool {
         false
+    }
+
+    @ViewBuilder
+    private func modelPicker(
+        selection: Binding<String>,
+        customValue: Binding<String>,
+        presets: [String],
+        fetchedModels: [String]
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Picker("", selection: selection) {
+                if !presets.isEmpty {
+                    Section(header: Text(t(.recommendedModels))) {
+                        ForEach(presets, id: \.self) { preset in
+                            Text(preset).tag(preset)
+                        }
+                    }
+                }
+
+                let dynamicModels = fetchedModels.filter { !presets.contains($0) }
+                if !dynamicModels.isEmpty {
+                    Section(header: Text(t(.fetchedModels))) {
+                        ForEach(dynamicModels, id: \.self) { model in
+                            Text(model).tag(model)
+                        }
+                    }
+                }
+
+                Section {
+                    Text(t(.customDirectInput)).tag("custom")
+                }
+            }
+            .pickerStyle(.menu)
+
+            if selection.wrappedValue == "custom" {
+                TextField(t(.enterModelName), text: customValue)
+                    .textFieldStyle(.roundedBorder)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func providerSummaryRow(imageReady: Bool, videoReady: Bool) -> some View {
+        HStack(spacing: 8) {
+            ProviderSupportBadge(title: "Image", isEnabled: imageReady)
+            ProviderSupportBadge(title: "Video", isEnabled: videoReady)
+        }
     }
 
     private func t(_ key: CinemaTextKey) -> String {
@@ -850,6 +1177,27 @@ private struct APIKeyField: View {
             .buttonStyle(.link)
             .fixedSize()
         }
+    }
+}
+
+private struct ProviderSupportBadge: View {
+    var title: String
+    var isEnabled: Bool
+
+    var body: some View {
+        Text(isEnabled ? "\(title) Ready" : "\(title) Manual")
+            .font(.caption.weight(.medium))
+            .foregroundStyle(isEnabled ? CinemaDesign.ink : CinemaDesign.mutedInk)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(
+                Capsule(style: .continuous)
+                    .fill(isEnabled ? CinemaDesign.keyColorSoft.opacity(1.2) : CinemaDesign.insetSurface)
+            )
+            .overlay {
+                Capsule(style: .continuous)
+                    .stroke(isEnabled ? CinemaDesign.warmBorder : CinemaDesign.fineBorder, lineWidth: 0.7)
+            }
     }
 }
 

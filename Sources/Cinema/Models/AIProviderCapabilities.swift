@@ -17,6 +17,16 @@ struct AIProviderCapabilities {
                 supportedVideoDurations: [4, 8, 12],
                 maximumReferenceImages: 1
             )
+        case .deepInfra:
+            return AIProviderCapabilities(
+                supportedVideoDurations: [4, 6, 8],
+                maximumReferenceImages: 0
+            )
+        case .novita:
+            return AIProviderCapabilities(
+                supportedVideoDurations: [4, 6, 8],
+                maximumReferenceImages: 0
+            )
         case .gemini:
             return AIProviderCapabilities(
                 supportedVideoDurations: hasReferenceImages ? [8] : [4, 6, 8],
