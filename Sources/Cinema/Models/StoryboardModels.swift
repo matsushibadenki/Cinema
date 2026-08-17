@@ -6,44 +6,54 @@ import Foundation
 
 struct StoryboardProject: Codable, Equatable {
     var title: String
+    var projectContext: ProjectContext
     var drawingSettings: DrawingSettings
     var referenceImages: [ReferenceImage]
     var sceneVideos: [SceneVideo]
     var generatedCutVideos: [GeneratedCutVideo]
+    var sceneStates: [SceneState]
     var cuts: [StoryboardCut]
 
     init(
         title: String = "",
+        projectContext: ProjectContext = ProjectContext(),
         drawingSettings: DrawingSettings = DrawingSettings(),
         referenceImages: [ReferenceImage] = [],
         sceneVideos: [SceneVideo] = [],
         generatedCutVideos: [GeneratedCutVideo] = [],
+        sceneStates: [SceneState] = [],
         cuts: [StoryboardCut] = StoryboardProject.defaultCuts()
     ) {
         self.title = title
+        self.projectContext = projectContext
         self.drawingSettings = drawingSettings
         self.referenceImages = referenceImages
         self.sceneVideos = sceneVideos
         self.generatedCutVideos = generatedCutVideos
+        self.sceneStates = sceneStates
         self.cuts = cuts
     }
 
     private enum CodingKeys: String, CodingKey {
         case title
+        case projectContext
         case drawingSettings
         case referenceImages
         case sceneVideos
         case generatedCutVideos
+        case sceneStates
         case cuts
     }
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         title = try container.decode(String.self, forKey: .title)
+        projectContext = try container.decodeIfPresent(ProjectContext.self, forKey: .projectContext) ?? ProjectContext()
         drawingSettings = try container.decodeIfPresent(DrawingSettings.self, forKey: .drawingSettings) ?? DrawingSettings()
         referenceImages = try container.decodeIfPresent([ReferenceImage].self, forKey: .referenceImages) ?? []
         sceneVideos = try container.decodeIfPresent([SceneVideo].self, forKey: .sceneVideos) ?? []
         generatedCutVideos = try container.decodeIfPresent([GeneratedCutVideo].self, forKey: .generatedCutVideos) ?? []
+        sceneStates = try container.decodeIfPresent([SceneState].self, forKey: .sceneStates) ?? []
         cuts = try container.decode([StoryboardCut].self, forKey: .cuts)
     }
 
@@ -51,6 +61,408 @@ struct StoryboardProject: Codable, Equatable {
         (1...5).map { index in
             StoryboardCut(cutNumber: index)
         }
+    }
+}
+
+struct ProjectContext: Codable, Equatable {
+    var storySummary: String
+    var visualBible: String
+    var continuityNotes: String
+    var reusableCharacterIDs: [UUID]
+    var reusableObjectIDs: [UUID]
+    var defaultFilmProfileID: String
+    var defaultFilmRecipeID: String
+    var defaultCreativePresetID: String
+    var defaultSeed: String
+
+    init(
+        storySummary: String = "",
+        visualBible: String = "",
+        continuityNotes: String = "",
+        reusableCharacterIDs: [UUID] = [],
+        reusableObjectIDs: [UUID] = [],
+        defaultFilmProfileID: String = "",
+        defaultFilmRecipeID: String = "",
+        defaultCreativePresetID: String = "",
+        defaultSeed: String = ""
+    ) {
+        self.storySummary = storySummary
+        self.visualBible = visualBible
+        self.continuityNotes = continuityNotes
+        self.reusableCharacterIDs = reusableCharacterIDs
+        self.reusableObjectIDs = reusableObjectIDs
+        self.defaultFilmProfileID = defaultFilmProfileID
+        self.defaultFilmRecipeID = defaultFilmRecipeID
+        self.defaultCreativePresetID = defaultCreativePresetID
+        self.defaultSeed = defaultSeed
+    }
+}
+
+struct SceneState: Codable, Identifiable, Equatable {
+    var id: UUID
+    var sceneKey: String
+    var title: String
+    var characterState: SceneStateCategory
+    var objectState: SceneStateCategory
+    var environmentState: SceneStateCategory
+    var cameraState: SceneStateCategory
+    var lightingState: SceneStateCategory
+    var eventState: SceneStateCategory
+    var timelineState: SceneStateCategory
+    var audioState: SceneStateCategory
+    var audioContinuity: AudioContinuityState
+    var persistenceRules: [SceneRule]
+    var conservationRules: [SceneRule]
+    var causalityRules: [SceneRule]
+    var eventGraph: EventGraph
+    var updatedAt: Date
+
+    init(
+        id: UUID = UUID(),
+        sceneKey: String = "",
+        title: String = "",
+        characterState: SceneStateCategory = SceneStateCategory(title: "Character"),
+        objectState: SceneStateCategory = SceneStateCategory(title: "Object"),
+        environmentState: SceneStateCategory = SceneStateCategory(title: "Environment"),
+        cameraState: SceneStateCategory = SceneStateCategory(title: "Camera"),
+        lightingState: SceneStateCategory = SceneStateCategory(title: "Lighting"),
+        eventState: SceneStateCategory = SceneStateCategory(title: "Event"),
+        timelineState: SceneStateCategory = SceneStateCategory(title: "Timeline"),
+        audioState: SceneStateCategory = SceneStateCategory(title: "Audio"),
+        audioContinuity: AudioContinuityState = AudioContinuityState(),
+        persistenceRules: [SceneRule] = [],
+        conservationRules: [SceneRule] = [],
+        causalityRules: [SceneRule] = [],
+        eventGraph: EventGraph = EventGraph(),
+        updatedAt: Date = Date()
+    ) {
+        self.id = id
+        self.sceneKey = sceneKey
+        self.title = title
+        self.characterState = characterState
+        self.objectState = objectState
+        self.environmentState = environmentState
+        self.cameraState = cameraState
+        self.lightingState = lightingState
+        self.eventState = eventState
+        self.timelineState = timelineState
+        self.audioState = audioState
+        self.audioContinuity = audioContinuity
+        self.persistenceRules = persistenceRules
+        self.conservationRules = conservationRules
+        self.causalityRules = causalityRules
+        self.eventGraph = eventGraph
+        self.updatedAt = updatedAt
+    }
+}
+
+struct CharacterVoiceProfile: Codable, Identifiable, Equatable {
+    var id: UUID
+    var characterName: String
+    var voiceID: String
+    var speakingStyle: String
+    var pace: String
+    var pitchRange: String
+    var emotionalBaseline: String
+    var accent: String
+    var pronunciationNotes: [String]
+    var forbiddenReadings: [String]
+    var sampleLine: String
+
+    init(
+        id: UUID = UUID(),
+        characterName: String = "",
+        voiceID: String = "",
+        speakingStyle: String = "",
+        pace: String = "",
+        pitchRange: String = "",
+        emotionalBaseline: String = "",
+        accent: String = "",
+        pronunciationNotes: [String] = [],
+        forbiddenReadings: [String] = [],
+        sampleLine: String = ""
+    ) {
+        self.id = id
+        self.characterName = characterName
+        self.voiceID = voiceID
+        self.speakingStyle = speakingStyle
+        self.pace = pace
+        self.pitchRange = pitchRange
+        self.emotionalBaseline = emotionalBaseline
+        self.accent = accent
+        self.pronunciationNotes = pronunciationNotes
+        self.forbiddenReadings = forbiddenReadings
+        self.sampleLine = sampleLine
+    }
+}
+
+struct PronunciationOverride: Codable, Identifiable, Equatable {
+    var id: UUID
+    var surface: String
+    var ruby: String
+    var phonetic: String
+    var accent: String
+    var spokenForm: String
+    var notes: String
+
+    init(
+        id: UUID = UUID(),
+        surface: String = "",
+        ruby: String = "",
+        phonetic: String = "",
+        accent: String = "",
+        spokenForm: String = "",
+        notes: String = ""
+    ) {
+        self.id = id
+        self.surface = surface
+        self.ruby = ruby
+        self.phonetic = phonetic
+        self.accent = accent
+        self.spokenForm = spokenForm
+        self.notes = notes
+    }
+}
+
+struct DialoguePerformance: Codable, Equatable {
+    var emotion: String
+    var intensity: String
+    var pace: String
+    var pauseHints: [String]
+    var emphasisWords: [String]
+    var keepPreviousTone: Bool
+    var normalizedSpokenText: String
+    var pronunciationOverrides: [PronunciationOverride]
+
+    init(
+        emotion: String = "",
+        intensity: String = "",
+        pace: String = "",
+        pauseHints: [String] = [],
+        emphasisWords: [String] = [],
+        keepPreviousTone: Bool = true,
+        normalizedSpokenText: String = "",
+        pronunciationOverrides: [PronunciationOverride] = []
+    ) {
+        self.emotion = emotion
+        self.intensity = intensity
+        self.pace = pace
+        self.pauseHints = pauseHints
+        self.emphasisWords = emphasisWords
+        self.keepPreviousTone = keepPreviousTone
+        self.normalizedSpokenText = normalizedSpokenText
+        self.pronunciationOverrides = pronunciationOverrides
+    }
+}
+
+struct AudioContinuityState: Codable, Equatable {
+    var activeSpeaker: String
+    var speakingOrder: [String]
+    var emotionalCarryOver: String
+    var lastVoiceTone: String
+    var ambientBed: String
+    var offscreenSpeakerNotes: [String]
+    var voiceProfiles: [CharacterVoiceProfile]
+    var pronunciationDictionary: [PronunciationOverride]
+    var bannedReadings: [String]
+
+    init(
+        activeSpeaker: String = "",
+        speakingOrder: [String] = [],
+        emotionalCarryOver: String = "",
+        lastVoiceTone: String = "",
+        ambientBed: String = "",
+        offscreenSpeakerNotes: [String] = [],
+        voiceProfiles: [CharacterVoiceProfile] = [],
+        pronunciationDictionary: [PronunciationOverride] = [],
+        bannedReadings: [String] = []
+    ) {
+        self.activeSpeaker = activeSpeaker
+        self.speakingOrder = speakingOrder
+        self.emotionalCarryOver = emotionalCarryOver
+        self.lastVoiceTone = lastVoiceTone
+        self.ambientBed = ambientBed
+        self.offscreenSpeakerNotes = offscreenSpeakerNotes
+        self.voiceProfiles = voiceProfiles
+        self.pronunciationDictionary = pronunciationDictionary
+        self.bannedReadings = bannedReadings
+    }
+}
+
+struct SceneStateCategory: Codable, Identifiable, Equatable {
+    var id: UUID
+    var title: String
+    var summary: String
+    var fields: [DrawingSettingsField]
+
+    init(id: UUID = UUID(), title: String, summary: String = "", fields: [DrawingSettingsField] = []) {
+        self.id = id
+        self.title = title
+        self.summary = summary
+        self.fields = fields
+    }
+}
+
+struct SceneRule: Codable, Identifiable, Equatable {
+    enum Kind: String, Codable, CaseIterable {
+        case persistence
+        case conservation
+        case causality
+        case custom
+    }
+
+    var id: UUID
+    var title: String
+    var rule: String
+    var kind: Kind
+    var isEnabled: Bool
+
+    init(
+        id: UUID = UUID(),
+        title: String = "",
+        rule: String = "",
+        kind: Kind = .custom,
+        isEnabled: Bool = true
+    ) {
+        self.id = id
+        self.title = title
+        self.rule = rule
+        self.kind = kind
+        self.isEnabled = isEnabled
+    }
+}
+
+struct EventGraph: Codable, Equatable {
+    var initialStateSummary: String
+    var events: [SceneEvent]
+    var stateTransitions: [StateTransition]
+    var continuityAssertions: [String]
+
+    init(
+        initialStateSummary: String = "",
+        events: [SceneEvent] = [],
+        stateTransitions: [StateTransition] = [],
+        continuityAssertions: [String] = []
+    ) {
+        self.initialStateSummary = initialStateSummary
+        self.events = events
+        self.stateTransitions = stateTransitions
+        self.continuityAssertions = continuityAssertions
+    }
+}
+
+struct SceneEvent: Codable, Identifiable, Equatable {
+    var id: UUID
+    var title: String
+    var startTime: String
+    var endTime: String
+    var description: String
+    var preconditions: [String]
+    var postconditions: [String]
+
+    init(
+        id: UUID = UUID(),
+        title: String = "",
+        startTime: String = "",
+        endTime: String = "",
+        description: String = "",
+        preconditions: [String] = [],
+        postconditions: [String] = []
+    ) {
+        self.id = id
+        self.title = title
+        self.startTime = startTime
+        self.endTime = endTime
+        self.description = description
+        self.preconditions = preconditions
+        self.postconditions = postconditions
+    }
+}
+
+struct StateTransition: Codable, Identifiable, Equatable {
+    var id: UUID
+    var fromStateID: String
+    var eventID: SceneEvent.ID?
+    var toStateID: String
+    var summary: String
+    var resultingFacts: [String]
+
+    init(
+        id: UUID = UUID(),
+        fromStateID: String = "",
+        eventID: SceneEvent.ID? = nil,
+        toStateID: String = "",
+        summary: String = "",
+        resultingFacts: [String] = []
+    ) {
+        self.id = id
+        self.fromStateID = fromStateID
+        self.eventID = eventID
+        self.toStateID = toStateID
+        self.summary = summary
+        self.resultingFacts = resultingFacts
+    }
+}
+
+struct ShotDelta: Codable, Equatable {
+    var summary: String
+    var characterChanges: [DrawingSettingsField]
+    var objectChanges: [DrawingSettingsField]
+    var environmentChanges: [DrawingSettingsField]
+    var cameraChanges: [DrawingSettingsField]
+    var lightingChanges: [DrawingSettingsField]
+    var eventChanges: [DrawingSettingsField]
+    var timelineChanges: [DrawingSettingsField]
+    var audioChanges: [DrawingSettingsField]
+    var stateTransitionIDs: [StateTransition.ID]
+    var continuityRequirements: [String]
+    var cameraObservation: CameraObservation
+
+    init(
+        summary: String = "",
+        characterChanges: [DrawingSettingsField] = [],
+        objectChanges: [DrawingSettingsField] = [],
+        environmentChanges: [DrawingSettingsField] = [],
+        cameraChanges: [DrawingSettingsField] = [],
+        lightingChanges: [DrawingSettingsField] = [],
+        eventChanges: [DrawingSettingsField] = [],
+        timelineChanges: [DrawingSettingsField] = [],
+        audioChanges: [DrawingSettingsField] = [],
+        stateTransitionIDs: [StateTransition.ID] = [],
+        continuityRequirements: [String] = [],
+        cameraObservation: CameraObservation = CameraObservation()
+    ) {
+        self.summary = summary
+        self.characterChanges = characterChanges
+        self.objectChanges = objectChanges
+        self.environmentChanges = environmentChanges
+        self.cameraChanges = cameraChanges
+        self.lightingChanges = lightingChanges
+        self.eventChanges = eventChanges
+        self.timelineChanges = timelineChanges
+        self.audioChanges = audioChanges
+        self.stateTransitionIDs = stateTransitionIDs
+        self.continuityRequirements = continuityRequirements
+        self.cameraObservation = cameraObservation
+    }
+}
+
+struct CameraObservation: Codable, Equatable {
+    var framingSummary: String
+    var visibleSubjects: [String]
+    var offscreenPersistenceNotes: [String]
+    var observationRules: [String]
+
+    init(
+        framingSummary: String = "",
+        visibleSubjects: [String] = [],
+        offscreenPersistenceNotes: [String] = [],
+        observationRules: [String] = []
+    ) {
+        self.framingSummary = framingSummary
+        self.visibleSubjects = visibleSubjects
+        self.offscreenPersistenceNotes = offscreenPersistenceNotes
+        self.observationRules = observationRules
     }
 }
 
@@ -406,11 +818,33 @@ struct DialogueLine: Codable, Identifiable, Equatable {
     var id: UUID
     var speaker: String
     var dialogue: String
+    var performance: DialoguePerformance
 
-    init(id: UUID = UUID(), speaker: String = "", dialogue: String = "") {
+    init(
+        id: UUID = UUID(),
+        speaker: String = "",
+        dialogue: String = "",
+        performance: DialoguePerformance = DialoguePerformance()
+    ) {
         self.id = id
         self.speaker = speaker
         self.dialogue = dialogue
+        self.performance = performance
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case speaker
+        case dialogue
+        case performance
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        speaker = try container.decodeIfPresent(String.self, forKey: .speaker) ?? ""
+        dialogue = try container.decodeIfPresent(String.self, forKey: .dialogue) ?? ""
+        performance = try container.decodeIfPresent(DialoguePerformance.self, forKey: .performance) ?? DialoguePerformance()
     }
 }
 
@@ -431,6 +865,7 @@ struct StoryboardCut: Codable, Identifiable, Equatable {
     var sceneName: String
     var referenceImageIDs: [ReferenceImage.ID]
     var aiShotSettings: AIShotSettings
+    var shotDelta: ShotDelta
 
     init(
         id: UUID = UUID(),
@@ -448,7 +883,8 @@ struct StoryboardCut: Codable, Identifiable, Equatable {
         scriptHeading: String = "",
         sceneName: String = "",
         referenceImageIDs: [ReferenceImage.ID] = [],
-        aiShotSettings: AIShotSettings = AIShotSettings()
+        aiShotSettings: AIShotSettings = AIShotSettings(),
+        shotDelta: ShotDelta = ShotDelta()
     ) {
         self.id = id
         self.cutNumber = cutNumber
@@ -466,6 +902,7 @@ struct StoryboardCut: Codable, Identifiable, Equatable {
         self.sceneName = sceneName
         self.referenceImageIDs = referenceImageIDs
         self.aiShotSettings = aiShotSettings
+        self.shotDelta = shotDelta
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -485,6 +922,7 @@ struct StoryboardCut: Codable, Identifiable, Equatable {
         case sceneName
         case referenceImageIDs
         case aiShotSettings
+        case shotDelta
     }
 
     init(from decoder: Decoder) throws {
@@ -507,5 +945,6 @@ struct StoryboardCut: Codable, Identifiable, Equatable {
         sceneName = try container.decodeIfPresent(String.self, forKey: .sceneName) ?? ""
         referenceImageIDs = try container.decodeIfPresent([ReferenceImage.ID].self, forKey: .referenceImageIDs) ?? []
         aiShotSettings = try container.decodeIfPresent(AIShotSettings.self, forKey: .aiShotSettings) ?? AIShotSettings()
+        shotDelta = try container.decodeIfPresent(ShotDelta.self, forKey: .shotDelta) ?? ShotDelta()
     }
 }

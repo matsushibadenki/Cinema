@@ -448,7 +448,7 @@ struct ContentView: View {
     private var toolbar: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 14) {
-                // Left group: mode, language, drawing settings
+                // Left group: mode, drawing settings
                 HStack(spacing: 10) {
                     Picker("Display Mode", selection: $displayMode) {
                         Label(t(.focusMode), systemImage: "rectangle.portrait.on.rectangle.portrait")
@@ -458,15 +458,6 @@ struct ContentView: View {
                     }
                     .pickerStyle(.segmented)
                     .frame(width: 250)
-
-                    Picker(t(.language), selection: $appLanguage) {
-                        ForEach(AppLanguage.allCases) { language in
-                            Text(language.displayName).tag(language.rawValue)
-                        }
-                    }
-                    .labelsHidden()
-                    .pickerStyle(.menu)
-                    .frame(width: 110)
 
                     Button {
                         showsDrawingSettings.toggle()

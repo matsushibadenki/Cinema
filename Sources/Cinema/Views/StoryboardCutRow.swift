@@ -841,21 +841,15 @@ private struct FocusedStoryboardCutView: View {
     var delete: () -> Void
     var appLanguage: String
 
-    private let headerHorizontalPadding: CGFloat = 18
-    private let contentHorizontalPadding: CGFloat = 18
-    private let contentSpacing: CGFloat = 14
-    private let canvasInset: CGFloat = 18
-    private let setCornerRadius: CGFloat = 18
     var body: some View {
         GeometryReader { proxy in
             let isCompactWidth = proxy.size.width < 1380
             let isVeryCompactWidth = proxy.size.width < 1160
-            let innerInset = isCompactWidth ? 10.0 : 12.0
-            let sectionSpacing = isCompactWidth ? 6.0 : 8.0
-            let contentBottomInset = isCompactWidth ? 10.0 : 12.0
-            let bodyPanelInset = isCompactWidth ? 10.0 : 12.0
+            let innerInset = isCompactWidth ? 8.0 : 10.0
+            let sectionSpacing = isCompactWidth ? 4.0 : 6.0
+            let contentBottomInset = isCompactWidth ? 6.0 : 8.0
             let contentColumnWidth = max(proxy.size.width - (innerInset * 2), 320)
-            let contentAreaWidth = max(contentColumnWidth - (bodyPanelInset * 2), 320)
+            let contentAreaWidth = contentColumnWidth
             let contentHeight = max(proxy.size.height - 108 - contentBottomInset, isCompactWidth ? 320 : 420)
             let inspectorWidth = clampedInspectorWidth(
                 totalWidth: contentAreaWidth,
@@ -874,15 +868,11 @@ private struct FocusedStoryboardCutView: View {
             ZStack {
                 Rectangle()
                     .fill(CinemaDesign.focusedCutShellSurface.opacity(0.98))
-                Rectangle()
-                    .stroke(CinemaDesign.focusedCutBorder.opacity(0.96), lineWidth: 0.9)
-                Rectangle()
-                    .stroke(CinemaDesign.topHighlight.opacity(0.65), lineWidth: 0.8)
-                    .padding(0.5)
 
                 VStack(spacing: sectionSpacing) {
                     headerPanel(compact: isCompactWidth)
                         .frame(width: contentColumnWidth, alignment: .leading)
+                        .padding(.bottom, isCompactWidth ? 4 : 6)
 
                     Group {
                         if isVeryCompactWidth {
@@ -912,17 +902,8 @@ private struct FocusedStoryboardCutView: View {
                             }
                         }
                     }
-                    .padding(bodyPanelInset)
                     .frame(width: contentColumnWidth, alignment: .leading)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(
-                        RoundedRectangle(cornerRadius: setCornerRadius - 4, style: .continuous)
-                            .fill(CinemaDesign.focusedCutPanelSurface.opacity(0.98))
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: setCornerRadius - 4, style: .continuous)
-                            .stroke(CinemaDesign.focusedCutBorder.opacity(0.8), lineWidth: 0.8)
-                    )
                     .padding(.bottom, contentBottomInset)
                 }
                 .padding(innerInset)
@@ -1006,16 +987,8 @@ private struct FocusedStoryboardCutView: View {
     private func headerPanel(compact: Bool) -> some View {
         header(compact: compact)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, compact ? 10 : 12)
-            .padding(.vertical, compact ? 8 : 10)
-            .background(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(CinemaDesign.focusedCutPanelSurface.opacity(0.98))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .stroke(CinemaDesign.focusedCutBorder.opacity(0.88), lineWidth: 0.8)
-            )
+            .padding(.horizontal, compact ? 2 : 4)
+            .padding(.vertical, compact ? 2 : 4)
     }
 
     private var previewPanel: some View {
@@ -1034,13 +1007,6 @@ private struct FocusedStoryboardCutView: View {
                 deleteImage: deleteImage
             )
         }
-        .padding(8)
-        .background(CinemaDesign.focusedCutPanelSurface)
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(CinemaDesign.focusedCutBorder.opacity(0.9), lineWidth: 0.8)
-        )
     }
 
     private func inspectorPanel(contentHeight: CGFloat) -> some View {
@@ -1052,6 +1018,7 @@ private struct FocusedStoryboardCutView: View {
                     Text(t(.contentAndDialogue)).tag(InspectorTab.contentDialogue)
                     Text(t(.additionalPrompt)).tag(InspectorTab.additionalPrompt)
                 }
+                .labelsHidden()
                 .pickerStyle(.segmented)
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
@@ -1069,13 +1036,6 @@ private struct FocusedStoryboardCutView: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        }
-        .padding(8)
-        .background(CinemaDesign.focusedCutPanelSurface)
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(CinemaDesign.focusedCutBorder.opacity(0.9), lineWidth: 0.8)
         }
     }
 
