@@ -99,11 +99,11 @@ private struct GeneratedVideoFilmstripColumnView: View {
             HStack(spacing: 6) {
                 Text("\(column.cutNumber)")
                     .font(.system(size: isCompact ? 10 : 11, weight: .bold))
-                    .foregroundStyle(isCurrentCut ? CinemaDesign.inverseInk : CinemaDesign.keyColor)
+                    .foregroundStyle(isCurrentCut ? CinemaDesign.ink : CinemaDesign.controlInactiveInk)
                     .frame(width: isCompact ? 18 : 20, height: isCompact ? 18 : 20)
                     .background(
                         Circle()
-                            .fill(isCurrentCut ? CinemaDesign.keyColor : CinemaDesign.keyColorSoft)
+                            .fill(isCurrentCut ? CinemaDesign.insetSurface : CinemaDesign.keyColorSoft)
                     )
 
                 Text(column.cutName.isEmpty ? "カット \(column.cutNumber)" : column.cutName)

@@ -23,13 +23,16 @@ struct ReferenceSidebarView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Picker("表示", selection: $selectedTab) {
+            HStack(spacing: 2) {
                 ForEach(InspectorSidebarTab.allCases) { tab in
-                    Text(tab.label(language: appLanguage)).tag(tab)
+                    Button {
+                        selectedTab = tab
+                    } label: {
+                        Text(tab.label(language: appLanguage))
+                    }
+                    .buttonStyle(CinemaStateButtonStyle(isActive: selectedTab == tab, expands: true))
                 }
             }
-            .labelsHidden()
-            .pickerStyle(.segmented)
 
             switch selectedTab {
             case .reference:

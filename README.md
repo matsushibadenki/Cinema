@@ -1,6 +1,6 @@
 # Cinema
 
-![Cinema app screenshot](doc/images/Cinema-image.png)
+![Cinema - Scenario workspace](doc/images/Cinema-image.png)
 
 Cinemaは、映像制作向けの絵コンテと台本を1つのドキュメントで作成できるmacOSアプリです。カットごとの画面、内容、セリフ、秒数を紙面に近いレイアウトで編集しながら、AI画像生成やシーン単位の動画生成、リファレンス画像管理までを同じ作業画面で扱えます。
 

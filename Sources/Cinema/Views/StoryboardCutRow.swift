@@ -1014,12 +1014,21 @@ private struct FocusedStoryboardCutView: View {
             VStack(alignment: .leading, spacing: 8) {
                 sectionLabel("Inspector")
 
-                Picker("Inspector", selection: $selectedTab) {
-                    Text(t(.contentAndDialogue)).tag(InspectorTab.contentDialogue)
-                    Text(t(.additionalPrompt)).tag(InspectorTab.additionalPrompt)
+                HStack(spacing: 2) {
+                    Button {
+                        selectedTab = .contentDialogue
+                    } label: {
+                        Text(t(.contentAndDialogue))
+                    }
+                    .buttonStyle(CinemaStateButtonStyle(isActive: selectedTab == .contentDialogue, expands: true))
+
+                    Button {
+                        selectedTab = .additionalPrompt
+                    } label: {
+                        Text(t(.additionalPrompt))
+                    }
+                    .buttonStyle(CinemaStateButtonStyle(isActive: selectedTab == .additionalPrompt, expands: true))
                 }
-                .labelsHidden()
-                .pickerStyle(.segmented)
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -1125,18 +1134,17 @@ private struct FocusedStoryboardCutView: View {
                     .font(.system(size: 13, weight: .bold))
                     .lineLimit(1)
             }
-            .foregroundStyle(CinemaDesign.inverseInk)
+            .foregroundStyle(CinemaDesign.ink)
             .padding(.horizontal, 14)
             .padding(.vertical, 9)
             .background {
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(isGenerating ? CinemaDesign.keyColor.opacity(0.78) : CinemaDesign.keyColor)
+                    .fill(CinemaDesign.insetSurface.opacity(isGenerating ? 0.86 : 0.72))
             }
             .overlay(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(CinemaDesign.keyColor.opacity(0.92), lineWidth: 1)
+                    .stroke(CinemaDesign.strongBorder, lineWidth: 1)
             )
-            .shadow(color: CinemaDesign.keyColor.opacity(0.24), radius: 10, x: 0, y: 4)
         }
         .buttonStyle(.plain)
         .disabled(isGenerating)
@@ -1457,23 +1465,11 @@ private struct DialogueSheetRow: View {
             dialogueCell
         }
         .frame(height: rowHeight, alignment: .topLeading)
-        .background {
-            if usesClassicStoryboardChrome {
-                Rectangle()
-                    .fill(rowBackgroundFill)
-            } else {
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(rowBackgroundFill)
-            }
-        }
-        .overlay {
-            if usesClassicStoryboardChrome {
-                Rectangle()
-                    .stroke(rowBorderColor, lineWidth: 0.85)
-            } else {
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .stroke(rowBorderColor, lineWidth: 0.8)
-            }
+        .background(rowBackgroundFill)
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(rowBorderColor)
+                .frame(height: 1)
         }
         .overlay(alignment: .bottom) {
             DialogueSheetRowDivider(usesClassicStoryboardChrome: usesClassicStoryboardChrome)

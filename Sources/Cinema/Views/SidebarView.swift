@@ -114,15 +114,15 @@ struct SidebarView: View {
                 } label: {
                     Image(systemName: mode.symbolName)
                         .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(selectedThemeMode == mode ? CinemaDesign.inverseInk : CinemaDesign.keyColor.opacity(0.82))
+                        .foregroundStyle(selectedThemeMode == mode ? CinemaDesign.ink : CinemaDesign.controlInactiveInk)
                         .frame(width: 34, height: 34)
                         .background {
                             RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                .fill(selectedThemeMode == mode ? CinemaDesign.keyColor : CinemaDesign.railIconBackground)
+                                .fill(CinemaDesign.railIconBackground)
                         }
                         .overlay {
                             RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                .stroke(selectedThemeMode == mode ? CinemaDesign.keyColor.opacity(0.95) : CinemaDesign.railIconStroke, lineWidth: 0.7)
+                                .stroke(selectedThemeMode == mode ? CinemaDesign.strongBorder : CinemaDesign.railIconStroke, lineWidth: selectedThemeMode == mode ? 0.9 : 0.7)
                         }
                 }
                 .buttonStyle(.plain)
@@ -246,15 +246,6 @@ struct SidebarView: View {
             : AnyShapeStyle(CinemaDesign.aiSparkleLight)
         )
         .cinemaPanel(isHighlighted: true)
-        .overlay {
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .stroke(
-                    isAICostLimitExceeded
-                    ? Color.red.opacity(0.50)
-                    : CinemaDesign.warmBorder,
-                    lineWidth: isAICostLimitExceeded ? 1.2 : 0.8
-                )
-        }
         .padding(.horizontal, 14)
     }
 
@@ -347,11 +338,9 @@ struct SidebarView: View {
                         exportScenePrompts(selectedSection.title)
                     } label: {
                         Text(t(.exportPrompt))
-                            .foregroundStyle(CinemaDesign.inverseInk)
                             .frame(maxWidth: .infinity)
                     }
-                    .buttonStyle(.borderedProminent)
-                    .tint(.gray)
+                    .buttonStyle(CinemaActionButtonStyle())
 
                     HStack {
                         Button {
@@ -360,7 +349,7 @@ struct SidebarView: View {
                             Text(generatingSceneTitle == selectedSection.title ? t(.generating) : t(.createSelectedSceneVideo))
                                 .frame(maxWidth: .infinity)
                         }
-                        .buttonStyle(.borderedProminent)
+                        .buttonStyle(CinemaActionButtonStyle())
                         .disabled(generatingSceneTitle != nil)
 
                         if let video = sceneVideos.first(where: { $0.title == selectedSection.title }) {
@@ -550,14 +539,11 @@ struct SidebarView: View {
                         }
                         .padding(.leading, 12)
                     }
-                    .padding(10)
-                    .background {
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .fill(CinemaDesign.cardSurface.opacity(0.78))
-                    }
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .stroke(CinemaDesign.cardStroke, lineWidth: 0.8)
+                    .padding(.vertical, 4)
+                    .overlay(alignment: .top) {
+                        Rectangle()
+                            .fill(CinemaDesign.fineBorder)
+                            .frame(height: 1)
                     }
                 }
             }
@@ -649,21 +635,19 @@ private struct SidebarRailButton: View {
         Button(action: action) {
             Image(systemName: systemName)
                 .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(isProminent ? CinemaDesign.inverseInk : (isHovered ? CinemaDesign.keyColor : CinemaDesign.keyColor.opacity(0.86)))
+                .foregroundStyle(isProminent || isHovered ? CinemaDesign.ink : CinemaDesign.controlInactiveInk)
                 .frame(width: 38, height: 38)
                 .background {
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(isProminent ? CinemaDesign.keyColor : (isHovered ? CinemaDesign.keyColorSoft.opacity(0.8) : CinemaDesign.railIconBackground))
+                        .fill(isHovered ? CinemaDesign.insetSurface : CinemaDesign.railIconBackground)
                 }
                 .overlay {
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .stroke(isProminent ? CinemaDesign.keyColor.opacity(0.95) : (isHovered ? CinemaDesign.warmBorder : CinemaDesign.railIconStroke), lineWidth: 0.8)
+                        .stroke(isProminent || isHovered ? CinemaDesign.strongBorder : CinemaDesign.railIconStroke, lineWidth: isProminent ? 0.9 : 0.8)
                 }
         }
         .buttonStyle(.plain)
-        .scaleEffect(isHovered ? 1.05 : 1.0)
-        .shadow(color: isProminent ? CinemaDesign.keyColor.opacity(0.28) : CinemaDesign.raisedShadow.opacity(isHovered ? 0.4 : 0.22), radius: isProminent ? 10 : (isHovered ? 6 : 3), x: 0, y: isProminent ? 5 : 2)
-        .animation(.spring(response: 0.22, dampingFraction: 0.7), value: isHovered)
+        .animation(.easeOut(duration: 0.12), value: isHovered)
         .onHover { hovering in
             isHovered = hovering
         }
@@ -720,6 +704,19 @@ private struct CutSidebarRow: View {
         .padding(.vertical, 7)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(rowBackground)
+        .overlay(alignment: .leading) {
+            if isCurrentCut {
+                Rectangle()
+                    .fill(CinemaDesign.keyColor)
+                    .frame(width: 2)
+            }
+        }
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(CinemaDesign.fineBorder)
+                .frame(height: 1)
+                .padding(.leading, 32)
+        }
         .overlay(alignment: .top) {
             if dropTargetPosition == .before {
                 Rectangle()
@@ -743,7 +740,7 @@ private struct CutSidebarRow: View {
             }
         }
         .opacity(isDragged ? 0.65 : 1)
-        .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .contentShape(Rectangle())
         .onTapGesture(perform: openCut)
     }
 
@@ -787,32 +784,20 @@ private struct CutSidebarRow: View {
     @ViewBuilder
     private var rowBackground: some View {
         if dropTargetPosition != nil {
-            RoundedRectangle(cornerRadius: 6)
+            Rectangle()
                 .fill(CinemaDesign.keyColor.opacity(0.16))
         } else if isDragged {
-            RoundedRectangle(cornerRadius: 6)
+            Rectangle()
                 .fill(Color.secondary.opacity(0.14))
         } else if isCurrentCut {
-            RoundedRectangle(cornerRadius: 8)
+            Rectangle()
                 .fill(CinemaDesign.selectedRowSurface)
-                .overlay {
-                    RoundedRectangle(cornerRadius: 8)
-                        .stroke(CinemaDesign.warmBorder, lineWidth: 0.8)
-                }
         } else if isVideoSceneSelected {
-            RoundedRectangle(cornerRadius: 6)
-                .fill(CinemaDesign.insetSurface.opacity(0.96))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 6)
-                        .stroke(CinemaDesign.warmBorder, lineWidth: 0.8)
-                }
+            Rectangle()
+                .fill(CinemaDesign.keyColorSoft.opacity(0.34))
         } else {
-            RoundedRectangle(cornerRadius: 8)
-                .fill(CinemaDesign.insetSurface.opacity(0.62))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 8)
-                        .stroke(CinemaDesign.fineBorder.opacity(0.72), lineWidth: 0.6)
-                }
+            Rectangle()
+                .fill(Color.clear)
         }
     }
 
@@ -977,11 +962,11 @@ private struct SceneSelectionRow: View {
             HStack(spacing: 8) {
                 // Accent bar for selected state
                 RoundedRectangle(cornerRadius: 1.5)
-                    .fill(isSelected ? CinemaDesign.keyColor : Color.clear)
+                    .fill(isSelected ? CinemaDesign.sidebarStructureAccent : Color.clear)
                     .frame(width: 3, height: 24)
 
                 Image(systemName: isSelected ? "largecircle.fill.circle" : "circle")
-                    .foregroundStyle(isSelected ? CinemaDesign.keyColor : .secondary)
+                    .foregroundStyle(isSelected ? CinemaDesign.ink : .secondary)
                     .font(.system(size: 13))
 
                 VStack(alignment: .leading, spacing: 2) {

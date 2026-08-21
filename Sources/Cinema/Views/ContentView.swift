@@ -15,10 +15,60 @@ private enum DocumentDisplayMode: String, CaseIterable, Identifiable {
 
 }
 
+private enum CinemaWorkspace: String, CaseIterable, Identifiable {
+    case scenario
+    case editor
+    case browser
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .scenario: "Scenario"
+        case .editor: "Editor"
+        case .browser: "Browser"
+        }
+    }
+
+    var symbolName: String {
+        switch self {
+        case .scenario: "text.book.closed"
+        case .editor: "timeline.selection"
+        case .browser: "rectangle.grid.2x2"
+        }
+    }
+}
+
 private struct GenerationErrorAlert: Identifiable {
     let id = UUID()
     var title: String
     var message: String
+}
+
+private struct WorkspaceTabButtonStyle: ButtonStyle {
+    var isSelected: Bool
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.system(size: 12, weight: isSelected ? .semibold : .medium))
+            .foregroundStyle(isSelected ? CinemaDesign.ink : CinemaDesign.controlInactiveInk)
+            .lineLimit(1)
+            .padding(.horizontal, 18)
+            .frame(height: 42)
+            .background(Color.clear)
+            .overlay(alignment: .top) {
+                Rectangle()
+                    .fill(isSelected ? CinemaDesign.ink : Color.clear)
+                    .frame(height: 2)
+            }
+            .overlay(alignment: .trailing) {
+                Rectangle()
+                    .fill(CinemaDesign.fineBorder)
+                    .frame(width: 1, height: 20)
+            }
+            .opacity(configuration.isPressed ? 0.72 : 1)
+            .contentShape(Rectangle())
+    }
 }
 
 private enum SceneVideoStorageError: LocalizedError {
@@ -80,6 +130,7 @@ struct ContentView: View {
     @State private var showsFullCanvas = false
     @State private var isInitialStoryboardFitPending = true
     @State private var storyboardCanvasHeight: CGFloat = 0
+    @State private var selectedWorkspace: CinemaWorkspace = .scenario
 
     private let cutsPerPage = 5
     private let minimumZoomScale: CGFloat = 0.5
@@ -88,7 +139,10 @@ struct ContentView: View {
     private let pageCanvasPadding: CGFloat = 16
 
     var body: some View {
-        NavigationSplitView {
+        VStack(spacing: 0) {
+            Group {
+                if selectedWorkspace == .scenario {
+                    NavigationSplitView {
             SidebarView(
                 title: $document.project.title,
                 drawingSettings: $document.project.drawingSettings,
@@ -145,6 +199,13 @@ struct ContentView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(CinemaDesign.canvasBackground)
             .animation(.easeInOut(duration: 0.18), value: showsReferenceSidebar)
+                    }
+                } else {
+                    workspacePlaceholder
+                }
+            }
+
+            workspaceTabBar
         }
         .navigationTitle(documentTitle)
         .background(MainWindowConfigurator())
@@ -190,6 +251,54 @@ struct ContentView: View {
             ensureSelectedVideoScene()
             ensureSelectedVideoCuts()
         }
+    }
+
+    private var workspaceTabBar: some View {
+        HStack(spacing: 0) {
+            ForEach(CinemaWorkspace.allCases) { workspace in
+                Button {
+                    selectedWorkspace = workspace
+                } label: {
+                    Label(workspace.title, systemImage: workspace.symbolName)
+                }
+                .buttonStyle(WorkspaceTabButtonStyle(isSelected: selectedWorkspace == workspace))
+                .help(workspace.title)
+            }
+
+            Spacer(minLength: 0)
+
+            Text("CINEMA")
+                .font(.system(size: 10, weight: .bold, design: .rounded))
+                .tracking(1.2)
+                .foregroundStyle(CinemaDesign.quietInk)
+                .padding(.trailing, 16)
+        }
+        .frame(maxWidth: .infinity)
+        .frame(height: 42)
+        .background(CinemaDesign.panelBackground)
+        .overlay(alignment: .top) {
+            Rectangle()
+                .fill(CinemaDesign.strongBorder)
+                .frame(height: 1)
+        }
+    }
+
+    private var workspacePlaceholder: some View {
+        VStack(spacing: 10) {
+            Image(systemName: selectedWorkspace.symbolName)
+                .font(.system(size: 28, weight: .light))
+                .foregroundStyle(CinemaDesign.quietInk)
+
+            Text(selectedWorkspace.title)
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(CinemaDesign.ink)
+
+            Text("このワークスペースは準備中です。")
+                .font(.system(size: 12))
+                .foregroundStyle(CinemaDesign.mutedInk)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(CinemaDesign.canvasBackground)
     }
 
     private var pageCount: Int {
@@ -450,13 +559,21 @@ struct ContentView: View {
             HStack(spacing: 14) {
                 // Left group: mode, drawing settings
                 HStack(spacing: 10) {
-                    Picker("Display Mode", selection: $displayMode) {
-                        Label(t(.focusMode), systemImage: "rectangle.portrait.on.rectangle.portrait")
-                            .tag(DocumentDisplayMode.cutFocus)
-                        Label(t(.storyboard), systemImage: "rectangle.grid.1x2")
-                            .tag(DocumentDisplayMode.storyboard)
+                    HStack(spacing: 2) {
+                        Button {
+                            displayMode = .cutFocus
+                        } label: {
+                            Label(t(.focusMode), systemImage: "rectangle.portrait.on.rectangle.portrait")
+                        }
+                        .buttonStyle(CinemaStateButtonStyle(isActive: displayMode == .cutFocus, expands: true))
+
+                        Button {
+                            displayMode = .storyboard
+                        } label: {
+                            Label(t(.storyboard), systemImage: "rectangle.grid.1x2")
+                        }
+                        .buttonStyle(CinemaStateButtonStyle(isActive: displayMode == .storyboard, expands: true))
                     }
-                    .pickerStyle(.segmented)
                     .frame(width: 250)
 
                     Button {
@@ -580,8 +697,7 @@ struct ContentView: View {
                     } label: {
                         Label(t(.print), systemImage: "printer")
                     }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.regular)
+                    .buttonStyle(CinemaActionButtonStyle())
                     .disabled(showsDrawingSettings)
                 }
             }

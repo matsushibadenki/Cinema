@@ -9,13 +9,13 @@ enum CinemaDesign {
     // MARK: - Base Theme
 
     static let keyColor = dynamicColor(
-        light: (0.42, 0.34, 0.74, 1.0),
-        dark: (0.55, 0.50, 0.84, 1.0)
+        light: (0.19, 0.19, 0.21, 1.0),
+        dark: (0.78, 0.78, 0.81, 1.0)
     )
 
     static let keyColorSoft = dynamicColor(
-        light: (0.42, 0.34, 0.74, 0.08),
-        dark: (0.55, 0.50, 0.84, 0.12)
+        light: (0.19, 0.19, 0.21, 0.08),
+        dark: (0.78, 0.78, 0.81, 0.12)
     )
 
     static let canvasBackground = dynamicColor(
@@ -91,8 +91,8 @@ enum CinemaDesign {
     )
 
     static let warmBorder = dynamicColor(
-        light: (0.42, 0.34, 0.74, 0.22),
-        dark: (0.55, 0.50, 0.84, 0.30)
+        light: (0.19, 0.19, 0.21, 0.24),
+        dark: (0.78, 0.78, 0.81, 0.28)
     )
 
     static let ink = dynamicColor(
@@ -108,6 +108,11 @@ enum CinemaDesign {
     static let quietInk = dynamicColor(
         light: (0.56, 0.57, 0.61, 1.0),
         dark: (0.46, 0.47, 0.52, 1.0)
+    )
+
+    static let controlInactiveInk = dynamicColor(
+        light: (0.52, 0.53, 0.57, 1.0),
+        dark: (0.34, 0.35, 0.39, 1.0)
     )
 
     static let placeholderInk = dynamicColor(
@@ -165,8 +170,14 @@ enum CinemaDesign {
     )
 
     static let selectedRowSurface = dynamicColor(
-        light: (0.42, 0.34, 0.74, 0.06),
-        dark: (0.55, 0.50, 0.84, 0.10)
+        light: (0.19, 0.19, 0.21, 0.055),
+        dark: (0.78, 0.78, 0.81, 0.09)
+    )
+
+    // The structure rail is the single colored wayfinding mark in the interface.
+    static let sidebarStructureAccent = dynamicColor(
+        light: (0.42, 0.34, 0.74, 1.0),
+        dark: (0.55, 0.50, 0.84, 1.0)
     )
 
     static let cardStroke = dynamicColor(
@@ -204,36 +215,34 @@ enum CinemaDesign {
 }
 
 struct CinemaPanelModifier: ViewModifier {
-    var cornerRadius: CGFloat = 12
+    var cornerRadius: CGFloat = 0
     var isHighlighted: Bool = false
 
     func body(content: Content) -> some View {
         content
             .background(
-                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .fill(CinemaDesign.cardSurface.opacity(isHighlighted ? 0.98 : 0.94))
-            )
-            .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .stroke(
-                        isHighlighted ? CinemaDesign.warmBorder : CinemaDesign.cardStroke,
-                        lineWidth: isHighlighted ? 1.0 : 0.6
+                Rectangle()
+                    .fill(
+                        isHighlighted
+                        ? CinemaDesign.keyColorSoft.opacity(0.42)
+                        : CinemaDesign.cardSurface.opacity(0.44)
                     )
+            )
+            .overlay(alignment: .topLeading) {
+                Rectangle()
+                    .fill(isHighlighted ? CinemaDesign.keyColor.opacity(0.72) : CinemaDesign.strongBorder)
+                    .frame(width: isHighlighted ? 2 : 1)
             }
-            .overlay(alignment: .top) {
-                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .stroke(CinemaDesign.topHighlight, lineWidth: 0.8)
-                    .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
-                    .allowsHitTesting(false)
+            .overlay(alignment: .bottom) {
+                Rectangle()
+                    .fill(isHighlighted ? CinemaDesign.warmBorder.opacity(0.72) : CinemaDesign.fineBorder)
+                    .frame(height: 1)
             }
-            .shadow(color: CinemaDesign.raisedShadow.opacity(0.6), radius: 6, x: 0, y: 2)
-            .shadow(color: CinemaDesign.raisedShadow.opacity(0.2), radius: 1, x: 0, y: 1)
     }
 }
 
 extension View {
-    func cinemaPanel(cornerRadius: CGFloat = 14, isHighlighted: Bool = false) -> some View {
+    func cinemaPanel(cornerRadius: CGFloat = 0, isHighlighted: Bool = false) -> some View {
         modifier(CinemaPanelModifier(cornerRadius: cornerRadius, isHighlighted: isHighlighted))
     }
 }
@@ -244,35 +253,68 @@ struct CinemaToolbarButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.system(size: 12.5, weight: .medium))
-            .foregroundStyle(
-                isActive
-                ? CinemaDesign.inverseInk
-                : CinemaDesign.ink
-            )
+            .foregroundStyle(isActive ? CinemaDesign.ink : CinemaDesign.controlInactiveInk)
             .lineLimit(1)
             .fixedSize(horizontal: true, vertical: false)
             .padding(.horizontal, 10)
             .padding(.vertical, 5.5)
             .background {
                 RoundedRectangle(cornerRadius: 9, style: .continuous)
-                    .fill(
-                        isActive
-                        ? CinemaDesign.keyColor
-                        : (configuration.isPressed
-                           ? CinemaDesign.insetSurface.opacity(0.95)
-                           : CinemaDesign.cardSurface.opacity(0.88))
-                    )
+                    .fill(CinemaDesign.insetSurface.opacity(configuration.isPressed ? 0.98 : 0.72))
             }
             .overlay {
                 RoundedRectangle(cornerRadius: 9, style: .continuous)
                     .stroke(
-                        isActive ? CinemaDesign.keyColor.opacity(0.95) : CinemaDesign.cardStroke,
+                        isActive ? CinemaDesign.strongBorder : CinemaDesign.fineBorder,
                         lineWidth: isActive ? 0.9 : 0.6
                     )
             }
-            .shadow(color: isActive ? CinemaDesign.keyColor.opacity(0.18) : CinemaDesign.raisedShadow.opacity(0.22), radius: isActive ? 5 : 2, x: 0, y: 1)
-            .scaleEffect(configuration.isPressed ? 0.96 : 1.0)
-            .animation(.spring(response: 0.2, dampingFraction: 0.7), value: configuration.isPressed)
+            .scaleEffect(configuration.isPressed ? 0.98 : 1.0)
+            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
+    }
+}
+
+struct CinemaActionButtonStyle: ButtonStyle {
+    var isActive: Bool = true
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.system(size: 12.5, weight: isActive ? .semibold : .medium))
+            .foregroundStyle(isActive ? CinemaDesign.ink : CinemaDesign.controlInactiveInk)
+            .lineLimit(1)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 7)
+            .frame(minHeight: 30)
+            .background(CinemaDesign.insetSurface.opacity(configuration.isPressed ? 0.98 : 0.72))
+            .overlay {
+                Rectangle()
+                    .stroke(isActive ? CinemaDesign.strongBorder : CinemaDesign.fineBorder, lineWidth: isActive ? 0.9 : 0.6)
+            }
+            .opacity(configuration.isPressed ? 0.76 : 1)
+            .contentShape(Rectangle())
+    }
+}
+
+struct CinemaStateButtonStyle: ButtonStyle {
+    var isActive: Bool
+    var expands: Bool = false
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.system(size: 12, weight: isActive ? .semibold : .medium))
+            .foregroundStyle(isActive ? CinemaDesign.ink : CinemaDesign.controlInactiveInk)
+            .lineLimit(1)
+            .padding(.horizontal, 10)
+            .frame(minHeight: 28)
+            .frame(maxWidth: expands ? .infinity : nil)
+            .background(Color.clear)
+            .overlay(alignment: .bottom) {
+                Rectangle()
+                    .fill(isActive ? CinemaDesign.ink.opacity(0.76) : Color.clear)
+                    .frame(height: 1)
+            }
+            .opacity(configuration.isPressed ? 0.70 : 1)
+            .contentShape(Rectangle())
     }
 }
 
