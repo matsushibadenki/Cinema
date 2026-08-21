@@ -10,9 +10,15 @@ let package = Package(
     products: [
         .executable(name: "Cinema", targets: ["Cinema"])
     ],
+    dependencies: [
+        .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.7.0")
+    ],
     targets: [
         .executableTarget(
             name: "Cinema",
+            dependencies: [
+                .product(name: "Sparkle", package: "Sparkle")
+            ],
             path: "Sources/Cinema",
             exclude: ["Resources/Info.plist"],
             linkerSettings: [

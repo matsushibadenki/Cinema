@@ -40,6 +40,7 @@ enum CinemaTextKey: String {
     case hideReference
     case showReference
     case print
+    case checkForUpdates
     case title
     case block
     case sequence
@@ -204,6 +205,7 @@ enum CinemaStrings {
         .hideReference: "リファレンスを非表示",
         .showReference: "リファレンスを表示",
         .print: "プリント",
+        .checkForUpdates: "ソフトウェアアップデートを確認...",
         .title: "タイトル",
         .block: "ブロック",
         .sequence: "シーケンス",
@@ -314,6 +316,7 @@ enum CinemaStrings {
         .hideReference: "Hide Reference",
         .showReference: "Show Reference",
         .print: "Print",
+        .checkForUpdates: "Check for Software Updates...",
         .title: "Title",
         .block: "Block",
         .sequence: "Sequence",
@@ -424,6 +427,7 @@ enum CinemaStrings {
         .hideReference: "隐藏参考",
         .showReference: "显示参考",
         .print: "打印",
+        .checkForUpdates: "检查软件更新...",
         .title: "标题",
         .block: "区块",
         .sequence: "序列",

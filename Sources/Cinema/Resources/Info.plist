@@ -20,6 +20,14 @@
   <string>14.0</string>
   <key>NSPrincipalClass</key>
   <string>NSApplication</string>
+  <key>SUFeedURL</key>
+  <string>https://raw.githubusercontent.com/matsushibadenki/Cinema/main/appcast.xml</string>
+  <key>SUPublicEDKey</key>
+  <string>bmKlFvhROgTAZ6QO1rF7zAdPPslfknbFcd0xIcjWEhc=</string>
+  <key>SUEnableAutomaticChecks</key>
+  <true/>
+  <key>SUAutomaticallyUpdate</key>
+  <true/>
   <key>CFBundleDocumentTypes</key>
   <array>
     <dict>

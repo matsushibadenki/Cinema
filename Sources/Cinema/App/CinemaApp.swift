@@ -60,6 +60,12 @@ private struct AppCommands: Commands {
             .keyboardShortcut(",", modifiers: .command)
         }
 
+        CommandGroup(after: .appInfo) {
+            Button(CinemaStrings.text(.checkForUpdates, language: appLanguage)) {
+                SoftwareUpdateController.shared.checkForUpdates()
+            }
+        }
+
         CommandGroup(after: .newItem) {
             Button(CinemaStrings.text(.print, language: appLanguage) + "...") {
                 NotificationCenter.default.post(name: .printCurrentStoryboardPage, object: nil)
@@ -101,6 +107,7 @@ extension Notification.Name {
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
+        _ = SoftwareUpdateController.shared
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
     }
