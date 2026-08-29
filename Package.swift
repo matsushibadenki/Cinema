@@ -23,6 +23,8 @@ let package = Package(
             exclude: ["Resources/Info.plist"],
             linkerSettings: [
                 .unsafeFlags([
+                    "-Xlinker", "-rpath",
+                    "-Xlinker", "@executable_path/../Frameworks",
                     "-Xlinker", "-sectcreate",
                     "-Xlinker", "__TEXT",
                     "-Xlinker", "__info_plist",

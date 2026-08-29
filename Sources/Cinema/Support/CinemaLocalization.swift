@@ -75,6 +75,9 @@ enum CinemaTextKey: String {
     case reorderCut
     case cutName
     case reference
+    case referenceApplicationItems
+    case noReferenceApplicationItems
+    case unnamedReference
     case properties
     case addPhoto
     case noPhotos
@@ -240,6 +243,9 @@ enum CinemaStrings {
         .reorderCut: "ドラッグしてカットを並べ替え",
         .cutName: "カット名",
         .reference: "リファレンス",
+        .referenceApplicationItems: "リファレンス適用項目",
+        .noReferenceApplicationItems: "このシーンに適用するリファレンス項目はありません",
+        .unnamedReference: "名称なし",
         .properties: "プロパティ",
         .addPhoto: "写真を登録",
         .noPhotos: "登録写真なし",
@@ -351,6 +357,9 @@ enum CinemaStrings {
         .reorderCut: "Drag to reorder cuts",
         .cutName: "Cut Name",
         .reference: "Reference",
+        .referenceApplicationItems: "Reference Application Items",
+        .noReferenceApplicationItems: "No reference items are applied to this scene",
+        .unnamedReference: "Untitled Reference",
         .properties: "Properties",
         .addPhoto: "Add Photo",
         .noPhotos: "No Photos",
@@ -462,6 +471,9 @@ enum CinemaStrings {
         .reorderCut: "拖动以重新排序镜头",
         .cutName: "镜头名",
         .reference: "参考",
+        .referenceApplicationItems: "参考应用项目",
+        .noReferenceApplicationItems: "没有应用于此场景的参考项目",
+        .unnamedReference: "未命名参考",
         .properties: "属性",
         .addPhoto: "添加照片",
         .noPhotos: "没有照片",

@@ -813,6 +813,8 @@ struct FocusedStoryboardCutScroller: View {
     }
 }
 
+// Hallmark · component: reference application panel · genre: modern-minimal · theme: Cinema grayscale
+// Hallmark · pre-emit critique: P5 H4 E4 S5 R5 V4
 private struct FocusedStoryboardCutView: View {
     private enum InspectorTab: String, CaseIterable, Identifiable {
         case contentDialogue
@@ -879,9 +881,9 @@ private struct FocusedStoryboardCutView: View {
                             VStack(spacing: sectionSpacing) {
                                 previewPanel
                                     .frame(maxWidth: .infinity)
-                                    .frame(height: max(contentHeight * 0.48, 240))
+                                    .frame(height: max(contentHeight * 0.54, 300))
 
-                                inspectorPanel(contentHeight: max(contentHeight * 0.52, 260))
+                                inspectorPanel(contentHeight: max(contentHeight * 0.46, 260))
                                     .frame(maxWidth: .infinity)
                                     .frame(maxHeight: .infinity)
                             }
@@ -995,17 +997,130 @@ private struct FocusedStoryboardCutView: View {
         VStack(alignment: .leading, spacing: 8) {
             sectionLabel(t(.screen))
 
-            StoryboardScreenFrame(
-                imageData: imageData,
-                image: image,
-                aspectRatio: screenAspectRatio,
-                showsGeneratePlaceholder: showsGeneratePlaceholder,
-                backgroundBrightness: screenBackgroundBrightness,
-                isGenerating: isGenerating,
-                cutNumber: cut.cutNumber,
-                importImage: importImage,
-                deleteImage: deleteImage
-            )
+            GeometryReader { proxy in
+                let applicationHeight = min(max(proxy.size.height * 0.28, 112), 210)
+
+                VStack(spacing: 0) {
+                    StoryboardScreenFrame(
+                        imageData: imageData,
+                        image: image,
+                        aspectRatio: screenAspectRatio,
+                        showsGeneratePlaceholder: showsGeneratePlaceholder,
+                        backgroundBrightness: screenBackgroundBrightness,
+                        isGenerating: isGenerating,
+                        cutNumber: cut.cutNumber,
+                        importImage: importImage,
+                        deleteImage: deleteImage
+                    )
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+                    Rectangle()
+                        .fill(CinemaDesign.focusedCutBorder.opacity(0.9))
+                        .frame(height: 1)
+                        .padding(.top, 8)
+
+                    referenceApplicationPanel
+                        .frame(height: applicationHeight)
+                }
+            }
+        }
+    }
+
+    private var referenceApplicationPanel: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                sectionLabel(t(.referenceApplicationItems))
+
+                if !appliedReferences.isEmpty {
+                    Text("\(appliedReferences.count)")
+                        .font(.system(size: 10, weight: .semibold, design: .rounded))
+                        .foregroundStyle(CinemaDesign.quietInk)
+                }
+
+                Spacer(minLength: 0)
+            }
+            .padding(.top, 8)
+
+            if appliedReferences.isEmpty {
+                HStack(spacing: 8) {
+                    Image(systemName: "photo.on.rectangle")
+                        .font(.system(size: 12, weight: .medium))
+
+                    Text(t(.noReferenceApplicationItems))
+                        .font(.system(size: 12))
+                }
+                .foregroundStyle(CinemaDesign.mutedInk)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .padding(.top, 8)
+            } else {
+                ScrollView(.vertical) {
+                    LazyVStack(alignment: .leading, spacing: 0) {
+                        ForEach(appliedReferences) { reference in
+                            appliedReferenceRows(reference)
+                        }
+                    }
+                }
+                .scrollIndicators(.automatic)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func appliedReferenceRows(_ reference: ReferenceImage) -> some View {
+        let referenceName = reference.name.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        VStack(alignment: .leading, spacing: 6) {
+            Text(referenceName.isEmpty ? t(.unnamedReference) : referenceName)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(CinemaDesign.ink)
+                .lineLimit(1)
+
+            ForEach(reference.details) { section in
+                let fields = applicableFields(in: section)
+
+                if !fields.isEmpty {
+                    Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 4) {
+                        ForEach(fields) { field in
+                            GridRow(alignment: .firstTextBaseline) {
+                                Text(section.title.trimmingCharacters(in: .whitespacesAndNewlines))
+                                    .font(.system(size: 10, weight: .medium))
+                                    .foregroundStyle(CinemaDesign.quietInk)
+                                    .frame(minWidth: 72, alignment: .leading)
+
+                                Text(field.key.trimmingCharacters(in: .whitespacesAndNewlines))
+                                    .font(.system(size: 11, weight: .medium))
+                                    .foregroundStyle(CinemaDesign.mutedInk)
+                                    .frame(minWidth: 88, alignment: .leading)
+
+                                Text(field.value.trimmingCharacters(in: .whitespacesAndNewlines))
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(CinemaDesign.ink)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        .padding(.vertical, 8)
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(CinemaDesign.fineBorder)
+                .frame(height: 1)
+        }
+    }
+
+    private var appliedReferences: [ReferenceImage] {
+        cut.referenceImageIDs.compactMap { id in
+            referenceImages.first { $0.id == id }
+        }
+    }
+
+    private func applicableFields(in section: DrawingSettingsSection) -> [DrawingSettingsField] {
+        section.fields.filter { field in
+            !field.key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                || !field.value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         }
     }
 
