@@ -6,6 +6,19 @@
         <description>Signed release feed for Cinema.</description>
         <language>en</language>
         <item>
+            <title>0.1.1</title>
+            <pubDate>Mon, 31 Aug 2026 06:01:27 +0900</pubDate>
+            <link>https://github.com/matsushibadenki/Cinema/releases</link>
+            <sparkle:version>2</sparkle:version>
+            <sparkle:shortVersionString>0.1.1</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
+            <enclosure url="https://github.com/matsushibadenki/Cinema/releases/download/v0.1.1/Cinema-0.1.1.zip" length="2672781" type="application/octet-stream" sparkle:edSignature="iamyTZJ8BBA8um/XLY+Sc4kFHp5KiiSsPLwJTaQjjUJxSU6jwquFIWYK/GbMIIlkEHvaCjWTULn+tCQ51v+/Cg=="/>
+            <sparkle:deltas>
+                <enclosure url="https://github.com/matsushibadenki/Cinema/releases/download/v0.1.1/Cinema2-1.delta" sparkle:deltaFrom="1" length="244206" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977808" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="0O0XaY7mVHEek3B1ULUyAfEAXAPeQYHJ4vXZdgYfi8t/ImqJqHaOnSGvTjCRPlnxLhdIauV5ZJ+Y1e6Ubg2gAw=="/>
+            </sparkle:deltas>
+        </item>
+        <item>
             <title>0.1.0</title>
             <pubDate>Fri, 21 Aug 2026 16:27:45 +0900</pubDate>
             <link>https://github.com/matsushibadenki/Cinema/releases</link>
