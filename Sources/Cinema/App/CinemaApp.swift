@@ -121,6 +121,8 @@ extension Notification.Name {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         _ = SoftwareUpdateController.shared
+        CinemaContextMenuMonitor.shared.start()
+        EmptyDocumentWindowCoordinator.shared.start()
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
     }

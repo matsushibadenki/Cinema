@@ -99,6 +99,10 @@ private final class CompactNSTextField: NSTextField {
     override var intrinsicContentSize: NSSize {
         NSSize(width: NSView.noIntrinsicMetric, height: NSView.noIntrinsicMetric)
     }
+
+    override func menu(for event: NSEvent) -> NSMenu? {
+        CinemaContextMenu.textEditingMenu(from: super.menu(for: event))
+    }
 }
 
 private final class VerticallyCenteredTextFieldCell: NSTextFieldCell {
@@ -163,7 +167,7 @@ private protocol StoryboardTextContextMenuHandling: AnyObject {
     func makeContextMenu(from baseMenu: NSMenu?) -> NSMenu?
 }
 
-private final class ContextMenuTextView: NSTextView {
+private final class ContextMenuTextView: NSTextView, CinemaManagedContextMenuView {
     weak var contextMenuHandler: StoryboardTextContextMenuHandling?
 
     override func menu(for event: NSEvent) -> NSMenu? {
@@ -295,9 +299,9 @@ private struct StoryboardTextView: NSViewRepresentable {
         }
 
         func makeContextMenu(from baseMenu: NSMenu?) -> NSMenu? {
-            guard let contextMenuActions else { return baseMenu }
+            let menu = CinemaContextMenu.textEditingMenu(from: baseMenu)
+            guard let contextMenuActions else { return menu }
 
-            let menu = baseMenu?.copy() as? NSMenu ?? NSMenu()
             if menu.items.isEmpty == false {
                 menu.addItem(.separator())
             }

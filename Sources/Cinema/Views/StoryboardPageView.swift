@@ -450,6 +450,10 @@ private final class CompactPageNSTextField: NSTextField {
     override var intrinsicContentSize: NSSize {
         NSSize(width: NSView.noIntrinsicMetric, height: NSView.noIntrinsicMetric)
     }
+
+    override func menu(for event: NSEvent) -> NSMenu? {
+        CinemaContextMenu.textEditingMenu(from: super.menu(for: event))
+    }
 }
 
 private struct ScreenAspectRatioKey: EnvironmentKey {
