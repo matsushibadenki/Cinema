@@ -36,3 +36,6 @@ docs-private/
 *.tmp
 *.swp
 *.swo
+
+# website
+website/
