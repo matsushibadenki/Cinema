@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Cinemaは、構想、絵コンテ、セリフ、AI映像生成をひとつの制作フローにまとめるmacOS用映画制作アプリです。" />
+    <meta name="theme-color" content="#111315" />
+    <meta property="og:title" content="Cinema — 構想を、一本の映画へ。" />
+    <meta property="og:description" content="映画の設計からAI映像生成まで。シーンの一貫性を保ちながら、物語をカットへ落とし込むmacOSアプリ。" />
+    <meta property="og:image" content="assets/cinema-hero.png" />
+    <title>Cinema — 構想を、一本の映画へ。</title>
+    <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Noto+Sans+JP:wght@400;500;600;700&family=Shippori+Mincho:wght@500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="styles.css" />
+    <script src="script.js" defer></script>
+  </head>
+  <body>
+    <header class="site-header" data-header>
+      <a class="brand" href="#top" aria-label="Cinema ホーム">
+        <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
+        <span>CINEMA</span>
+      </a>
+      <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="site-nav" data-menu-toggle>
+        <span></span><span></span>
+        <span class="sr-only">メニューを開く</span>
+      </button>
+      <nav class="site-nav" id="site-nav" data-nav>
+        <a href="#workflow">制作フロー</a>
+        <a href="#continuity">シーン設計</a>
+        <a href="#ai">AI生成</a>
+        <a href="https://github.com/matsushibadenki/Cinema" target="_blank" rel="noreferrer">GitHub</a>
+        <a class="nav-download" href="https://github.com/matsushibadenki/Cinema/releases/latest">ダウンロード</a>
+      </nav>
+    </header>
+
+    <main id="top">
+      <section class="hero" aria-labelledby="hero-title">
+        <div class="hero-media" aria-hidden="true">
+          <img src="assets/cinema-hero.png" alt="" fetchpriority="high" />
+        </div>
+        <div class="hero-shade" aria-hidden="true"></div>
+        <div class="hero-content">
+          <h1 id="hero-title"><span class="heading-line">構想を、</span><span class="heading-line">一本の映画へ。</span></h1>
+          <p>シーンを設計し、カットをつなぎ、映像にする。<br />Cinemaは、物語の一貫性を守るための制作ワークスペースです。</p>
+          <div class="hero-actions">
+            <a class="button button-primary" href="https://github.com/matsushibadenki/Cinema/releases/latest">
+              macOS版をダウンロード
+              <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 10h11M11 5l5 5-5 5" /></svg>
+            </a>
+            <a class="button button-quiet" href="#product">画面を見る</a>
+          </div>
+          <p class="requirements">macOS 14以降 · Apple Silicon · Version 0.1.2</p>
+        </div>
+        <div class="hero-caption">
+          <span>PRE-PRODUCTION WORKSPACE</span>
+          <span>SCENE 01 / TAKE 01</span>
+        </div>
+        <a class="scroll-cue" href="#intro" aria-label="次のセクションへ"><span></span></a>
+      </section>
+
+      <section class="intro section" id="intro">
+        <div class="section-index">01</div>
+        <div class="intro-copy reveal">
+          <p class="section-label">THE WHOLE PICTURE</p>
+          <h2><span class="heading-line">プロンプトではなく、</span><span class="heading-line">映画そのものを</span><span class="heading-line">設計する。</span></h2>
+          <p class="lead">Cinemaは、カット単位の生成ツールではありません。作品全体のトーン、登場人物、世界観、時間、光、音をひとつのプロジェクトに保ち、すべてのシーンへつなげます。</p>
+        </div>
+        <div class="intro-aside reveal">
+          <div class="stat-line"><span>PROJECT</span><strong>全体の演出方針</strong></div>
+          <div class="stat-line"><span>SCENE</span><strong>持続する世界の状態</strong></div>
+          <div class="stat-line"><span>CUT</span><strong>その瞬間だけの変化</strong></div>
+        </div>
+      </section>
+
+      <section class="product section" id="product">
+        <div class="product-heading reveal">
+          <p class="section-label">SCENARIO WORKSPACE</p>
+          <h2><span class="heading-line">制作に必要な情報を、</span><span class="heading-line">ひとつの画面に。</span></h2>
+          <p>構成、画面、内容、セリフ、秒数、リファレンス、生成履歴。映画を考える流れを止めずに、すべてへアクセスできます。</p>
+        </div>
+        <figure class="app-stage reveal">
+          <div class="stage-topline"><span>CINEMA / SCENARIO</span><span>PROJECT VIEW</span></div>
+          <img src="assets/cinema-app.png" alt="CinemaのScenarioワークスペース。左にカット構成、中央に映像、右に内容とセリフを表示している。" loading="lazy" />
+        </figure>
+      </section>
+
+      <section class="workflow section" id="workflow">
+        <div class="section-index">02</div>
+        <header class="workflow-header reveal">
+          <p class="section-label">ONE CONTINUOUS FLOW</p>
+          <h2><span class="heading-line">思考を分断しない、</span><span class="heading-line">一本の</span><span class="heading-line">制作フロー。</span></h2>
+        </header>
+        <div class="timeline" data-timeline>
+          <article class="timeline-step reveal">
+            <span class="step-no">01</span>
+            <div><h3>作品を定義する</h3><p>ジャンル、世界観、雰囲気、キャラクター、演技の方向性を「プロジェクト設計」に記録します。</p></div>
+          </article>
+          <article class="timeline-step reveal">
+            <span class="step-no">02</span>
+            <div><h3>シーンを組み立てる</h3><p>ブロックとカットを並べ、画面、内容、セリフ、秒数を絵コンテとして編集します。</p></div>
+          </article>
+          <article class="timeline-step reveal">
+            <span class="step-no">03</span>
+            <div><h3>世界の状態を保つ</h3><p>人物、物、環境、カメラ、照明、出来事、時間、音をScene Stateとして管理します。</p></div>
+          </article>
+          <article class="timeline-step reveal">
+            <span class="step-no">04</span>
+            <div><h3>映像へ展開する</h3><p>AIで画面を生成し、選択したカットを動画化。異なる生成バージョンも履歴として比較できます。</p></div>
+          </article>
+        </div>
+      </section>
+
+      <section class="continuity" id="continuity">
+        <div class="continuity-visual" aria-hidden="true">
+          <img src="assets/cinema-hero.png" alt="" loading="lazy" />
+        </div>
+        <div class="continuity-copy reveal">
+          <p class="section-label">CONTINUITY BY DESIGN</p>
+          <h2><span class="heading-line">前のカットを、</span><span class="heading-line">忘れさせない。</span></h2>
+          <p>同じシーンでは人物、衣装、小道具、天候、光、色温度、画面方向を引き継ぎます。変えるのは、そのカットで指定した要素だけ。場面が変わるときは、前のシーンを明確にリセットします。</p>
+          <ul class="continuity-list">
+            <li><span>01</span>プロジェクト全体の制作指示</li>
+            <li><span>02</span>8カテゴリーのScene State</li>
+            <li><span>03</span>前カットからのContinuity Contract</li>
+            <li><span>04</span>場面転換時のScene Reset</li>
+          </ul>
+        </div>
+      </section>
+
+      <section class="ai section" id="ai">
+        <div class="section-index">03</div>
+        <header class="ai-heading reveal">
+          <p class="section-label">PROVIDER FLEXIBILITY</p>
+          <h2><span class="heading-line">作品に合うAIを、</span><span class="heading-line">自由に選ぶ。</span></h2>
+          <p>画像と動画、それぞれに最適なサービスとモデルを選択。Cinemaは制作データを保ち、生成エンジンの違いを越えてプロジェクトをつなぎます。</p>
+        </header>
+        <div class="provider-rail reveal" aria-label="対応AIプロバイダー">
+          <span>GEMINI / VEO</span>
+          <span>OPENAI / SORA</span>
+          <span>DEEPINFRA</span>
+          <span>NOVITA</span>
+          <span>HYPERBOLIC</span>
+        </div>
+        <div class="ai-notes reveal">
+          <p>画像生成</p><strong>5 providers</strong>
+          <p>動画生成</p><strong>4 providers</strong>
+          <p>画面比率</p><strong>5 presets + custom</strong>
+        </div>
+      </section>
+
+      <section class="handoff section">
+        <div class="handoff-copy reveal">
+          <p class="section-label">SCENE BUNDLE</p>
+          <h2><span class="heading-line">制作環境の外へも、</span><span class="heading-line">意図を失わずに渡す。</span></h2>
+          <p>プロンプト、Scene State、カット設定、画面比率、シード、参照画像を、バージョン管理されたScene Bundleとして書き出せます。Google ColabやGPUワーカーなど、別の生成環境へ渡しても作品の設計情報は崩れません。</p>
+          <a class="text-link" href="https://github.com/matsushibadenki/Cinema/blob/main/doc/CINEMA_SCENE_BUNDLE_V1.md" target="_blank" rel="noreferrer">Scene Bundle仕様を見る <span>↗</span></a>
+        </div>
+        <div class="bundle-diagram reveal" aria-label="Scene Bundleのファイル構成">
+          <div class="bundle-root"><span></span>CINEMA_SCENE_BUNDLE_V1</div>
+          <div class="bundle-row"><span>01</span><strong>manifest.json</strong><small>project / scene / cut</small></div>
+          <div class="bundle-row"><span>02</span><strong>prompts/</strong><small>image / video / world-state</small></div>
+          <div class="bundle-row"><span>03</span><strong>storyboard/</strong><small>generated frames</small></div>
+          <div class="bundle-row"><span>04</span><strong>references/</strong><small>visual evidence</small></div>
+        </div>
+      </section>
+
+      <section class="closing">
+        <div class="closing-frame reveal">
+          <p>CINEMA FOR macOS</p>
+          <h2><span class="heading-line">次のシーンを、</span><span class="heading-line">ここから始めよう。</span></h2>
+          <a class="button button-light" href="https://github.com/matsushibadenki/Cinema/releases/latest">Cinemaをダウンロード</a>
+          <small>アプリは無料です。AI生成には各サービスのAPIキーと利用料金が必要です。</small>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="footer-brand">CINEMA</div>
+      <p>Story design. Scene continuity. Moving images.</p>
+      <div class="footer-links">
+        <a href="https://github.com/matsushibadenki/Cinema">GitHub</a>
+        <a href="https://github.com/matsushibadenki/Cinema/releases">Releases</a>
+        <a href="#top">ページ上部へ ↑</a>
+      </div>
+      <p class="copyright">© 2026 Cinema.</p>
+    </footer>
+  </body>
+</html>
