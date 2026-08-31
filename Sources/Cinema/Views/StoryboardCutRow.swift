@@ -1377,19 +1377,8 @@ private struct FocusedStoryboardCutView: View {
                     .font(.system(size: 13, weight: .bold))
                     .lineLimit(1)
             }
-            .foregroundStyle(CinemaDesign.ink)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 9)
-            .background {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(CinemaDesign.insetSurface.opacity(isGenerating ? 0.86 : 0.72))
-            }
-            .overlay(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(CinemaDesign.strongBorder, lineWidth: 1)
-            )
         }
-        .buttonStyle(.plain)
+        .buttonStyle(CinemaPrimaryActionButtonStyle())
         .disabled(isGenerating)
         .help(isGenerating ? "AIで画面を生成中" : "AIで画面を生成")
         .pointingHandCursor(isEnabled: !isGenerating)

@@ -837,7 +837,7 @@ struct ContentView: View {
                     Button(generatingSceneTitle == sceneTitle ? t(.generating) : t(.createSelectedSceneVideo)) {
                         generateSceneVideo(for: sceneTitle)
                     }
-                    .buttonStyle(CinemaActionButtonStyle())
+                    .buttonStyle(CinemaPrimaryActionButtonStyle())
                     .disabled(generatingSceneTitle != nil)
 
                     if let video = document.project.sceneVideos.first(where: { $0.title == sceneTitle }) {

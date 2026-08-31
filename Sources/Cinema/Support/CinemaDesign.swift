@@ -180,6 +180,16 @@ enum CinemaDesign {
         dark: (0.55, 0.50, 0.84, 1.0)
     )
 
+    static let primaryAction = dynamicColor(
+        light: (0.38, 0.29, 0.72, 1.0),
+        dark: (0.50, 0.42, 0.82, 1.0)
+    )
+
+    static let primaryActionPressed = dynamicColor(
+        light: (0.32, 0.24, 0.64, 1.0),
+        dark: (0.43, 0.35, 0.74, 1.0)
+    )
+
     static let cardStroke = dynamicColor(
         light: (0.35, 0.36, 0.40, 0.12),
         dark: (1.0, 1.0, 1.0, 0.08)
@@ -292,6 +302,29 @@ struct CinemaActionButtonStyle: ButtonStyle {
             }
             .opacity(configuration.isPressed ? 0.76 : 1)
             .contentShape(Rectangle())
+    }
+}
+
+struct CinemaPrimaryActionButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.system(size: 12.5, weight: .semibold))
+            .foregroundStyle(Color.white)
+            .lineLimit(1)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 7)
+            .frame(minHeight: 30)
+            .background {
+                RoundedRectangle(cornerRadius: 9, style: .continuous)
+                    .fill(configuration.isPressed ? CinemaDesign.primaryActionPressed : CinemaDesign.primaryAction)
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: 9, style: .continuous)
+                    .stroke(Color.white.opacity(0.16), lineWidth: 0.8)
+            }
+            .shadow(color: CinemaDesign.primaryAction.opacity(0.22), radius: 6, x: 0, y: 2)
+            .scaleEffect(configuration.isPressed ? 0.98 : 1)
+            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
     }
 }
 
