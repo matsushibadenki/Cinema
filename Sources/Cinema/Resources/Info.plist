@@ -8,6 +8,8 @@
   <string>Cinema</string>
   <key>CFBundleIdentifier</key>
   <string>com.littlebuddha.cinema</string>
+  <key>CFBundleIconFile</key>
+  <string>AppIcon.icns</string>
   <key>CFBundleName</key>
   <string>Cinema</string>
   <key>CFBundlePackageType</key>

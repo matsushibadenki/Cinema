@@ -900,6 +900,7 @@ struct StoryboardCut: Codable, Identifiable, Equatable {
     var scriptHeading: String
     var sceneName: String
     var referenceImageIDs: [ReferenceImage.ID]
+    var disabledReferenceImageIDs: [ReferenceImage.ID]
     var aiShotSettings: AIShotSettings
     var shotDelta: ShotDelta
 
@@ -919,6 +920,7 @@ struct StoryboardCut: Codable, Identifiable, Equatable {
         scriptHeading: String = "",
         sceneName: String = "",
         referenceImageIDs: [ReferenceImage.ID] = [],
+        disabledReferenceImageIDs: [ReferenceImage.ID] = [],
         aiShotSettings: AIShotSettings = AIShotSettings(),
         shotDelta: ShotDelta = ShotDelta()
     ) {
@@ -937,6 +939,7 @@ struct StoryboardCut: Codable, Identifiable, Equatable {
         self.scriptHeading = scriptHeading
         self.sceneName = sceneName
         self.referenceImageIDs = referenceImageIDs
+        self.disabledReferenceImageIDs = disabledReferenceImageIDs
         self.aiShotSettings = aiShotSettings
         self.shotDelta = shotDelta
     }
@@ -957,6 +960,7 @@ struct StoryboardCut: Codable, Identifiable, Equatable {
         case scriptHeading
         case sceneName
         case referenceImageIDs
+        case disabledReferenceImageIDs
         case aiShotSettings
         case shotDelta
     }
@@ -980,7 +984,12 @@ struct StoryboardCut: Codable, Identifiable, Equatable {
         scriptHeading = try container.decodeIfPresent(String.self, forKey: .scriptHeading) ?? ""
         sceneName = try container.decodeIfPresent(String.self, forKey: .sceneName) ?? ""
         referenceImageIDs = try container.decodeIfPresent([ReferenceImage.ID].self, forKey: .referenceImageIDs) ?? []
+        disabledReferenceImageIDs = try container.decodeIfPresent([ReferenceImage.ID].self, forKey: .disabledReferenceImageIDs) ?? []
         aiShotSettings = try container.decodeIfPresent(AIShotSettings.self, forKey: .aiShotSettings) ?? AIShotSettings()
         shotDelta = try container.decodeIfPresent(ShotDelta.self, forKey: .shotDelta) ?? ShotDelta()
+    }
+
+    var enabledReferenceImageIDs: [ReferenceImage.ID] {
+        referenceImageIDs.filter { !disabledReferenceImageIDs.contains($0) }
     }
 }

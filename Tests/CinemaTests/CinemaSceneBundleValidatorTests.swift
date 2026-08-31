@@ -78,4 +78,30 @@ final class CinemaSceneBundleValidatorTests: XCTestCase {
 
         XCTAssertEqual(report.warningCount, 1)
     }
+
+    func testDisabledReferenceIsExcludedFromValidation() {
+        let reference = ReferenceImage(name: "Disabled", imageFileName: "missing.png")
+        let cut = StoryboardCut(
+            cutNumber: 1,
+            situation: "A valid cut.",
+            duration: "3",
+            referenceImageIDs: [reference.id],
+            disabledReferenceImageIDs: [reference.id]
+        )
+
+        let report = CinemaSceneBundleValidator.validate(
+            sceneTitle: "Disabled Reference",
+            sceneState: SceneState(
+                sceneKey: "Disabled Reference",
+                environmentState: SceneStateCategory(title: "Environment", summary: "Studio")
+            ),
+            cuts: [cut],
+            references: [reference],
+            imageData: [:],
+            language: AppLanguage.english.rawValue
+        )
+
+        XCTAssertEqual(report.referenceCount, 0)
+        XCTAssertFalse(report.items.contains { $0.id.contains("reference") })
+    }
 }

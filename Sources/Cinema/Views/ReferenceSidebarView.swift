@@ -4,6 +4,7 @@
 
 import AppKit
 import SwiftUI
+import UniformTypeIdentifiers
 
 private enum InspectorSidebarTab: String, CaseIterable, Identifiable {
     case reference
@@ -18,8 +19,10 @@ private enum InspectorSidebarTab: String, CaseIterable, Identifiable {
 
 struct ReferenceSidebarView: View {
     @Binding var document: StoryboardDocument
+    var currentCutID: StoryboardCut.ID?
     var appLanguage: String
     @State private var selectedTab: InspectorSidebarTab = .reference
+    @State private var isDropTargeted = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -76,6 +79,9 @@ struct ReferenceSidebarView: View {
                     Text(t(.addPhoto))
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                    Text(t(.dropReferenceMaterials))
+                        .font(.caption2)
+                        .foregroundStyle(CinemaDesign.mutedInk.opacity(0.72))
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
@@ -85,6 +91,12 @@ struct ReferenceSidebarView: View {
                             ReferenceImageRow(
                                 reference: $reference,
                                 image: ImageHelpers.nsImage(from: document.imageData[reference.imageFileName]),
+                                applyToCurrentCutTitle: t(.applyReferenceToCurrentCut),
+                                deleteTitle: t(.delete),
+                                canApplyToCurrentCut: canApplyToCurrentCut(reference.id),
+                                applyToCurrentCut: {
+                                    applyReferenceToCurrentCut(reference.id)
+                                },
                                 delete: {
                                     deleteReferenceImage(reference.id)
                                 }
@@ -93,6 +105,26 @@ struct ReferenceSidebarView: View {
                     }
                 }
             }
+        }
+        .contentShape(Rectangle())
+        .overlay {
+            if isDropTargeted {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(CinemaDesign.selectedRowSurface.opacity(0.42))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .stroke(
+                                CinemaDesign.ink.opacity(0.72),
+                                style: StrokeStyle(lineWidth: 1.5, dash: [6, 4])
+                            )
+                    }
+                    .allowsHitTesting(false)
+            }
+        }
+        .dropDestination(for: URL.self) { urls, _ in
+            importReferenceImages(from: urls)
+        } isTargeted: { targeted in
+            isDropTargeted = targeted
         }
     }
 
@@ -105,8 +137,22 @@ struct ReferenceSidebarView: View {
 
         guard panel.runModal() == .OK else { return }
 
-        for url in panel.urls {
-            guard let data = try? Data(contentsOf: url) else { continue }
+        importReferenceImages(from: panel.urls)
+    }
+
+    @discardableResult
+    private func importReferenceImages(from urls: [URL]) -> Bool {
+        var importedAnyImage = false
+
+        for url in urls where isSupportedImage(url) {
+            let didAccessSecurityScopedResource = url.startAccessingSecurityScopedResource()
+            defer {
+                if didAccessSecurityScopedResource {
+                    url.stopAccessingSecurityScopedResource()
+                }
+            }
+
+            guard let data = try? Data(contentsOf: url), NSImage(data: data) != nil else { continue }
             let id = UUID()
             let fileExtension = normalizedImageExtension(from: url)
             let fileName = "Images/References/\(id.uuidString).\(fileExtension)"
@@ -117,18 +163,53 @@ struct ReferenceSidebarView: View {
             )
             document.project.referenceImages.append(reference)
             document.imageData[fileName] = data
+            importedAnyImage = true
         }
+
+        return importedAnyImage
+    }
+
+    private func applyReferenceToCurrentCut(_ referenceID: ReferenceImage.ID) {
+        guard let currentCutID,
+              let cutIndex = document.project.cuts.firstIndex(where: { $0.id == currentCutID }) else {
+            return
+        }
+        if !document.project.cuts[cutIndex].referenceImageIDs.contains(referenceID) {
+            document.project.cuts[cutIndex].referenceImageIDs.append(referenceID)
+        }
+        document.project.cuts[cutIndex].disabledReferenceImageIDs.removeAll { $0 == referenceID }
+    }
+
+    private func canApplyToCurrentCut(_ referenceID: ReferenceImage.ID) -> Bool {
+        guard let currentCutID,
+              let cut = document.project.cuts.first(where: { $0.id == currentCutID }) else {
+            return false
+        }
+        return !cut.referenceImageIDs.contains(referenceID)
+            || cut.disabledReferenceImageIDs.contains(referenceID)
     }
 
     private func deleteReferenceImage(_ id: ReferenceImage.ID) {
         guard let index = document.project.referenceImages.firstIndex(where: { $0.id == id }) else { return }
         let reference = document.project.referenceImages.remove(at: index)
         document.imageData[reference.imageFileName] = nil
+        for cutIndex in document.project.cuts.indices {
+            document.project.cuts[cutIndex].referenceImageIDs.removeAll { $0 == id }
+            document.project.cuts[cutIndex].disabledReferenceImageIDs.removeAll { $0 == id }
+        }
     }
 
     private func normalizedImageExtension(from url: URL) -> String {
         let ext = url.pathExtension.lowercased()
         return ext.isEmpty ? "png" : ext
+    }
+
+    private func isSupportedImage(_ url: URL) -> Bool {
+        guard !url.hasDirectoryPath,
+              let type = UTType(filenameExtension: url.pathExtension) else {
+            return false
+        }
+        return type.conforms(to: .image)
     }
 
     private func t(_ key: CinemaTextKey) -> String {
@@ -139,6 +220,10 @@ struct ReferenceSidebarView: View {
 private struct ReferenceImageRow: View {
     @Binding var reference: ReferenceImage
     var image: NSImage?
+    var applyToCurrentCutTitle: String
+    var deleteTitle: String
+    var canApplyToCurrentCut: Bool
+    var applyToCurrentCut: () -> Void
     var delete: () -> Void
     @State private var showsDetails = false
     @State private var isHovering = false
@@ -192,6 +277,18 @@ private struct ReferenceImageRow: View {
         }
         .padding(10)
         .cinemaPanel()
+        .contextMenu {
+            Button(applyToCurrentCutTitle, systemImage: "photo.badge.checkmark") {
+                applyToCurrentCut()
+            }
+            .disabled(!canApplyToCurrentCut)
+
+            Divider()
+
+            Button(role: .destructive, action: delete) {
+                Label(deleteTitle, systemImage: "trash")
+            }
+        }
     }
 
     private var referenceDetailsEditor: some View {

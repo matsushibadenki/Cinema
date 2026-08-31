@@ -81,6 +81,10 @@ enum CinemaTextKey: String {
     case properties
     case addPhoto
     case noPhotos
+    case dropReferenceMaterials
+    case applyReferenceToCurrentCut
+    case removeReferenceFromCut
+    case toggleReferenceApplication
     case delete
     case details
     case deleteSection
@@ -302,6 +306,10 @@ enum CinemaStrings {
         .properties: "プロパティ",
         .addPhoto: "写真を登録",
         .noPhotos: "登録写真なし",
+        .dropReferenceMaterials: "画像をここへドラッグ＆ドロップ",
+        .applyReferenceToCurrentCut: "現在のカットに適用",
+        .removeReferenceFromCut: "このカットへの適用を削除",
+        .toggleReferenceApplication: "リファレンス適用のオン / オフ",
         .delete: "削除",
         .details: "詳細情報",
         .deleteSection: "セクションを削除",
@@ -421,6 +429,10 @@ enum CinemaStrings {
         .properties: "Properties",
         .addPhoto: "Add Photo",
         .noPhotos: "No Photos",
+        .dropReferenceMaterials: "Drag and drop images here",
+        .applyReferenceToCurrentCut: "Apply to Current Cut",
+        .removeReferenceFromCut: "Remove from This Cut",
+        .toggleReferenceApplication: "Enable or disable reference application",
         .delete: "Delete",
         .details: "Details",
         .deleteSection: "Delete Section",
@@ -540,6 +552,10 @@ enum CinemaStrings {
         .properties: "属性",
         .addPhoto: "添加照片",
         .noPhotos: "没有照片",
+        .dropReferenceMaterials: "将图像拖放到这里",
+        .applyReferenceToCurrentCut: "应用到当前镜头",
+        .removeReferenceFromCut: "从当前镜头中移除",
+        .toggleReferenceApplication: "启用或停用参考应用",
         .delete: "删除",
         .details: "详细信息",
         .deleteSection: "删除分区",

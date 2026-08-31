@@ -52,5 +52,18 @@ final class StoryboardModelMigrationTests: XCTestCase {
         let cut = try JSONDecoder().decode(StoryboardCut.self, from: Data(json.utf8))
 
         XCTAssertEqual(cut.aiShotSettings, AIShotSettings())
+        XCTAssertTrue(cut.disabledReferenceImageIDs.isEmpty)
+    }
+
+    func testEnabledReferenceIDsExcludeDisabledLinks() {
+        let enabledID = UUID()
+        let disabledID = UUID()
+        let cut = StoryboardCut(
+            cutNumber: 1,
+            referenceImageIDs: [enabledID, disabledID],
+            disabledReferenceImageIDs: [disabledID]
+        )
+
+        XCTAssertEqual(cut.enabledReferenceImageIDs, [enabledID])
     }
 }

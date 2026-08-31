@@ -21,9 +21,10 @@ EXECUTABLE_PATH="$BUILD_DIR/$APP_NAME"
 SPARKLE_FRAMEWORK_PATH="$BUILD_DIR/Sparkle.framework"
 
 rm -rf "$BUNDLE_PATH"
-mkdir -p "$BUNDLE_PATH/Contents/MacOS" "$BUNDLE_PATH/Contents/Frameworks"
+mkdir -p "$BUNDLE_PATH/Contents/MacOS" "$BUNDLE_PATH/Contents/Frameworks" "$BUNDLE_PATH/Contents/Resources"
 cp "$EXECUTABLE_PATH" "$BUNDLE_PATH/Contents/MacOS/$APP_NAME"
 cp "$INFO_PLIST_PATH" "$BUNDLE_PATH/Contents/Info.plist"
+cp "$ROOT_DIR/Sources/Cinema/Resources/AppIcon.icns" "$BUNDLE_PATH/Contents/Resources/AppIcon.icns"
 ditto "$SPARKLE_FRAMEWORK_PATH" "$BUNDLE_PATH/Contents/Frameworks/Sparkle.framework"
 
 if [[ "$CODE_SIGN_IDENTITY" == "-" ]]; then

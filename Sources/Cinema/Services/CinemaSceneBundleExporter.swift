@@ -194,7 +194,7 @@ enum CinemaSceneBundleExporter {
                     durationSeconds: durationSeconds(cut.duration),
                     shotSettings: cut.aiShotSettings,
                     shotDelta: cut.shotDelta,
-                    referenceIDs: cut.referenceImageIDs,
+                    referenceIDs: cut.enabledReferenceImageIDs,
                     storyboardImagePath: storyboardImagePath,
                     imagePromptPath: imagePromptPath,
                     videoPromptPath: videoPromptPath
@@ -256,7 +256,7 @@ enum CinemaSceneBundleExporter {
 
     private static func referencedImages(for cuts: [StoryboardCut], in references: [ReferenceImage]) -> [ReferenceImage] {
         var seen = Set<ReferenceImage.ID>()
-        return cuts.flatMap(\.referenceImageIDs).compactMap { id in
+        return cuts.flatMap(\.enabledReferenceImageIDs).compactMap { id in
             guard seen.insert(id).inserted else { return nil }
             return references.first { $0.id == id }
         }

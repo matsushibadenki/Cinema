@@ -72,7 +72,7 @@ enum CinemaSceneBundleValidator {
                 }
             }
 
-            for referenceID in cut.referenceImageIDs {
+            for referenceID in cut.enabledReferenceImageIDs {
                 referencedIDs.insert(referenceID)
                 guard let reference = referenceLookup[referenceID] else {
                     items.append(.init(id: "\(prefix)-reference-\(referenceID)", severity: .warning, message: localized.unknownReference(cut.cutNumber)))

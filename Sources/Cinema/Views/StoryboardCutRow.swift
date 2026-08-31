@@ -544,6 +544,7 @@ struct StoryboardCutRow: View {
                     imageData: imageData,
                     image: image,
                     aspectRatio: screenAspectRatio,
+                    appLanguage: appLanguage,
                     showsGeneratePlaceholder: showsGeneratePlaceholder,
                     backgroundBrightness: screenBackgroundBrightness,
                     isGenerating: isGenerating,
@@ -639,6 +640,7 @@ struct StoryboardCutRow: View {
             .popover(isPresented: $showsReferencePicker, arrowEdge: .trailing) {
                 CutReferencePickerPopover(
                     selectedIDs: $cut.referenceImageIDs,
+                    disabledIDs: $cut.disabledReferenceImageIDs,
                     references: referenceImages
                 )
             }
@@ -796,6 +798,7 @@ struct FocusedStoryboardCutScroller: View {
                                 imageData: cut.imageFileName.flatMap { imageData[$0] },
                                 image: ImageHelpers.nsImage(from: cut.imageFileName.flatMap { imageData[$0] }),
                                 referenceImages: referenceImages,
+                                referenceImageData: imageData,
                                 screenAspectRatio: screenAspectRatio,
                                 showsGeneratePlaceholder: showsGeneratePlaceholder,
                                 screenBackgroundBrightness: screenBackgroundBrightness,
@@ -855,10 +858,12 @@ private struct FocusedStoryboardCutView: View {
     @AppStorage("focusedCutInspectorWidthRatio") private var inspectorWidthRatio = 0.38
     @State private var selectedTab: InspectorTab = .contentDialogue
     @State private var inspectorDragStartRatio: Double?
+    @State private var expandedReferenceIDs: Set<ReferenceImage.ID> = []
 
     var imageData: Data?
     var image: NSImage?
     var referenceImages: [ReferenceImage]
+    var referenceImageData: [String: Data]
     var screenAspectRatio: CGFloat
     var showsGeneratePlaceholder: Bool
     var screenBackgroundBrightness: CGFloat
@@ -1033,10 +1038,12 @@ private struct FocusedStoryboardCutView: View {
                         imageData: imageData,
                         image: image,
                         aspectRatio: screenAspectRatio,
+                        appLanguage: appLanguage,
                         showsGeneratePlaceholder: showsGeneratePlaceholder,
                         backgroundBrightness: screenBackgroundBrightness,
                         isGenerating: isGenerating,
                         cutNumber: cut.cutNumber,
+                        allowsImageViewportEditing: true,
                         importImage: importImage,
                         deleteImage: deleteImage
                     )
@@ -1059,8 +1066,8 @@ private struct FocusedStoryboardCutView: View {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 sectionLabel(t(.referenceApplicationItems))
 
-                if !appliedReferences.isEmpty {
-                    Text("\(appliedReferences.count)")
+                if !linkedReferences.isEmpty {
+                    Text("\(enabledReferences.count)/\(linkedReferences.count)")
                         .font(.system(size: 10, weight: .semibold, design: .rounded))
                         .foregroundStyle(CinemaDesign.quietInk)
                 }
@@ -1069,7 +1076,7 @@ private struct FocusedStoryboardCutView: View {
             }
             .padding(.top, 8)
 
-            if appliedReferences.isEmpty {
+            if linkedReferences.isEmpty {
                 HStack(spacing: 8) {
                     Image(systemName: "photo.on.rectangle")
                         .font(.system(size: 12, weight: .medium))
@@ -1082,9 +1089,9 @@ private struct FocusedStoryboardCutView: View {
                 .padding(.top, 8)
             } else {
                 ScrollView(.vertical) {
-                    LazyVStack(alignment: .leading, spacing: 0) {
-                        ForEach(appliedReferences) { reference in
-                            appliedReferenceRows(reference)
+                    LazyVStack(alignment: .leading, spacing: 6) {
+                        ForEach(linkedReferences) { reference in
+                            appliedReferenceDisclosure(reference)
                         }
                     }
                 }
@@ -1093,8 +1100,63 @@ private struct FocusedStoryboardCutView: View {
         }
     }
 
+    private func appliedReferenceDisclosure(_ reference: ReferenceImage) -> some View {
+        DisclosureGroup(isExpanded: expandedBinding(for: reference.id)) {
+            appliedReferenceDetails(reference)
+                .padding(.top, 6)
+        } label: {
+            HStack(spacing: 8) {
+                Toggle("", isOn: referenceEnabledBinding(for: reference.id))
+                    .labelsHidden()
+                    .toggleStyle(.checkbox)
+                    .help(t(.toggleReferenceApplication))
+
+                referenceThumbnail(reference)
+                    .opacity(isReferenceEnabled(reference.id) ? 1 : 0.52)
+
+                Spacer(minLength: 0)
+            }
+        }
+        .disclosureGroupStyle(.automatic)
+        .padding(.vertical, 4)
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(CinemaDesign.fineBorder)
+                .frame(height: 1)
+        }
+        .contextMenu {
+            Button(t(.removeReferenceFromCut), systemImage: "xmark.circle", role: .destructive) {
+                removeReferenceFromCut(reference.id)
+            }
+        }
+    }
+
+    private func referenceThumbnail(_ reference: ReferenceImage) -> some View {
+        ZStack {
+            Rectangle()
+                .fill(CinemaDesign.insetSurface)
+
+            if let image = ImageHelpers.nsImage(from: referenceImageData[reference.imageFileName]) {
+                Image(nsImage: image)
+                    .resizable()
+                    .scaledToFill()
+            } else {
+                Image(systemName: "photo")
+                    .font(.system(size: 18, weight: .light))
+                    .foregroundStyle(CinemaDesign.mutedInk)
+            }
+        }
+        .frame(width: 96, height: 56)
+        .clipped()
+        .overlay {
+            Rectangle()
+                .stroke(CinemaDesign.focusedCutBorder, lineWidth: 0.8)
+        }
+        .contentShape(Rectangle())
+    }
+
     @ViewBuilder
-    private func appliedReferenceRows(_ reference: ReferenceImage) -> some View {
+    private func appliedReferenceDetails(_ reference: ReferenceImage) -> some View {
         let referenceName = reference.name.trimmingCharacters(in: .whitespacesAndNewlines)
 
         VStack(alignment: .leading, spacing: 6) {
@@ -1131,18 +1193,52 @@ private struct FocusedStoryboardCutView: View {
                 }
             }
         }
-        .padding(.vertical, 8)
-        .overlay(alignment: .bottom) {
-            Rectangle()
-                .fill(CinemaDesign.fineBorder)
-                .frame(height: 1)
+        .padding(.leading, 18)
+        .padding(.bottom, 8)
+    }
+
+    private func expandedBinding(for referenceID: ReferenceImage.ID) -> Binding<Bool> {
+        Binding {
+            expandedReferenceIDs.contains(referenceID)
+        } set: { isExpanded in
+            if isExpanded {
+                expandedReferenceIDs.insert(referenceID)
+            } else {
+                expandedReferenceIDs.remove(referenceID)
+            }
         }
     }
 
-    private var appliedReferences: [ReferenceImage] {
+    private var linkedReferences: [ReferenceImage] {
         cut.referenceImageIDs.compactMap { id in
             referenceImages.first { $0.id == id }
         }
+    }
+
+    private var enabledReferences: [ReferenceImage] {
+        linkedReferences.filter { isReferenceEnabled($0.id) }
+    }
+
+    private func isReferenceEnabled(_ referenceID: ReferenceImage.ID) -> Bool {
+        !cut.disabledReferenceImageIDs.contains(referenceID)
+    }
+
+    private func referenceEnabledBinding(for referenceID: ReferenceImage.ID) -> Binding<Bool> {
+        Binding {
+            isReferenceEnabled(referenceID)
+        } set: { isEnabled in
+            if isEnabled {
+                cut.disabledReferenceImageIDs.removeAll { $0 == referenceID }
+            } else if !cut.disabledReferenceImageIDs.contains(referenceID) {
+                cut.disabledReferenceImageIDs.append(referenceID)
+            }
+        }
+    }
+
+    private func removeReferenceFromCut(_ referenceID: ReferenceImage.ID) {
+        cut.referenceImageIDs.removeAll { $0 == referenceID }
+        cut.disabledReferenceImageIDs.removeAll { $0 == referenceID }
+        expandedReferenceIDs.remove(referenceID)
     }
 
     private func applicableFields(in section: DrawingSettingsSection) -> [DrawingSettingsField] {
@@ -1791,14 +1887,24 @@ private struct StoryboardScreenFrame: View {
     var imageData: Data?
     var image: NSImage?
     var aspectRatio: CGFloat
+    var appLanguage: String
     var showsGeneratePlaceholder: Bool
     var backgroundBrightness: CGFloat
     var isGenerating: Bool
     var cutNumber: Int
+    var allowsImageViewportEditing = false
     var importImage: () -> Void
     var deleteImage: () -> Void
 
     @State private var isEnlarged = false
+    @State private var imageScale: CGFloat = 1
+    @State private var magnificationStartScale: CGFloat?
+    @State private var imageOffset: CGSize = .zero
+    @State private var dragStartOffset: CGSize?
+
+    private let minimumImageScale: CGFloat = 1
+    private let maximumImageScale: CGFloat = 5
+    private let imageScaleStep: CGFloat = 0.25
 
     private var backgroundColor: Color {
         Color(white: min(max(backgroundBrightness, 0), 1))
@@ -1828,8 +1934,16 @@ private struct StoryboardScreenFrame: View {
                             Image(nsImage: image)
                                 .resizable()
                                 .scaledToFit()
+                                .scaleEffect(imageScale)
+                                .offset(imageOffset)
+                                .gesture(imagePanGesture(frameSize: frameSize))
+                                .simultaneousGesture(imageMagnificationGesture(frameSize: frameSize))
                                 .onTapGesture(count: 2) {
-                                    isEnlarged = true
+                                    if allowsImageViewportEditing, imageScale > minimumImageScale {
+                                        resetImageViewport()
+                                    } else {
+                                        isEnlarged = true
+                                    }
                                 }
                                 .pointingHandCursor()
                         } else {
@@ -1848,6 +1962,7 @@ private struct StoryboardScreenFrame: View {
                         }
                     }
                     .frame(width: frameSize.width, height: frameSize.height)
+                    .clipped()
                     .overlay {
                         Rectangle()
                             .stroke(CinemaDesign.storyboardFrameBorder, lineWidth: 0.8)
@@ -1880,6 +1995,13 @@ private struct StoryboardScreenFrame: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
                 }
 
+                if image != nil, allowsImageViewportEditing {
+                    imageViewportControls(frameSize: frameSize)
+                        .padding(.top, 8)
+                        .padding(.trailing, 10)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+                }
+
                 if isGenerating {
                     StoryboardProgressIndicator()
                         .frame(width: 32, height: 32)
@@ -1905,7 +2027,117 @@ private struct StoryboardScreenFrame: View {
                     )
                 }
             }
+            .onChange(of: imageData?.count) { _, _ in
+                resetImageViewport()
+            }
         }
+    }
+
+    private func imageViewportControls(frameSize: CGSize) -> some View {
+        HStack(spacing: 0) {
+            imageViewportButton(systemName: "minus", help: t(.zoomOut)) {
+                setImageScale(imageScale - imageScaleStep, frameSize: frameSize)
+            }
+            .disabled(imageScale <= minimumImageScale)
+
+            Button {
+                resetImageViewport()
+            } label: {
+                Text("\(Int((imageScale * 100).rounded()))%")
+                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                    .frame(minWidth: 42, minHeight: 26)
+            }
+            .buttonStyle(.plain)
+            .help(t(.actualSize))
+
+            imageViewportButton(systemName: "plus", help: t(.zoomIn)) {
+                setImageScale(imageScale + imageScaleStep, frameSize: frameSize)
+            }
+            .disabled(imageScale >= maximumImageScale)
+        }
+        .foregroundStyle(.white)
+        .background(.black.opacity(0.68))
+        .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 5, style: .continuous)
+                .stroke(.white.opacity(0.16), lineWidth: 0.6)
+        }
+    }
+
+    private func imageViewportButton(systemName: String, help: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.system(size: 10, weight: .semibold))
+                .frame(width: 28, height: 26)
+        }
+        .buttonStyle(.plain)
+        .help(help)
+    }
+
+    private func imagePanGesture(frameSize: CGSize) -> some Gesture {
+        DragGesture(minimumDistance: 2)
+            .onChanged { value in
+                guard allowsImageViewportEditing, imageScale > minimumImageScale else { return }
+                if dragStartOffset == nil {
+                    dragStartOffset = imageOffset
+                }
+                let start = dragStartOffset ?? imageOffset
+                imageOffset = clampedImageOffset(
+                    CGSize(
+                        width: start.width + value.translation.width,
+                        height: start.height + value.translation.height
+                    ),
+                    frameSize: frameSize,
+                    scale: imageScale
+                )
+            }
+            .onEnded { _ in
+                dragStartOffset = nil
+                imageOffset = clampedImageOffset(imageOffset, frameSize: frameSize, scale: imageScale)
+            }
+    }
+
+    private func imageMagnificationGesture(frameSize: CGSize) -> some Gesture {
+        MagnificationGesture()
+            .onChanged { magnification in
+                guard allowsImageViewportEditing else { return }
+                if magnificationStartScale == nil {
+                    magnificationStartScale = imageScale
+                }
+                setImageScale((magnificationStartScale ?? imageScale) * magnification, frameSize: frameSize)
+            }
+            .onEnded { _ in
+                magnificationStartScale = nil
+            }
+    }
+
+    private func setImageScale(_ scale: CGFloat, frameSize: CGSize) {
+        imageScale = min(max(scale, minimumImageScale), maximumImageScale)
+        if imageScale == minimumImageScale {
+            imageOffset = .zero
+        } else {
+            imageOffset = clampedImageOffset(imageOffset, frameSize: frameSize, scale: imageScale)
+        }
+    }
+
+    private func clampedImageOffset(_ offset: CGSize, frameSize: CGSize, scale: CGFloat) -> CGSize {
+        let maximumX = max(frameSize.width * (scale - 1) / 2, 0)
+        let maximumY = max(frameSize.height * (scale - 1) / 2, 0)
+        return CGSize(
+            width: min(max(offset.width, -maximumX), maximumX),
+            height: min(max(offset.height, -maximumY), maximumY)
+        )
+    }
+
+    private func resetImageViewport() {
+        imageScale = minimumImageScale
+        imageOffset = .zero
+        magnificationStartScale = nil
+        dragStartOffset = nil
+    }
+
+    private func t(_ key: CinemaTextKey) -> String {
+        CinemaStrings.text(key, language: appLanguage)
     }
 
     private func saveImage(data: Data) {
@@ -2183,6 +2415,7 @@ private struct PromptEditorContent: View {
 
 private struct CutReferencePickerPopover: View {
     @Binding var selectedIDs: [ReferenceImage.ID]
+    @Binding var disabledIDs: [ReferenceImage.ID]
     var references: [ReferenceImage]
 
     var body: some View {
@@ -2218,10 +2451,12 @@ private struct CutReferencePickerPopover: View {
                 HStack {
                     Button("すべて選択") {
                         selectedIDs = references.map(\.id)
+                        disabledIDs.removeAll { selectedIDs.contains($0) }
                     }
 
                     Button("解除") {
                         selectedIDs.removeAll()
+                        disabledIDs.removeAll()
                     }
 
                     Spacer()
@@ -2240,8 +2475,10 @@ private struct CutReferencePickerPopover: View {
                 if !selectedIDs.contains(id) {
                     selectedIDs.append(id)
                 }
+                disabledIDs.removeAll { $0 == id }
             } else {
                 selectedIDs.removeAll { $0 == id }
+                disabledIDs.removeAll { $0 == id }
             }
         }
     }

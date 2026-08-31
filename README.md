@@ -4,6 +4,8 @@
 
 ![Cinema Storyboard](doc/images/Cinema-image2.png)
 
+![Cinema Scene sample](doc/images/Cinema-image3.png)
+
 Cinema is a native macOS pre-production workspace for designing cinematic scenes, storyboards, dialogue, and AI-assisted visual previews in one document.
 
 It is built for filmmakers, directors, storyboard artists, and small production teams who want to move from an idea to a structured sequence of cuts without scattering project context across prompt files, spreadsheets, image folders, and generation tools.

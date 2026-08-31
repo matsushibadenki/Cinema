@@ -142,6 +142,12 @@ struct ContentView: View {
     private let zoomStep: CGFloat = 0.1
     private let pageCanvasPadding: CGFloat = 16
 
+    private var currentReferenceCutID: StoryboardCut.ID? {
+        let index = displayMode == .cutFocus ? pageIndex : (focusedCutScrollPosition ?? pageIndex)
+        guard document.project.cuts.indices.contains(index) else { return nil }
+        return document.project.cuts[index].id
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             Group {
@@ -200,7 +206,11 @@ struct ContentView: View {
 
                 if showsReferenceSidebar {
                     Divider()
-                    ReferenceSidebarView(document: $document, appLanguage: appLanguage)
+                    ReferenceSidebarView(
+                        document: $document,
+                        currentCutID: currentReferenceCutID,
+                        appLanguage: appLanguage
+                    )
                         .fixedSize(horizontal: false, vertical: false)
                         .transition(.move(edge: .trailing).combined(with: .opacity))
                 }
@@ -1377,7 +1387,7 @@ struct ContentView: View {
 
     private func referencesForCuts(_ cuts: [StoryboardCut]) -> [ReferenceImage] {
         var seenIDs = Set<ReferenceImage.ID>()
-        let ids = cuts.flatMap(\.referenceImageIDs)
+        let ids = cuts.flatMap(\.enabledReferenceImageIDs)
         return ids.compactMap { id in
             guard !seenIDs.contains(id),
                   let reference = document.project.referenceImages.first(where: { $0.id == id }) else {
@@ -1899,7 +1909,7 @@ struct ContentView: View {
     }
 
     private func referencesForCut(_ cut: StoryboardCut) -> [ReferenceImage] {
-        cut.referenceImageIDs.compactMap { id in
+        cut.enabledReferenceImageIDs.compactMap { id in
             document.project.referenceImages.first { $0.id == id }
         }
     }

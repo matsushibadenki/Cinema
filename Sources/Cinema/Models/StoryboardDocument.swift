@@ -22,7 +22,9 @@ struct StoryboardDocument: FileDocument {
         }
 
         let wrappers = configuration.file.fileWrappers ?? [:]
-        guard let jsonData = wrappers["storyboard.json"]?.regularFileContents else {
+        guard let jsonWrapper = wrappers["storyboard.json"],
+              jsonWrapper.isRegularFile,
+              let jsonData = jsonWrapper.regularFileContents else {
             throw CocoaError(.fileReadNoSuchFile)
         }
 
@@ -66,14 +68,14 @@ struct StoryboardDocument: FileDocument {
         }
     }
 
-    private static func readData(from wrapper: FileWrapper, prefix: String) -> [String: Data] {
+    static func readData(from wrapper: FileWrapper, prefix: String) -> [String: Data] {
         var dataByPath: [String: Data] = [:]
         for (name, child) in wrapper.fileWrappers ?? [:] {
             let path = "\(prefix)/\(name)"
-            if let data = child.regularFileContents {
-                dataByPath[path] = data
-            } else if child.isDirectory {
+            if child.isDirectory {
                 dataByPath.merge(readData(from: child, prefix: path)) { current, _ in current }
+            } else if child.isRegularFile, let data = child.regularFileContents {
+                dataByPath[path] = data
             }
         }
         return dataByPath
