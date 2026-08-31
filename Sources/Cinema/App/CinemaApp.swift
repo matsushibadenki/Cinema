@@ -2,6 +2,7 @@
 // CinemaApp.swift
 // Cinemaアプリケーションのエントリーポイント。ドキュメントグループ設定やメニューコマンド、ウィンドウ構築を行います。
 
+import AppKit
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -66,7 +67,19 @@ private struct AppCommands: Commands {
             }
         }
 
-        CommandGroup(after: .newItem) {
+        CommandGroup(replacing: .saveItem) {
+            Button("保存") {
+                NSDocumentController.shared.currentDocument?.save(nil)
+            }
+            .keyboardShortcut("s", modifiers: .command)
+
+            Button("別名で保存...") {
+                NSDocumentController.shared.currentDocument?.saveAs(nil)
+            }
+            .keyboardShortcut("s", modifiers: [.command, .shift])
+        }
+
+        CommandGroup(replacing: .printItem) {
             Button(CinemaStrings.text(.print, language: appLanguage) + "...") {
                 NotificationCenter.default.post(name: .printCurrentStoryboardPage, object: nil)
             }

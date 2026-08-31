@@ -182,6 +182,7 @@ private struct StoryboardTextView: NSViewRepresentable {
     var alignment: NSTextAlignment = .left
     var textColor: NSColor = .labelColor
     var contextMenuActions: StoryboardTextContextMenuActions?
+    var isSingleLine = false
 
     func makeNSView(context: Context) -> NSScrollView {
         let scrollView = NSScrollView()
@@ -221,12 +222,13 @@ private struct StoryboardTextView: NSViewRepresentable {
             textView.string = text
         }
         context.coordinator.contextMenuActions = contextMenuActions
+        context.coordinator.isSingleLine = isSingleLine
         textView.contextMenuHandler = context.coordinator
         applyStyle(to: textView)
     }
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(text: $text, contextMenuActions: contextMenuActions)
+        Coordinator(text: $text, contextMenuActions: contextMenuActions, isSingleLine: isSingleLine)
     }
 
     private func applyStyle(to textView: NSTextView) {
@@ -244,16 +246,36 @@ private struct StoryboardTextView: NSViewRepresentable {
         ]
         textView.textContainerInset = NSSize(width: horizontalInset, height: verticalInset)
         textView.textContainer?.lineFragmentPadding = 0
+        textView.textContainer?.maximumNumberOfLines = isSingleLine ? 1 : 0
+        textView.textContainer?.lineBreakMode = isSingleLine ? .byTruncatingTail : .byWordWrapping
     }
 
     final class Coordinator: NSObject, NSTextViewDelegate, StoryboardTextContextMenuHandling {
         @Binding var text: String
         weak var textView: ContextMenuTextView?
         var contextMenuActions: StoryboardTextContextMenuActions?
+        var isSingleLine: Bool
 
-        init(text: Binding<String>, contextMenuActions: StoryboardTextContextMenuActions?) {
+        init(text: Binding<String>, contextMenuActions: StoryboardTextContextMenuActions?, isSingleLine: Bool) {
             _text = text
             self.contextMenuActions = contextMenuActions
+            self.isSingleLine = isSingleLine
+        }
+
+        func textView(
+            _ textView: NSTextView,
+            shouldChangeTextIn affectedCharRange: NSRange,
+            replacementString: String?
+        ) -> Bool {
+            guard isSingleLine, let replacementString,
+                  replacementString.contains(where: { $0.isNewline }) else { return true }
+
+            let singleLineReplacement = replacementString
+                .components(separatedBy: .newlines)
+                .joined(separator: " ")
+            textView.textStorage?.replaceCharacters(in: affectedCharRange, with: singleLineReplacement)
+            text = textView.string
+            return false
         }
 
         func textDidChange(_ notification: Notification) {
@@ -756,9 +778,14 @@ struct FocusedStoryboardCutScroller: View {
         GeometryReader { proxy in
             let isCompactWidth = proxy.size.width < 1380
             let stripSpacing = isCompactWidth ? 6.0 : 8.0
-            let stripHeight = isCompactWidth ? 134.0 : 148.0
+            // Reserve enough height for a complete 16:9 frame, cut heading, and
+            // timestamp without requiring vertical scrolling.
+            let stripHeight = isCompactWidth ? 170.0 : 196.0
             let currentCutID = cuts.indices.contains(currentIndex) ? cuts[currentIndex].id : nil
-            let editorHeight = max(proxy.size.height - stripHeight - stripSpacing, 700)
+            // Keep the filmstrip pinned inside the visible canvas. A fixed editor
+            // minimum pushed the strip below shorter windows and required the
+            // surrounding page to scroll before a complete thumbnail was visible.
+            let editorHeight = max(proxy.size.height - stripHeight - stripSpacing, 1)
 
             VStack(spacing: 0) {
                 ScrollView(.vertical) {
@@ -796,6 +823,7 @@ struct FocusedStoryboardCutScroller: View {
                     sceneTitle: selectedVideoSceneTitle,
                     columns: generatedVideoColumns,
                     currentCutID: currentCutID,
+                    screenAspectRatio: screenAspectRatio,
                     isCompact: isCompactWidth
                 )
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -1364,7 +1392,9 @@ private struct DialogueSheetEditor: View {
     private let minimumDialogueWidth: CGFloat = 26
 
     private var fontSize: CGFloat {
-        isPrinting ? max(baseFontSize - 1, 8) : max(baseFontSize - 1, 13)
+        // Dialogue cells are narrower than the content column, so use a quieter
+        // print size while preserving the user's selected size in the editor.
+        isPrinting ? max(baseFontSize - 2, 7) : max(baseFontSize - 1, 7)
     }
 
     var body: some View {
@@ -1605,7 +1635,9 @@ private struct DialogueSheetRow: View {
                 .font(.system(size: fontSize))
                 .foregroundStyle(Color(nsColor: textColor))
                 .multilineTextAlignment(.leading)
-                .lineLimit(nil)
+                .lineLimit(1)
+                .truncationMode(.tail)
+                .minimumScaleFactor(0.65)
                 .padding(.horizontal, horizontalInset)
                 .padding(.vertical, verticalInset)
                 .frame(width: speakerWidth, alignment: .topLeading)
@@ -1624,7 +1656,8 @@ private struct DialogueSheetRow: View {
                 verticalInset: verticalInset,
                 lineSpacing: lineSpacing,
                 textColor: textColor,
-                contextMenuActions: contextMenuActions
+                contextMenuActions: contextMenuActions,
+                isSingleLine: true
             )
             .frame(width: speakerWidth, alignment: .topLeading)
             .frame(height: rowHeight, alignment: .topLeading)

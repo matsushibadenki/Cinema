@@ -103,6 +103,8 @@ struct ContentView: View {
     @AppStorage("hyperbolicAPIKey") private var hyperbolicAPIKey = ""
     @AppStorage("hyperbolicModelName") private var hyperbolicModelName = "SDXL1.0-base"
     @AppStorage("screenAspectRatio") private var screenAspectRatioRawValue = ScreenAspectRatio.television169.rawValue
+    @AppStorage("customScreenWidth") private var customScreenWidth = 1920
+    @AppStorage("customScreenHeight") private var customScreenHeight = 1080
     @AppStorage("showsGeneratePlaceholder") private var showsGeneratePlaceholder = true
     @AppStorage("showsCutActionControls") private var showsCutActionControls = true
     @AppStorage("screenBackgroundBrightness") private var screenBackgroundBrightness = 0.0
@@ -127,6 +129,8 @@ struct ContentView: View {
     @State private var pinchStartZoomScale: CGFloat?
     @State private var displayMode: DocumentDisplayMode = .cutFocus
     @State private var showsDrawingSettings = false
+    @State private var showsSceneStateEditor = false
+    @State private var showsProjectSettings = false
     @State private var showsFullCanvas = false
     @State private var isInitialStoryboardFitPending = true
     @State private var storyboardCanvasHeight: CGFloat = 0
@@ -146,7 +150,12 @@ struct ContentView: View {
             SidebarView(
                 title: $document.project.title,
                 drawingSettings: $document.project.drawingSettings,
+                sceneStates: $document.project.sceneStates,
+                showsDrawingSettings: showsDrawingSettings,
+                toggleDrawingSettings: toggleDrawingSettings,
+                printCurrentPage: printCurrentPage,
                 cuts: document.project.cuts,
+                referenceImages: document.project.referenceImages,
                 imageData: document.imageData,
                 pageIndex: $pageIndex,
                 pageCount: currentPageCount,
@@ -214,6 +223,24 @@ struct ContentView: View {
                 title: Text(alert.title),
                 message: Text(alert.message),
                 dismissButton: .default(Text("OK"))
+            )
+        }
+        .sheet(isPresented: $showsSceneStateEditor) {
+            if let sceneTitle = selectedVideoSceneTitle {
+                SceneStateWorkspaceView(
+                    sceneTitle: sceneTitle,
+                    sceneState: sceneStateBinding(for: sceneTitle),
+                    cuts: selectedAISceneCuts,
+                    references: document.project.referenceImages,
+                    imageData: document.imageData,
+                    appLanguage: appLanguage
+                )
+            }
+        }
+        .sheet(isPresented: $showsProjectSettings) {
+            ProjectSettingsView(
+                context: $document.project.projectContext,
+                appLanguage: appLanguage
             )
         }
         .onReceive(NotificationCenter.default.publisher(for: .printCurrentStoryboardPage)) { _ in
@@ -468,7 +495,10 @@ struct ContentView: View {
     }
 
     private var screenAspectRatioValue: CGFloat {
-        ScreenAspectRatio.value(for: screenAspectRatioRawValue).ratio
+        ScreenAspectRatio.value(for: screenAspectRatioRawValue).ratio(
+            customWidth: customScreenWidth,
+            customHeight: customScreenHeight
+        )
     }
 
     private func fullCanvasPage(availableSize: CGSize) -> some View {
@@ -523,7 +553,7 @@ struct ContentView: View {
                 delete: deleteCut,
                 appLanguage: appLanguage
             )
-            .screenAspectRatio(ScreenAspectRatio.value(for: screenAspectRatioRawValue).ratio)
+            .screenAspectRatio(screenAspectRatioValue)
             .showsGeneratePlaceholder(showsGeneratePlaceholder)
             .showsCutActionControls(showsCutActionControls)
             .screenBackgroundBrightness(CGFloat(screenBackgroundBrightness))
@@ -556,8 +586,13 @@ struct ContentView: View {
 
     private var toolbar: some View {
         VStack(alignment: .leading, spacing: 0) {
+            aiControlBar
+
+            CinemaDesign.toolbarSeparator
+                .frame(height: 1)
+
             HStack(spacing: 14) {
-                // Left group: mode, drawing settings
+                // Left group: display mode
                 HStack(spacing: 10) {
                     HStack(spacing: 2) {
                         Button {
@@ -575,19 +610,6 @@ struct ContentView: View {
                         .buttonStyle(CinemaStateButtonStyle(isActive: displayMode == .storyboard, expands: true))
                     }
                     .frame(width: 250)
-
-                    Button {
-                        showsDrawingSettings.toggle()
-                        if showsDrawingSettings {
-                            showsFullCanvas = false
-                            zoomScale = 1.0
-                            focusedCutScrollPosition = displayMode == .cutFocus ? pageIndex : focusedCutScrollPosition
-                        }
-                    } label: {
-                        Label(t(.drawingSettings), systemImage: "paintpalette")
-                    }
-                    .buttonStyle(CinemaToolbarButtonStyle(isActive: showsDrawingSettings))
-                    .padding(.leading, 4)
                 }
 
                 Spacer(minLength: 12)
@@ -682,7 +704,7 @@ struct ContentView: View {
 
                 Spacer(minLength: 12)
 
-                // Right group: reference, print
+                // Right group: reference
                 HStack(spacing: 8) {
                     Button {
                         showsReferenceSidebar.toggle()
@@ -692,13 +714,6 @@ struct ContentView: View {
                     .buttonStyle(CinemaToolbarButtonStyle(isActive: showsReferenceSidebar))
                     .help(showsReferenceSidebar ? t(.hideReference) : t(.showReference))
 
-                    Button {
-                        printCurrentPage()
-                    } label: {
-                        Label(t(.print), systemImage: "printer")
-                    }
-                    .buttonStyle(CinemaActionButtonStyle())
-                    .disabled(showsDrawingSettings)
                 }
             }
             .padding(.horizontal, 18)
@@ -721,6 +736,185 @@ struct ContentView: View {
         .overlay(alignment: .bottom) {
             CinemaDesign.toolbarSeparator
                 .frame(height: 1)
+        }
+    }
+
+    private var aiControlBar: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 12) {
+                Label(t(.ai), systemImage: "sparkles")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(CinemaDesign.ink)
+
+                aiMetric(title: t(.estimatedTokens), value: "\(aiEstimatedTokensUsed)")
+                aiMetric(title: t(.estimatedCost), value: aiCostText(aiEstimatedCostUSD))
+
+                if isAICostLimitExceeded {
+                    Label(t(.costLimitExceeded), systemImage: "exclamationmark.triangle.fill")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(.red)
+                }
+
+                Divider().frame(height: 24)
+
+                Picker(t(.drawingPreset), selection: $document.project.drawingSettings.selectedPresetID) {
+                    ForEach(document.project.drawingSettings.presets) { preset in
+                        Text(preset.name).tag(preset.id)
+                    }
+                }
+                .labelsHidden()
+                .pickerStyle(.menu)
+                .frame(width: 150)
+
+                Picker(t(.screenSize), selection: $screenAspectRatioRawValue) {
+                    ForEach(ScreenAspectRatio.allCases) { ratio in
+                        Text(ratio.label(language: appLanguage))
+                            .tag(ratio.rawValue)
+                    }
+                }
+                .labelsHidden()
+                .pickerStyle(.menu)
+                .frame(width: 150)
+                .help(t(.screenSize))
+
+                Button {
+                    showsProjectSettings = true
+                } label: {
+                    Label(t(.projectSettings), systemImage: "slider.horizontal.3")
+                }
+                .buttonStyle(CinemaToolbarButtonStyle(
+                    isActive: !document.project.projectContext.productionDirective
+                        .trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                ))
+                .help(t(.projectSettingsHelp))
+
+                if ScreenAspectRatio.value(for: screenAspectRatioRawValue) == .custom {
+                    HStack(spacing: 4) {
+                        TextField("W", value: $customScreenWidth, format: .number)
+                            .frame(width: 58)
+                        Text("×")
+                            .foregroundStyle(CinemaDesign.mutedInk)
+                        TextField("H", value: $customScreenHeight, format: .number)
+                            .frame(width: 58)
+                    }
+                    .textFieldStyle(.roundedBorder)
+                    .help(ScreenAspectRatio.custom.detail(language: appLanguage))
+                }
+
+                Divider().frame(height: 24)
+
+                if let sceneTitle = selectedVideoSceneTitle {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(sceneTitle)
+                            .font(.system(size: 11, weight: .semibold))
+                        Text("対象: Cut \(selectedAISceneCuts.map(\.cutNumber).map(String.init).joined(separator: ", "))")
+                            .font(.system(size: 9))
+                            .foregroundStyle(CinemaDesign.mutedInk)
+                    }
+                    .lineLimit(1)
+
+                    Button(sceneStateButtonTitle) {
+                        ensureSceneState(for: sceneTitle)
+                        showsSceneStateEditor = true
+                    }
+                    .buttonStyle(CinemaToolbarButtonStyle())
+
+                    Button(t(.exportPrompt)) {
+                        exportScenePrompts(for: sceneTitle)
+                    }
+                    .buttonStyle(CinemaToolbarButtonStyle())
+
+                    Button(generatingSceneTitle == sceneTitle ? t(.generating) : t(.createSelectedSceneVideo)) {
+                        generateSceneVideo(for: sceneTitle)
+                    }
+                    .buttonStyle(CinemaActionButtonStyle())
+                    .disabled(generatingSceneTitle != nil)
+
+                    if let video = document.project.sceneVideos.first(where: { $0.title == sceneTitle }) {
+                        Button {
+                            saveSceneVideo(video)
+                        } label: {
+                            Image(systemName: "square.and.arrow.down")
+                        }
+                        .buttonStyle(CinemaToolbarButtonStyle())
+                        .help(t(.saveGeneratedVideo))
+                    }
+                } else {
+                    Text(t(.selectScene))
+                        .font(.system(size: 11))
+                        .foregroundStyle(CinemaDesign.mutedInk)
+                }
+            }
+            .padding(.horizontal, 18)
+            .padding(.vertical, 8)
+        }
+        .background(
+            isAICostLimitExceeded
+                ? AnyShapeStyle(Color.red.opacity(0.05))
+                : AnyShapeStyle(CinemaDesign.toolbarBackground)
+        )
+    }
+
+    private func aiMetric(title: String, value: String) -> some View {
+        VStack(alignment: .leading, spacing: 1) {
+            Text(title)
+                .font(.system(size: 8, weight: .medium))
+                .foregroundStyle(CinemaDesign.mutedInk)
+            Text(value)
+                .font(.system(size: 13, weight: .bold, design: .rounded).monospacedDigit())
+                .foregroundStyle(isAICostLimitExceeded ? .red : CinemaDesign.ink)
+        }
+    }
+
+    private var selectedAISceneCuts: [StoryboardCut] {
+        guard let sceneTitle = selectedVideoSceneTitle else { return [] }
+        return cutsForScene(title: sceneTitle).filter { selectedVideoCutIDs.contains($0.id) }
+    }
+
+    private var sceneStateButtonTitle: String {
+        switch AppLanguage.value(for: appLanguage) {
+        case .japanese: return "Scene State / 書き出し確認"
+        case .english: return "Scene State / Export Preview"
+        case .simplifiedChinese: return "Scene State / 导出预览"
+        }
+    }
+
+    private func ensureSceneState(for sceneTitle: String) {
+        guard !document.project.sceneStates.contains(where: { $0.sceneKey == sceneTitle || $0.title == sceneTitle }) else { return }
+        document.project.sceneStates.append(SceneState(sceneKey: sceneTitle, title: sceneTitle))
+    }
+
+    private func sceneStateBinding(for sceneTitle: String) -> Binding<SceneState> {
+        Binding(
+            get: {
+                document.project.sceneStates.first(where: { $0.sceneKey == sceneTitle || $0.title == sceneTitle })
+                    ?? SceneState(sceneKey: sceneTitle, title: sceneTitle)
+            },
+            set: { newValue in
+                if let index = document.project.sceneStates.firstIndex(where: { $0.id == newValue.id }) {
+                    document.project.sceneStates[index] = newValue
+                } else {
+                    document.project.sceneStates.append(newValue)
+                }
+            }
+        )
+    }
+
+    private func aiCostText(_ value: Double) -> String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .currency
+        formatter.currencyCode = "USD"
+        formatter.minimumFractionDigits = 4
+        formatter.maximumFractionDigits = 4
+        return formatter.string(from: NSNumber(value: value)) ?? "$0.0000"
+    }
+
+    private func toggleDrawingSettings() {
+        showsDrawingSettings.toggle()
+        if showsDrawingSettings {
+            showsFullCanvas = false
+            zoomScale = 1.0
+            focusedCutScrollPosition = displayMode == .cutFocus ? pageIndex : focusedCutScrollPosition
         }
     }
 
@@ -1211,7 +1405,7 @@ struct ContentView: View {
     }
 
     private var videoAspectRatio: String {
-        let ratio = ScreenAspectRatio.value(for: screenAspectRatioRawValue).ratio
+        let ratio = screenAspectRatioValue
         return ratio < 1 ? "9:16" : "16:9"
     }
 
@@ -1359,11 +1553,29 @@ struct ContentView: View {
     }
 
     private func exportScenePrompts(for title: String) {
-        let cuts = selectedVideoCuts(for: title)
-        let selectedCuts = cuts.filter { selectedVideoCutIDs.contains($0.id) }
+        let selectedCuts = selectedVideoCuts(for: title)
         
         guard !selectedCuts.isEmpty else {
-            generationStatus = "書き出すカットを選択してください"
+            generationStatus = CinemaStrings.noCutsForSceneBundle(language: appLanguage)
+            return
+        }
+
+        let sceneState = document.project.sceneStates.first {
+            $0.sceneKey == title || $0.title == title
+        }
+        let validation = CinemaSceneBundleValidator.validate(
+            sceneTitle: title,
+            sceneState: sceneState,
+            cuts: selectedCuts,
+            references: document.project.referenceImages,
+            imageData: document.imageData,
+            language: appLanguage
+        )
+        guard validation.canExport else {
+            generationStatus = CinemaStrings.sceneBundleHasErrors(
+                count: validation.errorCount,
+                language: appLanguage
+            )
             return
         }
         
@@ -1371,98 +1583,41 @@ struct ContentView: View {
         panel.canChooseDirectories = true
         panel.canChooseFiles = false
         panel.allowsMultipleSelection = false
-        panel.prompt = "選択"
-        panel.message = "プロンプトと画像を書き出すフォルダを選択してください。"
+        panel.prompt = CinemaStrings.chooseFolder(language: appLanguage)
+        panel.message = CinemaStrings.sceneBundleFolderMessage(language: appLanguage)
         
         let response = panel.runModal()
         guard response == .OK, let baseURL = panel.url else { return }
         
-        let invalidCharacters = CharacterSet(charactersIn: "\\/:*?\"<>|")
-        let safeTitle = title.components(separatedBy: invalidCharacters).joined(separator: "_")
-        let folderName = safeTitle.isEmpty ? "untitled_scene" : safeTitle
-        let sceneFolderURL = baseURL.appendingPathComponent(folderName)
-        
         do {
-            try FileManager.default.createDirectory(at: sceneFolderURL, withIntermediateDirectories: true, attributes: nil)
-            
-            // 1. シーン全体のまとめテキストを作成
-            var summary = ""
-            summary += "=========================================\n"
-            summary += "シーン: \(title)\n"
-            summary += "=========================================\n\n"
-            
-            let scenePrompt = sceneVideoPrompt(title: title, cuts: selectedCuts)
-            summary += "【シーン動画生成用プロンプト (AI動画生成用)】\n"
-            summary += "-----------------------------------------\n"
-            summary += scenePrompt + "\n"
-            summary += "-----------------------------------------\n\n"
-            
-            summary += "【カット別詳細】\n"
-            summary += "-----------------------------------------\n"
-            
-            for cut in selectedCuts {
-                let cutNumStr = String(format: "%02d", cut.cutNumber)
-                let durationStr = cut.duration.isEmpty ? "未設定" : "\(cut.duration)秒"
-                
-                summary += "■ カット \(cut.cutNumber) (\(durationStr))\n"
-                summary += "・内容: \(cut.situation)\n"
-                
-                let dialogue = dialoguePrompt(for: cut)
-                if !dialogue.isEmpty {
-                    summary += "・セリフ:\n\(dialogue)\n"
-                }
-                
-                let drawPrompt = drawingPromptForGeneration(references: referencesForCut(cut))
-                let cPrompt = cutPrompt(for: cut)
-                let fullImagePrompt = [drawPrompt, cPrompt].filter { !$0.isEmpty }.joined(separator: "\n")
-                summary += "・画像生成プロンプト:\n\(fullImagePrompt)\n"
-                
-                if !cut.generationPrompt.isEmpty {
-                    summary += "・追加の指示: \(cut.generationPrompt)\n"
-                }
-                summary += "-----------------------------------------\n\n"
-                
-                // 2. カットごとの個別プロンプトテキストを書き出し
-                var cutPromptContent = ""
-                cutPromptContent += "【画像生成用プロンプト (Image Generation Prompt)】\n"
-                cutPromptContent += fullImagePrompt + "\n\n"
-                cutPromptContent += "【動画生成用指示 (Video Generation Settings)】\n"
-                cutPromptContent += "Duration: \(durationStr)\n"
-                cutPromptContent += "Situation: \(cut.situation)\n"
-                if !dialogue.isEmpty {
-                    cutPromptContent += "Dialogue:\n\(dialogue)\n"
-                }
-                if !cut.generationPrompt.isEmpty {
-                    cutPromptContent += "Additional Direction: \(cut.generationPrompt)\n"
-                }
-                
-                let cutPromptURL = sceneFolderURL.appendingPathComponent("cut_\(cutNumStr)_prompt.txt")
-                try cutPromptContent.write(to: cutPromptURL, atomically: true, encoding: .utf8)
-                
-                // 3. 生成済みのコンテ画像を書き出し
-                if let imageFileName = cut.imageFileName,
-                   let imageData = document.imageData[imageFileName] {
-                    let imageURL = sceneFolderURL.appendingPathComponent("cut_\(cutNumStr)_image.png")
-                    try imageData.write(to: imageURL)
-                }
-                
-                // 4. リファレンス画像を書き出し
-                let refs = referencesForCut(cut)
-                for (index, ref) in refs.enumerated() {
-                    if let refData = document.imageData[ref.imageFileName] {
-                        let refNum = index + 1
-                        let refURL = sceneFolderURL.appendingPathComponent("cut_\(cutNumStr)_ref_\(refNum).png")
-                        try refData.write(to: refURL)
-                    }
-                }
-            }
-            
-            let summaryURL = sceneFolderURL.appendingPathComponent("scene_summary.txt")
-            try summary.write(to: summaryURL, atomically: true, encoding: .utf8)
-            
-            generationStatus = "シーン「\(title)」のプロンプトと画像をフォルダ「\(folderName)」に書き出しました"
+            let videoProvider = AIVideoGenerationProvider.value(for: videoGenerationProvider)
+            let configuration = CinemaSceneExportConfiguration(
+                aspectRatio: ScreenAspectRatio.value(for: screenAspectRatioRawValue),
+                aspectRatioLanguage: appLanguage,
+                imageProvider: AIImageGenerationProvider.value(for: imageGenerationProvider).rawValue,
+                imageModel: currentImageModelName(),
+                videoProvider: videoProvider.rawValue,
+                videoModel: currentVideoModelName(for: videoProvider),
+                applicationVersion: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "development"
+            )
+            let bundleURL = try CinemaSceneBundleExporter.export(
+                project: document.project,
+                sceneTitle: title,
+                cuts: selectedCuts,
+                imageData: document.imageData,
+                configuration: configuration,
+                to: baseURL
+            )
+            generationStatus = CinemaStrings.sceneBundleExported(
+                scene: title,
+                folder: bundleURL.lastPathComponent,
+                language: appLanguage
+            )
         } catch {
-            generationStatus = "書き出しに失敗しました: \(error.localizedDescription)"
+            generationStatus = CinemaStrings.sceneBundleExportFailed(
+                error: error.localizedDescription,
+                language: appLanguage
+            )
         }
     }
 
@@ -1472,7 +1627,7 @@ struct ContentView: View {
         guard let index = document.project.cuts.firstIndex(where: { $0.id == cutID }) else { return }
         let cut = document.project.cuts[index]
         let prompt = cutPrompt(for: cut)
-        let aspectRatio = ScreenAspectRatio.value(for: screenAspectRatioRawValue).ratio
+        let aspectRatio = screenAspectRatioValue
 
         guard !prompt.isEmpty else {
             generationStatus = "内容かセリフを入力してください"
@@ -1575,7 +1730,7 @@ struct ContentView: View {
             return
         }
 
-        let aspectRatio = ScreenAspectRatio.value(for: screenAspectRatioRawValue).ratio
+        let aspectRatio = screenAspectRatioValue
         let croppedData = ImageHelpers.pngDataByCropping(data, toAspectRatio: aspectRatio)
         let fileName = "Images/\(cutID.uuidString).png"
         document.imageData[fileName] = croppedData
@@ -1726,10 +1881,21 @@ struct ContentView: View {
     private func previousCutForContinuity(before cut: StoryboardCut) -> StoryboardCut? {
         guard cut.subtitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
               let index = document.project.cuts.firstIndex(where: { $0.id == cut.id }),
-              index > 0 else {
+              index > 0,
+              !requestsContinuityReset(cut) else {
             return nil
         }
         return document.project.cuts[index - 1]
+    }
+
+    private func requestsContinuityReset(_ cut: StoryboardCut) -> Bool {
+        let transition = cut.aiShotSettings.transition.lowercased()
+        let resetMarkers = [
+            "scene change", "new scene", "hard cut to", "time jump", "location change",
+            "場面転換", "新しい場面", "別の場所", "場所転換", "時間経過", "タイムジャンプ",
+            "场景切换", "新场景", "地点切换", "时间跳跃"
+        ]
+        return resetMarkers.contains { transition.contains($0) }
     }
 
     private func referencesForCut(_ cut: StoryboardCut) -> [ReferenceImage] {
@@ -1740,6 +1906,7 @@ struct ContentView: View {
 
     private func drawingPromptForGeneration(references: [ReferenceImage]) -> String {
         [
+            document.project.projectContext.promptText,
             document.project.drawingSettings.promptText(),
             referenceImagePrompt(references: references)
         ]

@@ -24,6 +24,7 @@ struct GeneratedVideoFilmstripView: View {
     var sceneTitle: String?
     var columns: [GeneratedVideoStripColumn]
     var currentCutID: StoryboardCut.ID?
+    var screenAspectRatio: CGFloat
     var isCompact = false
 
     var body: some View {
@@ -63,6 +64,7 @@ struct GeneratedVideoFilmstripView: View {
                                 GeneratedVideoFilmstripColumnView(
                                     column: column,
                                     isCurrentCut: column.cutID == currentCutID,
+                                    screenAspectRatio: screenAspectRatio,
                                     isCompact: isCompact,
                                     availableHeight: contentHeight
                                 )
@@ -86,6 +88,7 @@ struct GeneratedVideoFilmstripView: View {
 private struct GeneratedVideoFilmstripColumnView: View {
     var column: GeneratedVideoStripColumn
     var isCurrentCut: Bool
+    var screenAspectRatio: CGFloat
     var isCompact: Bool
     var availableHeight: CGFloat
 
@@ -93,38 +96,46 @@ private struct GeneratedVideoFilmstripColumnView: View {
     private var cardHeight: CGFloat {
         max(availableHeight - bottomMargin, isCompact ? 74 : 84)
     }
+    private var versionAreaHeight: CGFloat {
+        let verticalPadding = isCompact ? 10.0 : 12.0
+        return max(cardHeight - verticalPadding, 1)
+    }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: isCompact ? 6 : 8) {
-            HStack(spacing: 6) {
-                Text("\(column.cutNumber)")
-                    .font(.system(size: isCompact ? 10 : 11, weight: .bold))
-                    .foregroundStyle(isCurrentCut ? CinemaDesign.ink : CinemaDesign.controlInactiveInk)
-                    .frame(width: isCompact ? 18 : 20, height: isCompact ? 18 : 20)
-                    .background(
-                        Circle()
-                            .fill(isCurrentCut ? CinemaDesign.insetSurface : CinemaDesign.keyColorSoft)
-                    )
-
-                Text(column.cutName.isEmpty ? "カット \(column.cutNumber)" : column.cutName)
-                    .font(.system(size: isCompact ? 11 : 12, weight: .semibold))
-                    .foregroundStyle(CinemaDesign.ink)
-                    .lineLimit(1)
-            }
-
+        VStack(alignment: .leading, spacing: 0) {
             if column.versions.isEmpty {
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                Rectangle()
                     .fill(CinemaDesign.insetSurface.opacity(0.62))
                     .overlay {
                         Text("未生成")
                             .font(.system(size: 11, weight: .medium))
                             .foregroundStyle(CinemaDesign.quietInk)
                     }
+                    .overlay(alignment: .bottomLeading) {
+                        cutTitleOverlay
+                    }
+            } else if column.versions.count == 1, let version = column.versions.first {
+                GeneratedVideoVersionCard(
+                    version: version,
+                    cutNumber: column.cutNumber,
+                    versionNumber: 1,
+                    screenAspectRatio: screenAspectRatio,
+                    isCompact: isCompact,
+                    availableHeight: versionAreaHeight
+                )
+                .frame(height: versionAreaHeight, alignment: .top)
             } else {
                 ScrollView(.vertical, showsIndicators: true) {
                     LazyVStack(spacing: isCompact ? 6 : 8) {
-                        ForEach(column.versions) { version in
-                            GeneratedVideoVersionCard(version: version, isCompact: isCompact)
+                        ForEach(Array(column.versions.enumerated()), id: \.element.id) { index, version in
+                            GeneratedVideoVersionCard(
+                                version: version,
+                                cutNumber: column.cutNumber,
+                                versionNumber: index + 1,
+                                screenAspectRatio: screenAspectRatio,
+                                isCompact: isCompact,
+                                availableHeight: nil
+                            )
                         }
                     }
                     .padding(.trailing, 4)
@@ -150,20 +161,43 @@ private struct GeneratedVideoFilmstripColumnView: View {
         }
         .padding(.bottom, bottomMargin)
     }
+
+    private var cutTitleOverlay: some View {
+        HStack(spacing: 5) {
+            Text("\(column.cutNumber)")
+                .font(.system(size: isCompact ? 9 : 10, weight: .bold, design: .rounded))
+            Text(column.cutName.isEmpty ? "カット \(column.cutNumber)" : column.cutName)
+                .font(.system(size: isCompact ? 10 : 11, weight: .semibold))
+                .lineLimit(1)
+        }
+        .foregroundStyle(Color.white)
+        .padding(.horizontal, 7)
+        .padding(.vertical, 6)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.black.opacity(0.58))
+    }
 }
 
 private struct GeneratedVideoVersionCard: View {
     var version: GeneratedVideoStripVersion
+    var cutNumber: Int
+    var versionNumber: Int
+    var screenAspectRatio: CGFloat
     var isCompact: Bool
+    var availableHeight: CGFloat?
     @State private var image: NSImage?
     @State private var isLoading = false
+
+    private var thumbnailHeight: CGFloat {
+        let cardWidth = isCompact ? 136.0 : 162.0
+        return cardWidth / max(screenAspectRatio, 0.1)
+    }
 
     var body: some View {
         Button {
             NSWorkspace.shared.open(version.fileURL)
         } label: {
-            VStack(alignment: .leading, spacing: isCompact ? 4 : 6) {
-                ZStack {
+            ZStack(alignment: .bottomLeading) {
                     Rectangle()
                         .fill(CinemaDesign.insetSurface)
                         .overlay {
@@ -174,7 +208,8 @@ private struct GeneratedVideoVersionCard: View {
                     if let image {
                         Image(nsImage: image)
                             .resizable()
-                            .scaledToFill()
+                            .scaledToFit()
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
                     } else if isLoading {
                         ProgressView()
                             .controlSize(.small)
@@ -184,16 +219,33 @@ private struct GeneratedVideoVersionCard: View {
                             .font(.system(size: isCompact ? 14 : 16, weight: .semibold))
                             .foregroundStyle(CinemaDesign.quietInk)
                     }
-                }
-                .frame(height: isCompact ? 48 : 58)
-                .clipShape(Rectangle())
 
-                Text(version.generatedAt.formatted(date: .abbreviated, time: .shortened))
-                    .font(.system(size: isCompact ? 9 : 10, weight: .medium))
-                    .foregroundStyle(CinemaDesign.mutedInk)
-                    .lineLimit(1)
+                LinearGradient(
+                    colors: [.clear, .black.opacity(0.78)],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .frame(height: min(thumbnailHeight * 0.62, 54))
+                .allowsHitTesting(false)
+
+                VStack(alignment: .leading, spacing: 1) {
+                    HStack(spacing: 5) {
+                        Text("カット\(cutNumber)-\(versionNumber)")
+                            .font(.system(size: isCompact ? 10 : 11, weight: .semibold))
+                            .lineLimit(1)
+                    }
+                    Text(version.generatedAt.formatted(date: .abbreviated, time: .shortened))
+                        .font(.system(size: isCompact ? 8 : 9, weight: .medium))
+                        .opacity(0.82)
+                        .lineLimit(1)
+                }
+                .foregroundStyle(Color.white)
+                .padding(.horizontal, 7)
+                .padding(.vertical, 5)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(maxWidth: .infinity)
+            .frame(height: thumbnailHeight)
+            .clipped()
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

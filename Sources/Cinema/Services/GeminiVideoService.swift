@@ -48,27 +48,13 @@ struct GeminiVideoService {
         request.httpMethod = "POST"
         request.setValue(apiKey, forHTTPHeaderField: "x-goog-api-key")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = try JSONEncoder().encode(GeminiVideoRequest(
-            instances: [
-                GeminiVideoInstance(
-                    prompt: prompt,
-                    referenceImages: Array(referenceImages.prefix(3)).map {
-                        GeminiVideoReferenceImage(
-                            image: GeminiVideoImage(inlineData: GeminiInlineData(mimeType: $0.mimeType, data: $0.data.base64EncodedString())),
-                            referenceType: "asset"
-                        )
-                    }
-                )
-            ],
-            parameters: GeminiVideoParameters(
-                aspectRatio: aspectRatio,
-                durationSeconds: "\(durationSeconds)",
-                numberOfVideos: 1,
-                resolution: "720p",
-                negativePrompt: negativePrompt?.nilIfBlank,
-                seed: seed
-            )
-        ))
+        request.httpBody = try Self.requestBody(
+            prompt: prompt,
+            durationSeconds: durationSeconds,
+            aspectRatio: aspectRatio,
+            referenceImages: referenceImages,
+            negativePrompt: negativePrompt
+        )
 
         let (operationData, operationResponse) = try await URLSession.shared.data(for: request)
         if let httpResponse = operationResponse as? HTTPURLResponse, !(200..<300).contains(httpResponse.statusCode) {
@@ -97,6 +83,38 @@ struct GeminiVideoService {
         }
 
         return videoData
+    }
+
+    static func requestBody(
+        prompt: String,
+        durationSeconds: Int,
+        aspectRatio: String,
+        referenceImages: [GeminiReferenceImage],
+        negativePrompt: String?
+    ) throws -> Data {
+        try JSONEncoder().encode(GeminiVideoRequest(
+            instances: [
+                GeminiVideoInstance(
+                    prompt: prompt,
+                    referenceImages: Array(referenceImages.prefix(3)).map {
+                        GeminiVideoReferenceImage(
+                            image: GeminiVideoImage(
+                                bytesBase64Encoded: $0.data.base64EncodedString(),
+                                mimeType: $0.mimeType
+                            ),
+                            referenceType: "asset"
+                        )
+                    }
+                )
+            ],
+            parameters: GeminiVideoParameters(
+                aspectRatio: aspectRatio,
+                durationSeconds: durationSeconds,
+                sampleCount: 1,
+                resolution: "720p",
+                negativePrompt: negativePrompt?.nilIfBlank
+            )
+        ))
     }
 
     private func pollOperation(name: String) async throws -> GeminiVideoOperation {
@@ -140,16 +158,16 @@ private struct GeminiVideoReferenceImage: Encodable {
 }
 
 private struct GeminiVideoImage: Encodable {
-    var inlineData: GeminiInlineData
+    var bytesBase64Encoded: String
+    var mimeType: String
 }
 
 private struct GeminiVideoParameters: Encodable {
     var aspectRatio: String
-    var durationSeconds: String
-    var numberOfVideos: Int
+    var durationSeconds: Int
+    var sampleCount: Int
     var resolution: String
     var negativePrompt: String?
-    var seed: Int?
 }
 
 private struct GeminiVideoOperation: Decodable {

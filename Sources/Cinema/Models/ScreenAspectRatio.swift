@@ -6,6 +6,7 @@ enum ScreenAspectRatio: String, CaseIterable, Identifiable {
     case cinema185 = "cinema185"
     case cinemascope239 = "cinemascope239"
     case academy43 = "academy43"
+    case custom = "custom"
 
     var id: String { rawValue }
 
@@ -45,6 +46,12 @@ enum ScreenAspectRatio: String, CaseIterable, Identifiable {
             case .japanese: return "アカデミー 4:3"
             case .english: return "Academy 4:3"
             case .simplifiedChinese: return "学院 4:3"
+            }
+        case .custom:
+            switch language {
+            case .japanese: return "カスタム"
+            case .english: return "Custom"
+            case .simplifiedChinese: return "自定义"
             }
         }
     }
@@ -86,6 +93,12 @@ enum ScreenAspectRatio: String, CaseIterable, Identifiable {
             case .english: return "Classic"
             case .simplifiedChinese: return "经典"
             }
+        case .custom:
+            switch language {
+            case .japanese: return "任意の横幅と縦幅"
+            case .english: return "Custom width and height"
+            case .simplifiedChinese: return "自定义宽度和高度"
+            }
         }
     }
 
@@ -101,7 +114,14 @@ enum ScreenAspectRatio: String, CaseIterable, Identifiable {
             return 2.39
         case .academy43:
             return 4 / 3
+        case .custom:
+            return 16 / 9
         }
+    }
+
+    func ratio(customWidth: Int, customHeight: Int) -> CGFloat {
+        guard self == .custom else { return ratio }
+        return CGFloat(max(customWidth, 1)) / CGFloat(max(customHeight, 1))
     }
 
     static func value(for rawValue: String) -> ScreenAspectRatio {

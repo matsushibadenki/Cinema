@@ -102,6 +102,11 @@ enum CinemaTextKey: String {
     case language
     case documentAspectRatio
     case screenSize
+    case projectSettings
+    case projectSettingsHelp
+    case projectDirective
+    case projectDirectivePlaceholder
+    case close
     case screenFrameDescription
     case placeholder
     case showGeneratePlaceholder
@@ -195,6 +200,54 @@ enum CinemaStrings {
         }
     }
 
+    static func noCutsForSceneBundle(language rawLanguage: String) -> String {
+        switch AppLanguage.value(for: rawLanguage) {
+        case .japanese: return "書き出すカットを選択してください"
+        case .english: return "Select at least one cut to export"
+        case .simplifiedChinese: return "请选择至少一个要导出的镜头"
+        }
+    }
+
+    static func chooseFolder(language rawLanguage: String) -> String {
+        switch AppLanguage.value(for: rawLanguage) {
+        case .japanese: return "選択"
+        case .english: return "Choose"
+        case .simplifiedChinese: return "选择"
+        }
+    }
+
+    static func sceneBundleFolderMessage(language rawLanguage: String) -> String {
+        switch AppLanguage.value(for: rawLanguage) {
+        case .japanese: return "Cinema Scene Bundleを書き出すフォルダを選択してください。"
+        case .english: return "Choose a folder for the Cinema Scene Bundle."
+        case .simplifiedChinese: return "请选择 Cinema Scene Bundle 的导出文件夹。"
+        }
+    }
+
+    static func sceneBundleExported(scene: String, folder: String, language rawLanguage: String) -> String {
+        switch AppLanguage.value(for: rawLanguage) {
+        case .japanese: return "シーン「\(scene)」を「\(folder)」に書き出しました"
+        case .english: return "Exported scene “\(scene)” to “\(folder)”"
+        case .simplifiedChinese: return "已将场景“\(scene)”导出到“\(folder)”"
+        }
+    }
+
+    static func sceneBundleExportFailed(error: String, language rawLanguage: String) -> String {
+        switch AppLanguage.value(for: rawLanguage) {
+        case .japanese: return "Scene Bundleの書き出しに失敗しました: \(error)"
+        case .english: return "Scene Bundle export failed: \(error)"
+        case .simplifiedChinese: return "Scene Bundle 导出失败：\(error)"
+        }
+    }
+
+    static func sceneBundleHasErrors(count: Int, language rawLanguage: String) -> String {
+        switch AppLanguage.value(for: rawLanguage) {
+        case .japanese: return "Scene Bundleに\(count)件のエラーがあります。「Scene State / 書き出し確認」で修正してください。"
+        case .english: return "Scene Bundle has \(count) errors. Resolve them in Scene State / Export Preview."
+        case .simplifiedChinese: return "Scene Bundle 中有 \(count) 个错误。请在 Scene State / 导出预览中修复。"
+        }
+    }
+
     private static let japanese: [CinemaTextKey: String] = [
         .focusMode: "全画面",
         .storyboard: "絵コンテ",
@@ -234,7 +287,7 @@ enum CinemaStrings {
         .estimatedTokens: "推定トークン",
         .estimatedCost: "推定料金",
         .limit: "上限",
-        .exportPrompt: "プロンプト書き出し",
+        .exportPrompt: "Scene Bundle書き出し",
         .generating: "生成中...",
         .createSelectedSceneVideo: "選択シーンの動画作成",
         .saveGeneratedVideo: "生成動画を保存",
@@ -270,6 +323,11 @@ enum CinemaStrings {
         .language: "言語",
         .documentAspectRatio: "ドキュメントの画面比率",
         .screenSize: "画面サイズ",
+        .projectSettings: "プロジェクト設計",
+        .projectSettingsHelp: "動画全体の制作方針を設定",
+        .projectDirective: "動画全体の制作指示",
+        .projectDirectivePlaceholder: "例：作品のジャンル、世界観、雰囲気、登場人物と外見、演技の方向性、色彩、時代設定、全編で守るルールや避ける表現など",
+        .close: "閉じる",
         .screenFrameDescription: "画面欄は選択した比率の白いフレームで表示し、余白は黒ベタになります。",
         .placeholder: "プレースホルダー",
         .showGeneratePlaceholder: "未生成の画面にGenerate表示を出す",
@@ -348,7 +406,7 @@ enum CinemaStrings {
         .estimatedTokens: "Estimated Tokens",
         .estimatedCost: "Estimated Cost",
         .limit: "Limit",
-        .exportPrompt: "Export Prompts",
+        .exportPrompt: "Export Scene Bundle",
         .generating: "Generating...",
         .createSelectedSceneVideo: "Create Video for Scene",
         .saveGeneratedVideo: "Save Generated Video",
@@ -384,6 +442,11 @@ enum CinemaStrings {
         .language: "Language",
         .documentAspectRatio: "Document Screen Aspect Ratio",
         .screenSize: "Screen Size",
+        .projectSettings: "Project Design",
+        .projectSettingsHelp: "Set the production direction for the entire video",
+        .projectDirective: "Project-wide Production Direction",
+        .projectDirectivePlaceholder: "Example: genre, world, mood, recurring characters and appearance, performance direction, color language, period, global rules, and content to avoid",
+        .close: "Close",
         .screenFrameDescription: "The screen column uses the selected ratio as a white frame, with black fill in the margins.",
         .placeholder: "Placeholder",
         .showGeneratePlaceholder: "Show Generate on empty screens",
@@ -462,7 +525,7 @@ enum CinemaStrings {
         .estimatedTokens: "预计 Token",
         .estimatedCost: "预计费用",
         .limit: "上限",
-        .exportPrompt: "导出提示词",
+        .exportPrompt: "导出 Scene Bundle",
         .generating: "生成中...",
         .createSelectedSceneVideo: "生成所选场景视频",
         .saveGeneratedVideo: "保存生成视频",
@@ -498,6 +561,11 @@ enum CinemaStrings {
         .language: "语言",
         .documentAspectRatio: "文档画面比例",
         .screenSize: "画面尺寸",
+        .projectSettings: "项目设计",
+        .projectSettingsHelp: "设置整部视频的制作方针",
+        .projectDirective: "整部视频的制作指令",
+        .projectDirectivePlaceholder: "例如：类型、世界观、氛围、角色及外观、表演方向、色彩、时代背景、全片规则以及需要避免的表现",
+        .close: "关闭",
         .screenFrameDescription: "画面栏会以所选比例显示白色边框，空白区域以黑色填充。",
         .placeholder: "占位符",
         .showGeneratePlaceholder: "在未生成的画面中显示 Generate",

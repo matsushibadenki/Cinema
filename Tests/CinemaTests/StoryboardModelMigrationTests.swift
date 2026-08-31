@@ -2,6 +2,34 @@ import XCTest
 @testable import Cinema
 
 final class StoryboardModelMigrationTests: XCTestCase {
+    func testProjectContextWithoutProductionDirectiveDecodesWithEmptyDefault() throws {
+        let data = Data("""
+        {
+          "storySummary": "A reunion",
+          "visualBible": "Naturalistic",
+          "continuityNotes": "Keep wardrobe",
+          "reusableCharacterIDs": [],
+          "reusableObjectIDs": [],
+          "defaultFilmProfileID": "",
+          "defaultFilmRecipeID": "",
+          "defaultCreativePresetID": "",
+          "defaultSeed": ""
+        }
+        """.utf8)
+
+        let context = try JSONDecoder().decode(ProjectContext.self, from: data)
+
+        XCTAssertEqual(context.productionDirective, "")
+        XCTAssertEqual(context.storySummary, "A reunion")
+    }
+
+    func testProjectProductionDirectiveCreatesHighPriorityPrompt() {
+        let context = ProjectContext(productionDirective: "A quiet neo-noir with the same two leads throughout.")
+
+        XCTAssertTrue(context.promptText.contains("PROJECT-WIDE PRODUCTION DIRECTIVE"))
+        XCTAssertTrue(context.promptText.contains("same two leads"))
+    }
+
     func testCutWithoutAIShotSettingsDecodesWithDefaults() throws {
         let json = """
         {

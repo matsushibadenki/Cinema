@@ -46,5 +46,34 @@ final class AIPromptBuilderTests: XCTestCase {
 
         XCTAssertTrue(prompt.contains("cup beside his mouth"))
         XCTAssertTrue(prompt.contains("continue the hand movement"))
+        XCTAssertTrue(prompt.contains("SAME-SCENE CONTINUITY CONTRACT"))
+        XCTAssertTrue(prompt.contains("color temperature"))
+        XCTAssertTrue(prompt.contains("higher priority than the creative preset"))
+    }
+
+    func testFirstCutResetsVisualInheritance() {
+        let cut = StoryboardCut(cutNumber: 1, situation: "Morning in a new apartment.")
+
+        let prompt = AIPromptBuilder.cutPrompt(for: cut)
+
+        XCTAssertTrue(prompt.contains("NEW-SCENE RESET CONTRACT"))
+        XCTAssertTrue(prompt.contains("Do not inherit lighting"))
+    }
+
+    func testExplicitShotDeltaDefinesAllowedContinuityChanges() {
+        let previous = StoryboardCut(cutNumber: 1, situation: "Night platform.")
+        let current = StoryboardCut(
+            cutNumber: 2,
+            situation: "Reverse angle.",
+            shotDelta: ShotDelta(
+                lightingChanges: [DrawingSettingsField(key: "Key light", value: "unchanged warm station lamp")],
+                continuityRequirements: ["Keep the same white balance"]
+            )
+        )
+
+        let prompt = AIPromptBuilder.cutPrompt(for: current, previousCut: previous)
+
+        XCTAssertTrue(prompt.contains("unchanged warm station lamp"))
+        XCTAssertTrue(prompt.contains("Keep the same white balance"))
     }
 }

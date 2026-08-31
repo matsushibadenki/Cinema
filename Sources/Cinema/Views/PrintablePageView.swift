@@ -6,6 +6,8 @@ import SwiftUI
 
 struct PrintablePageView: View {
     @AppStorage("screenAspectRatio") private var screenAspectRatioRawValue = ScreenAspectRatio.television169.rawValue
+    @AppStorage("customScreenWidth") private var customScreenWidth = 1920
+    @AppStorage("customScreenHeight") private var customScreenHeight = 1080
     @AppStorage("showsGeneratePlaceholder") private var showsGeneratePlaceholder = true
     @AppStorage("showsCutActionControls") private var showsCutActionControls = true
     @AppStorage("screenBackgroundBrightness") private var screenBackgroundBrightness = 0.0
@@ -29,7 +31,12 @@ struct PrintablePageView: View {
             delete: { _ in },
             appLanguage: appLanguage
         )
-        .screenAspectRatio(ScreenAspectRatio.value(for: screenAspectRatioRawValue).ratio)
+        .screenAspectRatio(
+            ScreenAspectRatio.value(for: screenAspectRatioRawValue).ratio(
+                customWidth: customScreenWidth,
+                customHeight: customScreenHeight
+            )
+        )
         .showsGeneratePlaceholder(showsGeneratePlaceholder)
         .showsCutActionControls(false)
         .screenBackgroundBrightness(CGFloat(screenBackgroundBrightness))

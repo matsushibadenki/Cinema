@@ -9,7 +9,12 @@ import UniformTypeIdentifiers
 struct SidebarView: View {
     @Binding var title: String
     @Binding var drawingSettings: DrawingSettings
+    @Binding var sceneStates: [SceneState]
+    var showsDrawingSettings: Bool
+    var toggleDrawingSettings: () -> Void
+    var printCurrentPage: () -> Void
     var cuts: [StoryboardCut]
+    var referenceImages: [ReferenceImage]
     var imageData: [String: Data]
     @Binding var pageIndex: Int
     var pageCount: Int
@@ -45,6 +50,7 @@ struct SidebarView: View {
 
     @State private var draggedCutID: StoryboardCut.ID?
     @State private var hoveredDropTarget: HoveredCutDropTarget?
+    @State private var showsSceneStateEditor = false
 
     var body: some View {
         HStack(spacing: 0) {
@@ -52,7 +58,6 @@ struct SidebarView: View {
 
             VStack(alignment: .leading, spacing: 12) {
                 sidebarHeader
-                aiPanel
                 navigationList
             }
             .padding(.top, 12)
@@ -61,6 +66,18 @@ struct SidebarView: View {
         }
         .frame(minWidth: 326)
         .background(CinemaDesign.canvasBackground)
+        .sheet(isPresented: $showsSceneStateEditor) {
+            if let selectedSection {
+                SceneStateWorkspaceView(
+                    sceneTitle: selectedSection.title,
+                    sceneState: sceneStateBinding(for: selectedSection.title),
+                    cuts: selectedSection.cuts.filter { selectedVideoCutIDs.contains($0.id) },
+                    references: referenceImages,
+                    imageData: imageData,
+                    appLanguage: appLanguage
+                )
+            }
+        }
     }
 
     private var commandRail: some View {
@@ -87,7 +104,35 @@ struct SidebarView: View {
             SidebarRailButton(systemName: "text.badge.plus", help: t(.addBlock), action: addSubtitle)
             SidebarRailButton(systemName: "plus.square.on.square", help: t(.addCut), isProminent: true, action: addCut)
 
+            Rectangle()
+                .fill(CinemaDesign.cardStroke)
+                .frame(width: 28, height: 1)
+                .padding(.vertical, 2)
+
+            SidebarRailButton(
+                systemName: "printer",
+                help: t(.print),
+                action: printCurrentPage
+            )
+
             Spacer()
+
+            Rectangle()
+                .fill(CinemaDesign.cardStroke)
+                .frame(width: 28, height: 1)
+                .padding(.vertical, 2)
+
+            SidebarRailButton(
+                systemName: "paintpalette",
+                help: t(.drawingSettings),
+                isActive: showsDrawingSettings,
+                action: toggleDrawingSettings
+            )
+
+            Rectangle()
+                .fill(CinemaDesign.cardStroke)
+                .frame(width: 28, height: 1)
+                .padding(.vertical, 2)
 
             themeSwitcher
                 .padding(.bottom, 12)
@@ -335,6 +380,15 @@ struct SidebarView: View {
 
                 VStack(spacing: 8) {
                     Button {
+                        ensureSceneState(for: selectedSection.title)
+                        showsSceneStateEditor = true
+                    } label: {
+                        Label(sceneStateButtonTitle, systemImage: "checklist.checked")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(CinemaToolbarButtonStyle(isActive: false))
+
+                    Button {
                         exportScenePrompts(selectedSection.title)
                     } label: {
                         Text(t(.exportPrompt))
@@ -371,6 +425,35 @@ struct SidebarView: View {
         }
         .padding(12)
         .cinemaPanel()
+    }
+
+    private var sceneStateButtonTitle: String {
+        switch AppLanguage.value(for: appLanguage) {
+        case .japanese: return "Scene State / 書き出し確認"
+        case .english: return "Scene State / Export Preview"
+        case .simplifiedChinese: return "Scene State / 导出预览"
+        }
+    }
+
+    private func ensureSceneState(for sceneTitle: String) {
+        guard !sceneStates.contains(where: { $0.sceneKey == sceneTitle || $0.title == sceneTitle }) else { return }
+        sceneStates.append(SceneState(sceneKey: sceneTitle, title: sceneTitle))
+    }
+
+    private func sceneStateBinding(for sceneTitle: String) -> Binding<SceneState> {
+        Binding(
+            get: {
+                sceneStates.first(where: { $0.sceneKey == sceneTitle || $0.title == sceneTitle })
+                    ?? SceneState(sceneKey: sceneTitle, title: sceneTitle)
+            },
+            set: { newValue in
+                if let index = sceneStates.firstIndex(where: { $0.id == newValue.id }) {
+                    sceneStates[index] = newValue
+                } else {
+                    sceneStates.append(newValue)
+                }
+            }
+        )
     }
 
     private var estimatedCostText: String {
@@ -487,12 +570,13 @@ struct SidebarView: View {
                             .disabled(cutSections.count <= 1)
                         }
 
-                        VStack(spacing: 6) {
+                        VStack(spacing: 3) {
                             ForEach(section.cuts) { cut in
                                 CutSidebarRow(
                                     cut: cut,
                                     title: cutTitle(for: cut),
                                     cutName: cutNameBinding(for: cut.id),
+                                    cutNamePlaceholder: t(.cutName),
                                     previewImage: previewImage(for: cut),
                                     isCurrentCut: currentCutID == cut.id,
                                     isVideoSceneSelected: selectedVideoSceneTitle == section.title,
@@ -537,7 +621,6 @@ struct SidebarView: View {
                                 }
                             }
                         }
-                        .padding(.leading, 12)
                     }
                     .padding(.vertical, 4)
                     .overlay(alignment: .top) {
@@ -627,6 +710,7 @@ private struct SidebarRailButton: View {
     var systemName: String
     var help: String
     var isProminent = false
+    var isActive = false
     var action: () -> Void
 
     @State private var isHovered = false
@@ -635,15 +719,15 @@ private struct SidebarRailButton: View {
         Button(action: action) {
             Image(systemName: systemName)
                 .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(isProminent || isHovered ? CinemaDesign.ink : CinemaDesign.controlInactiveInk)
+                .foregroundStyle(isProminent || isActive || isHovered ? CinemaDesign.ink : CinemaDesign.controlInactiveInk)
                 .frame(width: 38, height: 38)
                 .background {
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(isHovered ? CinemaDesign.insetSurface : CinemaDesign.railIconBackground)
+                        .fill(isActive || isHovered ? CinemaDesign.insetSurface : CinemaDesign.railIconBackground)
                 }
                 .overlay {
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .stroke(isProminent || isHovered ? CinemaDesign.strongBorder : CinemaDesign.railIconStroke, lineWidth: isProminent ? 0.9 : 0.8)
+                        .stroke(isProminent || isActive || isHovered ? CinemaDesign.strongBorder : CinemaDesign.railIconStroke, lineWidth: isProminent || isActive ? 0.9 : 0.8)
                 }
         }
         .buttonStyle(.plain)
@@ -659,6 +743,7 @@ private struct CutSidebarRow: View {
     var cut: StoryboardCut
     var title: String
     @Binding var cutName: String
+    var cutNamePlaceholder: String
     var previewImage: NSImage?
     var isCurrentCut: Bool
     var isVideoSceneSelected: Bool
@@ -669,53 +754,49 @@ private struct CutSidebarRow: View {
     var startDrag: () -> NSItemProvider
 
     var body: some View {
-        HStack(alignment: .top, spacing: 7) {
-            controlColumn
+        ZStack {
+            previewThumbnail
 
-            HStack(alignment: .top, spacing: 10) {
-                previewThumbnail
+            LinearGradient(
+                colors: [Color.black.opacity(0.82), Color.black.opacity(0.28), Color.clear],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .frame(height: 58)
+            .frame(maxHeight: .infinity, alignment: .top)
+            .allowsHitTesting(false)
 
-                VStack(alignment: .leading, spacing: 4) {
-                    Button(action: openCut) {
-                        Text(title)
-                            .lineLimit(1)
-                            .truncationMode(.tail)
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(isCurrentCut ? CinemaDesign.ink : CinemaDesign.mutedInk)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                    .buttonStyle(.plain)
+            HStack(alignment: .top, spacing: 8) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .lineLimit(1)
+                        .font(.system(size: 12, weight: .bold, design: .rounded).monospacedDigit())
+                        .foregroundStyle(Color.white)
 
-                    EditableCutNameField(text: $cutName)
-                        .frame(maxWidth: .infinity, minHeight: 18, alignment: .leading)
-
-                    if !cut.situation.isEmpty {
-                        Text(cut.situation)
-                            .foregroundStyle(CinemaDesign.quietInk)
-                            .font(.system(size: 10.5, weight: .regular))
-                            .lineLimit(1)
-                            .truncationMode(.tail)
-                    }
+                    TextField(cutNamePlaceholder, text: $cutName)
+                        .textFieldStyle(.plain)
+                        .font(.system(size: 10.5, weight: .medium))
+                        .foregroundStyle(Color.white.opacity(cutName.isEmpty ? 0.68 : 0.94))
+                        .lineLimit(1)
+                        .frame(maxWidth: .infinity, minHeight: 16, alignment: .leading)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
+
+                controlColumn
             }
+            .padding(.leading, 11)
+            .padding(.top, 9)
+            .padding(.trailing, 8)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
-        .padding(.horizontal, 7)
-        .padding(.vertical, 7)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .aspectRatio(16 / 9, contentMode: .fit)
+        .frame(maxWidth: .infinity)
         .background(rowBackground)
         .overlay(alignment: .leading) {
             if isCurrentCut {
                 Rectangle()
                     .fill(CinemaDesign.keyColor)
-                    .frame(width: 2)
+                    .frame(width: 3)
             }
-        }
-        .overlay(alignment: .bottom) {
-            Rectangle()
-                .fill(CinemaDesign.fineBorder)
-                .frame(height: 1)
-                .padding(.leading, 32)
         }
         .overlay(alignment: .top) {
             if dropTargetPosition == .before {
@@ -735,8 +816,11 @@ private struct CutSidebarRow: View {
         }
         .overlay {
             if dropTargetPosition != nil {
-                RoundedRectangle(cornerRadius: 6)
-                    .stroke(CinemaDesign.keyColor.opacity(0.7), lineWidth: 1)
+                Rectangle()
+                    .stroke(CinemaDesign.keyColor.opacity(0.8), lineWidth: 1)
+            } else {
+                Rectangle()
+                    .stroke(isCurrentCut ? CinemaDesign.strongBorder : CinemaDesign.fineBorder, lineWidth: isCurrentCut ? 1 : 0.7)
             }
         }
         .opacity(isDragged ? 0.65 : 1)
@@ -746,7 +830,7 @@ private struct CutSidebarRow: View {
 
     @ViewBuilder
     private var controlColumn: some View {
-        VStack(spacing: 6) {
+        VStack(spacing: 5) {
             dragHandle
 
             if isVideoSceneSelected {
@@ -758,24 +842,23 @@ private struct CutSidebarRow: View {
                     .frame(width: 18, height: 18)
             }
         }
-        .frame(width: 18, alignment: .top)
-        .padding(.top, 2)
+        .frame(width: 20, alignment: .top)
     }
 
     private var dragHandle: some View {
         ZStack {
             RoundedRectangle(cornerRadius: 4)
-                .fill(isDragged ? CinemaDesign.keyColor.opacity(0.18) : CinemaDesign.insetSurface.opacity(0.96))
+                .fill(isDragged ? CinemaDesign.keyColor.opacity(0.72) : Color.black.opacity(0.54))
                 .overlay {
                     RoundedRectangle(cornerRadius: 4)
-                        .stroke(CinemaDesign.fineBorder, lineWidth: 0.6)
+                        .stroke(Color.white.opacity(0.24), lineWidth: 0.6)
                 }
 
             Image(systemName: "line.3.horizontal")
                 .font(.caption.weight(.semibold))
-                .foregroundStyle(isDragged ? CinemaDesign.keyColor : Color.secondary.opacity(0.75))
+                .foregroundStyle(Color.white.opacity(0.86))
         }
-        .frame(width: 18, height: 22)
+        .frame(width: 20, height: 20)
         .contentShape(RoundedRectangle(cornerRadius: 4))
         .help("ドラッグしてカットを並べ替え")
         .onDrag(startDrag)
@@ -811,25 +894,22 @@ private struct CutSidebarRow: View {
                 ZStack {
                     LinearGradient(
                         colors: [
-                            CinemaDesign.keyColorSoft.opacity(0.9),
-                            CinemaDesign.insetSurface
+                            Color.black.opacity(0.72),
+                            CinemaDesign.insetSurface.opacity(0.96)
                         ],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     )
 
                     Image(systemName: "photo")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(CinemaDesign.quietInk)
+                        .font(.system(size: 18, weight: .medium))
+                        .foregroundStyle(Color.white.opacity(0.28))
                 }
             }
         }
-        .frame(width: 68, height: 44)
-        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .stroke(CinemaDesign.cardStroke, lineWidth: 0.7)
-        }
+        .aspectRatio(16 / 9, contentMode: .fill)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .clipped()
     }
 }
 
@@ -841,65 +921,6 @@ enum CutDropPosition: Equatable {
 private struct HoveredCutDropTarget: Equatable {
     var targetID: StoryboardCut.ID
     var position: CutDropPosition
-}
-
-private struct EditableCutNameField: NSViewRepresentable {
-    @Binding var text: String
-
-    func makeNSView(context: Context) -> EditableCutNameNSTextField {
-        let field = EditableCutNameNSTextField(frame: .zero)
-        field.isEditable = true
-        field.isSelectable = true
-        field.isBezeled = false
-        field.isBordered = false
-        field.drawsBackground = false
-        field.font = .systemFont(ofSize: 10, weight: .regular)
-        field.delegate = context.coordinator
-        field.focusRingType = .none
-        field.usesSingleLineMode = true
-        field.lineBreakMode = .byTruncatingTail
-        field.placeholderString = "カット名"
-        field.stringValue = text
-        return field
-    }
-
-    func updateNSView(_ nsView: EditableCutNameNSTextField, context: Context) {
-        guard !context.coordinator.isEditing else { return }
-        if nsView.stringValue != text {
-            nsView.stringValue = text
-        }
-    }
-
-    func makeCoordinator() -> Coordinator {
-        Coordinator(text: $text)
-    }
-
-    final class Coordinator: NSObject, NSTextFieldDelegate {
-        var text: Binding<String>
-        var isEditing = false
-
-        init(text: Binding<String>) {
-            self.text = text
-        }
-
-        func controlTextDidBeginEditing(_ obj: Notification) {
-            isEditing = true
-        }
-
-        func controlTextDidEndEditing(_ obj: Notification) {
-            isEditing = false
-            controlTextDidChange(obj)
-        }
-
-        func controlTextDidChange(_ obj: Notification) {
-            guard let field = obj.object as? NSTextField else { return }
-            text.wrappedValue = field.stringValue
-        }
-    }
-}
-
-private final class EditableCutNameNSTextField: NSTextField {
-    override var acceptsFirstResponder: Bool { true }
 }
 
 private struct CutDropDelegate: DropDelegate {

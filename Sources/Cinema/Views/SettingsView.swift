@@ -28,6 +28,8 @@ struct SettingsView: View {
     @AppStorage("hyperbolicAPIKey") private var hyperbolicAPIKey = ""
     @AppStorage("hyperbolicModelName") private var hyperbolicModelName = "SDXL1.0-base"
     @AppStorage("screenAspectRatio") private var screenAspectRatioRawValue = ScreenAspectRatio.television169.rawValue
+    @AppStorage("customScreenWidth") private var customScreenWidth = 1920
+    @AppStorage("customScreenHeight") private var customScreenHeight = 1080
     @AppStorage("showsGeneratePlaceholder") private var showsGeneratePlaceholder = true
     @AppStorage("screenBackgroundBrightness") private var screenBackgroundBrightness = 0.0
     @AppStorage("storyboardTextColumnWidth") private var storyboardTextColumnWidth = Double(StoryboardPageLayout.mainColumnWidth)
@@ -847,8 +849,21 @@ struct SettingsView: View {
                 }
                 .pickerStyle(.radioGroup)
 
+                if ScreenAspectRatio.value(for: screenAspectRatioRawValue) == .custom {
+                    HStack(spacing: 8) {
+                        TextField("Width", value: $customScreenWidth, format: .number)
+                        Text("×")
+                            .foregroundStyle(.secondary)
+                        TextField("Height", value: $customScreenHeight, format: .number)
+                    }
+                    .textFieldStyle(.roundedBorder)
+                }
+
                 AspectRatioPreview(
-                    aspectRatio: ScreenAspectRatio.value(for: screenAspectRatioRawValue).ratio,
+                    aspectRatio: ScreenAspectRatio.value(for: screenAspectRatioRawValue).ratio(
+                        customWidth: customScreenWidth,
+                        customHeight: customScreenHeight
+                    ),
                     backgroundBrightness: CGFloat(screenBackgroundBrightness)
                 )
                     .frame(width: 220, height: 100)

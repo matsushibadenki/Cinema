@@ -22,6 +22,10 @@ Cinemaは、企画段階のアイデアを絵コンテとして素早く形に�
   - 選択したブロックのカットをもとに、シーン単位の動画生成を行えます。
 - リファレンス管理
   - 右サイドバーで参考画像を登録し、各カットの生成プロンプトに活用できます。
+- Scene Bundle書き出し
+  - プロンプト、Scene State、カット設定、参照画像を、外部のColabやGPUワーカーで扱える安定形式として書き出せます。
+- Scene State編集と書き出し確認
+  - Character / Object / Environment / Camera / Lighting / Event / Timeline / Audioをシーン単位で編集し、欠落情報や素材を事前に確認できます。
 - 印刷
   - 現在の絵コンテページや台本ページをプリントできます。
 
@@ -45,3 +49,5 @@ swift run Cinema
 ## 設定
 
 アプリの設定画面から、Gemini / OpenAIのAPIキー、画像生成モデル、動画生成モデル、表示設定、AI利用料金の上限などを設定できます。
+
+Scene Bundleの構成と外部runner向け互換性ルールは、[Cinema Scene Bundle v1](doc/CINEMA_SCENE_BUNDLE_V1.md)を参照してください。

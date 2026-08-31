@@ -65,6 +65,7 @@ struct StoryboardProject: Codable, Equatable {
 }
 
 struct ProjectContext: Codable, Equatable {
+    var productionDirective: String
     var storySummary: String
     var visualBible: String
     var continuityNotes: String
@@ -76,6 +77,7 @@ struct ProjectContext: Codable, Equatable {
     var defaultSeed: String
 
     init(
+        productionDirective: String = "",
         storySummary: String = "",
         visualBible: String = "",
         continuityNotes: String = "",
@@ -86,6 +88,7 @@ struct ProjectContext: Codable, Equatable {
         defaultCreativePresetID: String = "",
         defaultSeed: String = ""
     ) {
+        self.productionDirective = productionDirective
         self.storySummary = storySummary
         self.visualBible = visualBible
         self.continuityNotes = continuityNotes
@@ -95,6 +98,39 @@ struct ProjectContext: Codable, Equatable {
         self.defaultFilmRecipeID = defaultFilmRecipeID
         self.defaultCreativePresetID = defaultCreativePresetID
         self.defaultSeed = defaultSeed
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case productionDirective
+        case storySummary
+        case visualBible
+        case continuityNotes
+        case reusableCharacterIDs
+        case reusableObjectIDs
+        case defaultFilmProfileID
+        case defaultFilmRecipeID
+        case defaultCreativePresetID
+        case defaultSeed
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        productionDirective = try container.decodeIfPresent(String.self, forKey: .productionDirective) ?? ""
+        storySummary = try container.decodeIfPresent(String.self, forKey: .storySummary) ?? ""
+        visualBible = try container.decodeIfPresent(String.self, forKey: .visualBible) ?? ""
+        continuityNotes = try container.decodeIfPresent(String.self, forKey: .continuityNotes) ?? ""
+        reusableCharacterIDs = try container.decodeIfPresent([UUID].self, forKey: .reusableCharacterIDs) ?? []
+        reusableObjectIDs = try container.decodeIfPresent([UUID].self, forKey: .reusableObjectIDs) ?? []
+        defaultFilmProfileID = try container.decodeIfPresent(String.self, forKey: .defaultFilmProfileID) ?? ""
+        defaultFilmRecipeID = try container.decodeIfPresent(String.self, forKey: .defaultFilmRecipeID) ?? ""
+        defaultCreativePresetID = try container.decodeIfPresent(String.self, forKey: .defaultCreativePresetID) ?? ""
+        defaultSeed = try container.decodeIfPresent(String.self, forKey: .defaultSeed) ?? ""
+    }
+
+    var promptText: String {
+        let directive = productionDirective.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !directive.isEmpty else { return "" }
+        return "PROJECT-WIDE PRODUCTION DIRECTIVE (apply to every scene and cut unless explicitly overridden):\n\(directive)"
     }
 }
 
