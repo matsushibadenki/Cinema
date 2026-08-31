@@ -30,6 +30,11 @@ cp "$APPCAST_PATH" "$ARCHIVES_DIR/appcast.xml"
   --link "https://github.com/matsushibadenki/Cinema/releases" \
   -o "$ARCHIVES_DIR/appcast.xml" \
   "$ARCHIVES_DIR"
+
+# generate_appcast applies the current prefix to every archive in the folder.
+# Restore each full ZIP URL to the GitHub tag matching that archive's version.
+perl -0pi -e 's{releases/download/v[^/]+/(Cinema-([0-9.]+)\.zip)}{releases/download/v$2/$1}g' \
+  "$ARCHIVES_DIR/appcast.xml"
 cp "$ARCHIVES_DIR/appcast.xml" "$APPCAST_PATH"
 
 echo "Updated $APPCAST_PATH"
