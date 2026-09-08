@@ -5,6 +5,7 @@
 import Foundation
 
 struct StoryboardProject: Codable, Equatable {
+    var id: UUID
     var title: String
     var projectContext: ProjectContext
     var drawingSettings: DrawingSettings
@@ -28,6 +29,7 @@ struct StoryboardProject: Codable, Equatable {
         sceneStates: [SceneState] = [],
         cuts: [StoryboardCut] = StoryboardProject.defaultCuts()
     ) {
+        self.id = UUID()
         self.title = title
         self.projectContext = projectContext
         self.drawingSettings = drawingSettings
@@ -38,9 +40,11 @@ struct StoryboardProject: Codable, Equatable {
         self.presentationSettings = presentationSettings
         self.sceneStates = sceneStates
         self.cuts = cuts
+        normalizeSceneIdentities()
     }
 
     private enum CodingKeys: String, CodingKey {
+        case id
         case title
         case projectContext
         case drawingSettings
@@ -55,6 +59,7 @@ struct StoryboardProject: Codable, Equatable {
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
         title = try container.decode(String.self, forKey: .title)
         projectContext = try container.decodeIfPresent(ProjectContext.self, forKey: .projectContext) ?? ProjectContext()
         drawingSettings = try container.decodeIfPresent(DrawingSettings.self, forKey: .drawingSettings) ?? DrawingSettings()
@@ -65,6 +70,8 @@ struct StoryboardProject: Codable, Equatable {
         presentationSettings = try container.decodeIfPresent(ProjectPresentationSettings.self, forKey: .presentationSettings) ?? .legacyDefaults()
         sceneStates = try container.decodeIfPresent([SceneState].self, forKey: .sceneStates) ?? []
         cuts = try container.decode([StoryboardCut].self, forKey: .cuts)
+        if !container.contains(.id), let first = cuts.first { id = first.id }
+        normalizeSceneIdentities()
     }
 
     static func defaultCuts() -> [StoryboardCut] {
@@ -172,6 +179,7 @@ struct ProjectContext: Codable, Equatable {
 
 struct SceneState: Codable, Identifiable, Equatable {
     var id: UUID
+    var sceneID: UUID? = nil
     var sceneKey: String
     var title: String
     var characterState: SceneStateCategory
@@ -852,6 +860,7 @@ struct ReferenceImage: Codable, Identifiable, Equatable {
 
 struct SceneVideo: Codable, Identifiable, Equatable {
     var id: UUID
+    var sceneID: UUID? = nil
     var title: String
     var videoFileName: String
     var generatedAt: Date
@@ -866,6 +875,7 @@ struct SceneVideo: Codable, Identifiable, Equatable {
 
 struct GeneratedCutVideo: Codable, Identifiable, Equatable {
     var id: UUID
+    var sceneID: UUID? = nil
     var sceneTitle: String
     var cutID: StoryboardCut.ID
     var videoFileName: String
@@ -888,6 +898,7 @@ struct GeneratedCutVideo: Codable, Identifiable, Equatable {
 
 struct ImportedGenerationResult: Codable, Identifiable, Equatable {
     var id: UUID
+    var sceneID: UUID? = nil
     var sourceBundleID: UUID
     var sceneTitle: String
     var runner: String
@@ -953,6 +964,7 @@ struct DialogueLine: Codable, Identifiable, Equatable {
 
 struct StoryboardCut: Codable, Identifiable, Equatable {
     var id: UUID
+    var sceneID: UUID? = nil
     var cutNumber: Int
     var cutName: String
     var situation: String
@@ -1014,6 +1026,7 @@ struct StoryboardCut: Codable, Identifiable, Equatable {
     private enum CodingKeys: String, CodingKey {
         case id
         case cutNumber
+        case sceneID
         case cutName
         case situation
         case action
@@ -1036,6 +1049,7 @@ struct StoryboardCut: Codable, Identifiable, Equatable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decode(UUID.self, forKey: .id)
         cutNumber = try container.decode(Int.self, forKey: .cutNumber)
+        sceneID = try container.decodeIfPresent(UUID.self, forKey: .sceneID)
         cutName = try container.decodeIfPresent(String.self, forKey: .cutName) ?? ""
         situation = try container.decode(String.self, forKey: .situation)
         let decodedAction = try container.decode(String.self, forKey: .action)

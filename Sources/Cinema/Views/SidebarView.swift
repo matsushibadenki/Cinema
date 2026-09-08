@@ -34,9 +34,9 @@ struct SidebarView: View {
     var moveCutRelativeToTarget: (StoryboardCut.ID, StoryboardCut.ID, CutDropPosition) -> Void
     var updateCutName: (StoryboardCut.ID, String) -> Void
     var sceneVideos: [SceneVideo]
-    @Binding var selectedVideoSceneTitle: String?
+    @Binding var selectedVideoSceneKey: String?
     @Binding var selectedVideoCutIDs: Set<StoryboardCut.ID>
-    var generatingSceneTitle: String?
+    var generatingSceneKey: String?
     var generateSceneVideo: (String) -> Void
     var saveSceneVideo: (SceneVideo) -> Void
     var exportScenePrompts: (String) -> Void
@@ -70,7 +70,7 @@ struct SidebarView: View {
             if let selectedSection {
                 SceneStateWorkspaceView(
                     sceneTitle: selectedSection.title,
-                    sceneState: sceneStateBinding(for: selectedSection.title),
+                    sceneState: sceneStateBinding(for: selectedSection.key),
                     cuts: selectedSection.cuts.filter { selectedVideoCutIDs.contains($0.id) },
                     references: referenceImages,
                     imageData: imageData,
@@ -356,8 +356,8 @@ struct SidebarView: View {
     }
 
     private var selectedSection: CutSidebarSection? {
-        guard let selectedVideoSceneTitle else { return nil }
-        return cutSections.first { $0.title == selectedVideoSceneTitle }
+        guard let selectedVideoSceneKey else { return nil }
+        return cutSections.first { $0.key == selectedVideoSceneKey }
     }
 
     private var displayModeShowsPageNavigation: Bool {
@@ -380,7 +380,7 @@ struct SidebarView: View {
 
                 VStack(spacing: 8) {
                     Button {
-                        ensureSceneState(for: selectedSection.title)
+                        ensureSceneState(for: selectedSection.key)
                         showsSceneStateEditor = true
                     } label: {
                         Label(sceneStateButtonTitle, systemImage: "checklist.checked")
@@ -389,7 +389,7 @@ struct SidebarView: View {
                     .buttonStyle(CinemaToolbarButtonStyle(isActive: false))
 
                     Button {
-                        exportScenePrompts(selectedSection.title)
+                        exportScenePrompts(selectedSection.key)
                     } label: {
                         Text(t(.exportPrompt))
                             .frame(maxWidth: .infinity)
@@ -398,15 +398,15 @@ struct SidebarView: View {
 
                     HStack {
                         Button {
-                            generateSceneVideo(selectedSection.title)
+                            generateSceneVideo(selectedSection.key)
                         } label: {
-                            Text(generatingSceneTitle == selectedSection.title ? t(.generating) : t(.createSelectedSceneVideo))
+                            Text(generatingSceneKey == selectedSection.key ? t(.generating) : t(.createSelectedSceneVideo))
                                 .frame(maxWidth: .infinity)
                         }
                         .buttonStyle(CinemaActionButtonStyle())
-                        .disabled(generatingSceneTitle != nil)
+                        .disabled(generatingSceneKey != nil)
 
-                        if let video = sceneVideos.first(where: { $0.title == selectedSection.title }) {
+                        if let video = sceneVideos.first(where: { $0.sceneID == selectedSection.id }) {
                             Button {
                                 saveSceneVideo(video)
                             } label: {
@@ -436,17 +436,21 @@ struct SidebarView: View {
     }
 
     private func ensureSceneState(for sceneTitle: String) {
-        guard !sceneStates.contains(where: { $0.sceneKey == sceneTitle || $0.title == sceneTitle }) else { return }
-        sceneStates.append(SceneState(sceneKey: sceneTitle, title: sceneTitle))
+        guard let id = UUID(uuidString: sceneTitle), !sceneStates.contains(where: { $0.sceneID == id }) else { return }
+        var state = SceneState(sceneKey: sceneTitle, title: cutSections.first { $0.key == sceneTitle }?.title ?? "")
+        state.sceneID = id
+        sceneStates.append(state)
     }
 
     private func sceneStateBinding(for sceneTitle: String) -> Binding<SceneState> {
         Binding(
             get: {
-                sceneStates.first(where: { $0.sceneKey == sceneTitle || $0.title == sceneTitle })
-                    ?? SceneState(sceneKey: sceneTitle, title: sceneTitle)
+                sceneStates.first(where: { $0.sceneID?.uuidString == sceneTitle })
+                    ?? SceneState(sceneKey: sceneTitle, title: "")
             },
             set: { newValue in
+                var newValue = newValue
+                newValue.sceneID = UUID(uuidString: sceneTitle)
                 if let index = sceneStates.firstIndex(where: { $0.id == newValue.id }) {
                     sceneStates[index] = newValue
                 } else {
@@ -552,20 +556,20 @@ struct SidebarView: View {
                             title: section.title,
                             cutCount: section.cuts.count,
                             rangeText: section.rangeText,
-                            isSelected: selectedVideoSceneTitle == section.title,
-                            isGenerating: generatingSceneTitle == section.title,
-                            hasVideo: sceneVideos.contains(where: { $0.title == section.title }),
-                            select: { selectedVideoSceneTitle = section.title }
+                            isSelected: selectedVideoSceneKey == section.key,
+                            isGenerating: generatingSceneKey == section.key,
+                            hasVideo: sceneVideos.contains(where: { $0.sceneID == section.id }),
+                            select: { selectedVideoSceneKey = section.key }
                         )
                         .contextMenu {
                             Button(t(.addBlock)) {
-                                addBlockAfterSection(section.title)
+                                addBlockAfterSection(section.key)
                             }
 
                             Divider()
 
                             Button(t(.deleteSection), role: .destructive) {
-                                deleteBlockSection(section.title)
+                                deleteBlockSection(section.key)
                             }
                             .disabled(cutSections.count <= 1)
                         }
@@ -579,7 +583,7 @@ struct SidebarView: View {
                                     cutNamePlaceholder: t(.cutName),
                                     previewImage: previewImage(for: cut),
                                     isCurrentCut: currentCutID == cut.id,
-                                    isVideoSceneSelected: selectedVideoSceneTitle == section.title,
+                                    isVideoSceneSelected: selectedVideoSceneKey == section.key,
                                     isCutSelectedForVideo: cutSelectionBinding(for: cut.id),
                                     isDragged: draggedCutID == cut.id,
                                     dropTargetPosition: hoveredDropTarget?.targetID == cut.id ? hoveredDropTarget?.position : nil,
@@ -634,27 +638,9 @@ struct SidebarView: View {
     }
 
     private var cutSections: [CutSidebarSection] {
-        var sections: [CutSidebarSection] = []
-        var currentTitle = CinemaStrings.blockName(1, language: appLanguage)
-        var currentCuts: [StoryboardCut] = []
-
-        for cut in cuts {
-            let subtitle = cut.subtitle.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !subtitle.isEmpty {
-                if !currentCuts.isEmpty {
-                    sections.append(CutSidebarSection(title: currentTitle, cuts: currentCuts))
-                    currentCuts = []
-                }
-                currentTitle = subtitle
-            }
-            currentCuts.append(cut)
+        StoryboardProject.scenes(from: cuts, language: appLanguage).map {
+            CutSidebarSection(id: $0.id, title: $0.title, cuts: $0.cuts)
         }
-
-        if !currentCuts.isEmpty {
-            sections.append(CutSidebarSection(title: currentTitle, cuts: currentCuts))
-        }
-
-        return sections
     }
 
     private func cutTitle(for cut: StoryboardCut) -> String {
@@ -695,7 +681,8 @@ private extension SidebarView {
 }
 
 private struct CutSidebarSection: Identifiable {
-    let id = UUID()
+    var id: UUID
+    var key: String { id.uuidString }
     var title: String
     var cuts: [StoryboardCut]
 

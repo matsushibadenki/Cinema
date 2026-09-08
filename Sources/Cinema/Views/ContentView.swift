@@ -107,10 +107,11 @@ struct ContentView: View {
     @State private var focusedCutScrollPosition: Int? = 0
     @State private var generationStatus: String?
     @State private var generatingCutID: StoryboardCut.ID?
-    @State private var generatingSceneTitle: String?
+    @State private var generatingSceneKey: String?
     @State private var sceneGenerationTask: Task<Void, Never>?
+    @State private var recoverableRuns: [RecoveredVideoRun] = []
     @State private var generationErrorAlert: GenerationErrorAlert?
-    @State private var selectedVideoSceneTitle: String?
+    @State private var selectedVideoSceneKey: String?
     @State private var selectedVideoCutIDs: Set<StoryboardCut.ID> = []
     @State private var zoomScale: CGFloat = 1.0
     @State private var pinchStartZoomScale: CGFloat?
@@ -171,9 +172,9 @@ struct ContentView: View {
                 moveCutRelativeToTarget: moveCutRelativeToTarget,
                 updateCutName: updateCutName,
                 sceneVideos: document.project.sceneVideos,
-                selectedVideoSceneTitle: $selectedVideoSceneTitle,
+                selectedVideoSceneKey: $selectedVideoSceneKey,
                 selectedVideoCutIDs: $selectedVideoCutIDs,
-                generatingSceneTitle: generatingSceneTitle,
+                generatingSceneKey: generatingSceneKey,
                 generateSceneVideo: generateSceneVideo,
                 saveSceneVideo: saveSceneVideo,
                 exportScenePrompts: exportScenePrompts,
@@ -226,9 +227,9 @@ struct ContentView: View {
             )
         }
         .sheet(isPresented: $showsSceneStateEditor) {
-            if let sceneTitle = selectedVideoSceneTitle {
+            if let sceneTitle = selectedVideoSceneKey {
                 SceneStateWorkspaceView(
-                    sceneTitle: sceneTitle,
+                    sceneTitle: self.sceneTitle(for: sceneTitle),
                     sceneState: sceneStateBinding(for: sceneTitle),
                     cuts: selectedAISceneCuts,
                     references: document.project.referenceImages,
@@ -260,6 +261,10 @@ struct ContentView: View {
             ensureSelectedVideoScene()
             ensureSelectedVideoCuts()
         }
+        .onChange(of: document.project.cuts) { _, _ in
+            document.project.normalizeSceneIdentities()
+            ensureSelectedVideoScene()
+        }
         .onChange(of: displayMode) { _, _ in
             pageIndex = min(pageIndex, max(currentPageCount - 1, 0))
             if displayMode == .cutFocus {
@@ -272,7 +277,7 @@ struct ContentView: View {
                 focusedCutScrollPosition = newValue
             }
         }
-        .onChange(of: selectedVideoSceneTitle) { _, _ in
+        .onChange(of: selectedVideoSceneKey) { _, _ in
             ensureSelectedVideoCuts(reset: true)
         }
         .onAppear {
@@ -282,6 +287,7 @@ struct ContentView: View {
             document.project.drawingSettings.ensureSelection()
             ensureSelectedVideoScene()
             ensureSelectedVideoCuts()
+            restoreGeneratedVideos()
         }
     }
 
@@ -456,7 +462,7 @@ struct ContentView: View {
                     currentIndex: $pageIndex,
                     scrollPosition: $focusedCutScrollPosition,
                     generatedVideoColumns: generatedVideoStripColumns,
-                    selectedVideoSceneTitle: selectedVideoSceneTitle,
+                    selectedVideoSceneTitle: selectedVideoSceneKey.map { sceneTitle(for: $0) },
                     referenceImages: document.project.referenceImages,
                     imageData: document.imageData,
                     screenAspectRatio: screenAspectRatioValue,
@@ -735,7 +741,7 @@ struct ContentView: View {
             if let generationStatus {
                 CinemaStatusPill(
                     text: generationStatus,
-                    isAnimating: generatingCutID != nil || generatingSceneTitle != nil
+                    isAnimating: generatingCutID != nil || generatingSceneKey != nil
                 )
                 .padding(.horizontal, 18)
                 .padding(.bottom, 8)
@@ -816,9 +822,9 @@ struct ContentView: View {
 
                 Divider().frame(height: 24)
 
-                if let sceneTitle = selectedVideoSceneTitle {
+                if let sceneTitle = selectedVideoSceneKey {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(sceneTitle)
+                        Text(self.sceneTitle(for: sceneTitle))
                             .font(.system(size: 11, weight: .semibold))
                         Text("対象: Cut \(selectedAISceneCuts.map(\.cutNumber).map(String.init).joined(separator: ", "))")
                             .font(.system(size: 9))
@@ -842,17 +848,39 @@ struct ContentView: View {
                     }
                     .buttonStyle(CinemaToolbarButtonStyle())
 
-                    Button(generatingSceneTitle == sceneTitle ? t(.cancelGeneration) : t(.createSelectedSceneVideo)) {
-                        if generatingSceneTitle == sceneTitle {
+                    Button(generatingSceneKey == sceneTitle ? t(.cancelGeneration) : t(.createSelectedSceneVideo)) {
+                        if generatingSceneKey == sceneTitle {
                             sceneGenerationTask?.cancel()
                         } else {
                             generateSceneVideo(for: sceneTitle)
                         }
                     }
                     .buttonStyle(CinemaPrimaryActionButtonStyle())
-                    .disabled(generatingSceneTitle != nil && generatingSceneTitle != sceneTitle)
+                    .disabled(generatingSceneKey != nil && generatingSceneKey != sceneTitle)
 
-                    if let video = document.project.sceneVideos.first(where: { $0.title == sceneTitle }) {
+                    if let run = recoverableRuns.last(where: { $0.run.sceneID.uuidString == sceneTitle && $0.canAssemble && $0.sceneVideo == nil }) {
+                        Button(localizedGenerationText("保存済みカットを結合", "Assemble Saved Cuts", "合并已保存镜头")) {
+                            assembleRecoveredRun(run)
+                        }
+                        .buttonStyle(CinemaToolbarButtonStyle())
+                        .disabled(generatingSceneKey != nil)
+                    }
+
+                    if document.project.sceneVideos.contains(where: { $0.sceneID == nil }) {
+                        Menu(localizedGenerationText("未関連の旧動画", "Unassigned Legacy Videos", "未关联的旧视频")) {
+                            ForEach(document.project.sceneVideos.filter { $0.sceneID == nil }) { video in
+                                Button("\(video.title) · \(video.generatedAt.formatted(date: .abbreviated, time: .shortened))") {
+                                    if let index = document.project.sceneVideos.firstIndex(where: { $0.id == video.id }) {
+                                        document.project.sceneVideos[index].sceneID = UUID(uuidString: sceneTitle)
+                                        document.project.sceneVideos[index].title = self.sceneTitle(for: sceneTitle)
+                                    }
+                                }
+                            }
+                        }
+                        .help(localizedGenerationText("選んだ動画を現在のブロックに関連付けます。", "Assign a selected video to the current block.", "将选定视频关联到当前分组。"))
+                    }
+
+                    if let video = document.project.sceneVideos.first(where: { $0.sceneID?.uuidString == sceneTitle }) {
                         Button {
                             saveSceneVideo(video)
                         } label: {
@@ -889,7 +917,7 @@ struct ContentView: View {
     }
 
     private var selectedAISceneCuts: [StoryboardCut] {
-        guard let sceneTitle = selectedVideoSceneTitle else { return [] }
+        guard let sceneTitle = selectedVideoSceneKey else { return [] }
         return cutsForScene(title: sceneTitle).filter { selectedVideoCutIDs.contains($0.id) }
     }
 
@@ -902,17 +930,21 @@ struct ContentView: View {
     }
 
     private func ensureSceneState(for sceneTitle: String) {
-        guard !document.project.sceneStates.contains(where: { $0.sceneKey == sceneTitle || $0.title == sceneTitle }) else { return }
-        document.project.sceneStates.append(SceneState(sceneKey: sceneTitle, title: sceneTitle))
+        guard let id = UUID(uuidString: sceneTitle), document.project.sceneState(for: id) == nil else { return }
+        var state = SceneState(sceneKey: sceneTitle, title: self.sceneTitle(for: sceneTitle))
+        state.sceneID = id
+        document.project.sceneStates.append(state)
     }
 
     private func sceneStateBinding(for sceneTitle: String) -> Binding<SceneState> {
         Binding(
             get: {
-                document.project.sceneStates.first(where: { $0.sceneKey == sceneTitle || $0.title == sceneTitle })
-                    ?? SceneState(sceneKey: sceneTitle, title: sceneTitle)
+                document.project.sceneStates.first(where: { $0.sceneID?.uuidString == sceneTitle })
+                    ?? SceneState(sceneKey: sceneTitle, title: self.sceneTitle(for: sceneTitle))
             },
             set: { newValue in
+                var newValue = newValue
+                newValue.sceneID = UUID(uuidString: sceneTitle)
                 if let index = document.project.sceneStates.firstIndex(where: { $0.id == newValue.id }) {
                     document.project.sceneStates[index] = newValue
                 } else {
@@ -991,7 +1023,7 @@ struct ContentView: View {
 
     private func addBlockAfterSection(_ title: String) {
         let sections = sceneSections()
-        guard let section = sections.first(where: { $0.title == title }),
+        guard let section = sections.first(where: { $0.key == title }),
               let lastCut = section.cuts.last,
               let index = document.project.cuts.firstIndex(where: { $0.id == lastCut.id }) else {
             addSubtitleAtEnd()
@@ -1011,6 +1043,7 @@ struct ContentView: View {
     private func addCutAbove(_ cutID: StoryboardCut.ID) {
         guard let index = document.project.cuts.firstIndex(where: { $0.id == cutID }) else { return }
         var cut = StoryboardCut(cutNumber: index + 1)
+        cut.sceneID = document.project.cuts[index].sceneID
         if !document.project.cuts[index].subtitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             cut.subtitle = document.project.cuts[index].subtitle
             cut.scriptHeading = document.project.cuts[index].scriptHeading
@@ -1042,7 +1075,7 @@ struct ContentView: View {
     private func deleteBlockSection(_ title: String) {
         let sections = sceneSections()
         guard sections.count > 1,
-              let section = sections.first(where: { $0.title == title }) else { return }
+              let section = sections.first(where: { $0.key == title }) else { return }
         document.deleteCuts(withIDs: Set(section.cuts.map(\.id)))
         ensureSelectedVideoScene()
         ensureSelectedVideoCuts(reset: true)
@@ -1089,21 +1122,7 @@ struct ContentView: View {
     }
 
     private func moveCutRelativeToTarget(_ draggedID: StoryboardCut.ID, _ targetID: StoryboardCut.ID, _ position: CutDropPosition) {
-        guard draggedID != targetID,
-              let sourceIndex = document.project.cuts.firstIndex(where: { $0.id == draggedID }),
-              let targetIndex = document.project.cuts.firstIndex(where: { $0.id == targetID }) else { return }
-
-        let movedCut = document.project.cuts.remove(at: sourceIndex)
-        let rawTargetIndex: Int
-        switch position {
-        case .before:
-            rawTargetIndex = targetIndex
-        case .after:
-            rawTargetIndex = targetIndex + 1
-        }
-        let adjustedTargetIndex = sourceIndex < rawTargetIndex ? rawTargetIndex - 1 : rawTargetIndex
-        document.project.cuts.insert(movedCut, at: adjustedTargetIndex)
-        document.renumberCuts()
+        document.project.moveCut(draggedID, relativeTo: targetID, after: position == .after)
         jumpToCut(draggedID)
     }
 
@@ -1149,9 +1168,10 @@ struct ContentView: View {
         return storyboardPageCutIDs.firstIndex(where: { $0.contains(cutID) })
     }
 
-    private func generateSceneVideo(for title: String) {
+    private func generateSceneVideo(for key: String) {
+        let title = sceneTitle(for: key)
         guard canStartAIGeneration() else { return }
-        guard documentURL != nil else {
+        guard let generationDocumentURL = documentURL else {
             generationStatus = localizedGenerationText(
                 "動画生成の前に書類を保存してください。",
                 "Save the document before generating video.",
@@ -1160,7 +1180,7 @@ struct ContentView: View {
             return
         }
 
-        let cuts = selectedVideoCuts(for: title)
+        let cuts = selectedVideoCuts(for: key)
         guard !cuts.isEmpty else {
             generationStatus = "動画生成するカットを選択してください"
             return
@@ -1181,7 +1201,7 @@ struct ContentView: View {
             return
         }
 
-        generatingSceneTitle = title
+        generatingSceneKey = key
         generationStatus = "シーン「\(title)」の動画を生成中..."
         let provider = AIVideoGenerationProvider.value(for: videoGenerationProvider)
         let providerAPIKey: String
@@ -1203,12 +1223,19 @@ struct ContentView: View {
         let generationAspectRatio = videoAspectRatio
         let referenceSnapshots = Dictionary(uniqueKeysWithValues: cuts.map { ($0.id, sceneReferenceImages(for: [$0])) })
         let contextSnapshots = Dictionary(uniqueKeysWithValues: cuts.map { ($0.id, generationContext(for: $0)) })
+        let generationProjectID = document.project.id
+        guard let generationSceneID = UUID(uuidString: key) else {
+            generatingSceneKey = nil
+            return
+        }
 
         sceneGenerationTask = Task {
             do {
+                let run = try VideoGenerationRecovery.begin(projectID: generationProjectID,
+                    sceneID: generationSceneID, title: title, cuts: cuts,
+                    provider: provider.rawValue, model: providerModel, documentURL: generationDocumentURL)
                 var clips: [Data] = []
                 var previousLastFrame: GeminiReferenceImage?
-                var totalDurationSeconds = 0
 
                 for (index, cut) in cuts.enumerated() {
                     try Task.checkCancellation()
@@ -1275,75 +1302,93 @@ struct ContentView: View {
                     }
 
                     clips.append(clip)
+                    let savedClip = try VideoGenerationRecovery.checkpoint(clip, cutID: cut.id,
+                        run: run, documentURL: generationDocumentURL)
+                    if document.project.cuts.contains(where: { $0.id == cut.id }) {
+                        document.project.generatedCutVideos.append(savedClip)
+                    }
+                    recordAIUsage(prompt: cutPrompt, kind: .video(provider: provider.rawValue,
+                        model: providerModel, seconds: durationSeconds))
                     try Task.checkCancellation()
-                    totalDurationSeconds += durationSeconds
                     previousLastFrame = nil
                     if index < cuts.count - 1,
                        let frameData = try? await VideoAssemblyService.lastFramePNG(from: clip) {
                         previousLastFrame = GeminiReferenceImage(mimeType: "image/png", data: frameData)
                     }
                 }
+                try Task.checkCancellation()
                 let videoData = try await VideoAssemblyService.concatenate(clips)
-                let generatedAt = Date()
-                let storedVideos = try GeneratedVideoStorageService.persist(
-                    sceneTitle: title,
-                    cuts: cuts,
-                    clips: clips,
-                    combinedVideoData: videoData,
-                    generatedAt: generatedAt,
-                    documentURL: documentURL
-                )
+                try Task.checkCancellation()
+                let sceneVideo = try VideoGenerationRecovery.finish(videoData, run: run, documentURL: generationDocumentURL)
 
                 await MainActor.run {
-                    document.project.sceneVideos.removeAll { $0.title == title }
-                    document.project.sceneVideos.append(
-                        SceneVideo(
-                            title: title,
-                            videoFileName: storedVideos.sceneVideoPath,
-                            generatedAt: generatedAt
-                        )
-                    )
-                    document.project.generatedCutVideos.append(contentsOf: storedVideos.cutVideos)
-                    recordAIUsage(
-                        prompt: prompt,
-                        kind: .video(
-                            provider: provider.rawValue,
-                            model: providerModel,
-                            seconds: totalDurationSeconds
-                        )
-                    )
-                    generationStatus = "シーン「\(title)」の動画を生成しました"
-                    generatingSceneTitle = nil
+                    if document.project.cuts.contains(where: { $0.sceneID == generationSceneID }) {
+                        document.project.sceneVideos.removeAll { $0.sceneID == generationSceneID }
+                        document.project.sceneVideos.append(sceneVideo)
+                    }
+                    restoreGeneratedVideos()
+                    generationStatus = localizedGenerationText("シーン「\(title)」の動画を生成しました", "Generated video for “\(title)”.", "已为场景“\(title)”生成视频。")
+                    generatingSceneKey = nil
                     sceneGenerationTask = nil
                 }
             } catch is CancellationError {
                 await MainActor.run {
-                    generationStatus = localizedGenerationText("動画生成をキャンセルしました", "Video generation cancelled.", "视频生成已取消。")
-                    generatingSceneTitle = nil
+                    restoreGeneratedVideos()
+                    generationStatus = localizedGenerationText("生成を中止しました。完成済みカットは保存されています。", "Generation stopped. Completed cuts are saved.", "生成已停止。已完成的镜头已保存。")
+                    generatingSceneKey = nil
                     sceneGenerationTask = nil
                 }
             } catch {
                 await MainActor.run {
-                    generationStatus = "動画生成に失敗しました"
-                    generationErrorAlert = GenerationErrorAlert(title: "動画生成エラー", message: formattedErrorMessage(error))
-                    generatingSceneTitle = nil
+                    restoreGeneratedVideos()
+                    generationStatus = localizedGenerationText("生成が停止しました。保存済みカットは動画一覧から利用できます。", "Generation stopped. Saved cuts are available in video history.", "生成已停止。可在视频历史中使用已保存的镜头。")
+                    if !Task.isCancelled {
+                        generationErrorAlert = GenerationErrorAlert(title: localizedGenerationText("動画生成エラー", "Video Generation Error", "视频生成错误"), message: formattedErrorMessage(error))
+                    }
+                    generatingSceneKey = nil
                     sceneGenerationTask = nil
                 }
             }
         }
     }
 
+    private func restoreGeneratedVideos() {
+        guard let documentURL else { return }
+        let report = VideoGenerationRecovery.scan(projectID: document.project.id, documentURL: documentURL)
+        VideoGenerationRecovery.restore(report, into: &document.project)
+        recoverableRuns = report.runs
+        if report.unreadableRunCount > 0 {
+            generationStatus = localizedGenerationText("一部の保存済み動画を読み込めませんでした。元ファイルは保持されています。", "Some saved clips could not be read. Original files were preserved.", "部分已保存的视频无法读取。原始文件已保留。")
+        }
+    }
+
+    private func assembleRecoveredRun(_ recovered: RecoveredVideoRun) {
+        guard canStartAIGeneration(), let documentURL else { return }
+        generatingSceneKey = recovered.run.sceneID.uuidString
+        sceneGenerationTask = Task {
+            defer { generatingSceneKey = nil; sceneGenerationTask = nil }
+            do {
+                _ = try await VideoGenerationRecovery.assemble(recovered, documentURL: documentURL)
+                restoreGeneratedVideos()
+                generationStatus = localizedGenerationText("保存済みカットから動画を復旧しました。", "Recovered video from saved cuts.", "已从保存的镜头恢复视频。")
+            } catch {
+                generationStatus = localizedGenerationText("結合を完了できませんでした。保存済みカットは保持されています。", "Assembly could not finish. Saved cuts were preserved.", "合并未完成。已保存的镜头已保留。")
+                if !Task.isCancelled { generationErrorAlert = GenerationErrorAlert(title: t(.video), message: formattedErrorMessage(error)) }
+            }
+        }
+    }
+
     private func ensureSelectedVideoScene() {
         let sections = sceneSections()
-        if let selectedVideoSceneTitle, sections.contains(where: { $0.title == selectedVideoSceneTitle }) {
+        if let selectedVideoSceneKey, sections.contains(where: { $0.key == selectedVideoSceneKey }) {
             return
         }
-        self.selectedVideoSceneTitle = sections.first?.title
+        self.selectedVideoSceneKey = sections.first?.key
     }
 
     private func ensureSelectedVideoCuts(reset: Bool = false) {
-        guard let selectedVideoSceneTitle else { return }
-        let sceneCutIDs = Set(cutsForScene(title: selectedVideoSceneTitle).map(\.id))
+        guard let selectedVideoSceneKey else { return }
+        let sceneCutIDs = Set(cutsForScene(title: selectedVideoSceneKey).map(\.id))
         if reset || selectedVideoCutIDs.isEmpty {
             selectedVideoCutIDs = sceneCutIDs
             return
@@ -1356,35 +1401,19 @@ struct ContentView: View {
     }
 
     private func cutsForScene(title: String) -> [StoryboardCut] {
-        sceneSections().first(where: { $0.title == title })?.cuts ?? []
+        sceneSections().first(where: { $0.key == title })?.cuts ?? []
     }
 
     private func selectedVideoCuts(for title: String) -> [StoryboardCut] {
         cutsForScene(title: title).filter { selectedVideoCutIDs.contains($0.id) }
     }
 
-    private func sceneSections() -> [(title: String, cuts: [StoryboardCut])] {
-        var sections: [(title: String, cuts: [StoryboardCut])] = []
-        var currentTitle = CinemaStrings.blockName(1, language: appLanguage)
-        var currentCuts: [StoryboardCut] = []
+    private func sceneSections() -> [StoryboardScene] {
+        document.project.scenes(language: appLanguage)
+    }
 
-        for cut in document.project.cuts {
-            let subtitle = cut.subtitle.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !subtitle.isEmpty {
-                if !currentCuts.isEmpty {
-                    sections.append((currentTitle, currentCuts))
-                    currentCuts = []
-                }
-                currentTitle = subtitle
-            }
-            currentCuts.append(cut)
-        }
-
-        if !currentCuts.isEmpty {
-            sections.append((currentTitle, currentCuts))
-        }
-
-        return sections
+    private func sceneTitle(for key: String) -> String {
+        sceneSections().first { $0.key == key }?.title ?? ""
     }
 
     private func sceneVideoPrompt(title: String, cuts: [StoryboardCut]) -> String {
@@ -1448,11 +1477,11 @@ struct ContentView: View {
     }
 
     private var generatedVideoStripColumns: [GeneratedVideoStripColumn] {
-        guard let selectedVideoSceneTitle else { return [] }
+        guard let selectedVideoSceneKey else { return [] }
 
-        return cutsForScene(title: selectedVideoSceneTitle).map { cut in
+        return cutsForScene(title: selectedVideoSceneKey).map { cut in
             let versions = document.project.generatedCutVideos
-                .filter { $0.sceneTitle == selectedVideoSceneTitle && $0.cutID == cut.id }
+                .filter { $0.cutID == cut.id }
                 .sorted { $0.generatedAt > $1.generatedAt }
                 .compactMap { video -> GeneratedVideoStripVersion? in
                     guard let fileURL = GeneratedVideoStorageService.fileURL(for: video.videoFileName, documentURL: documentURL),
@@ -1511,8 +1540,9 @@ struct ContentView: View {
         }
     }
 
-    private func exportScenePrompts(for title: String) {
-        let selectedCuts = selectedVideoCuts(for: title)
+    private func exportScenePrompts(for key: String) {
+        let title = sceneTitle(for: key)
+        let selectedCuts = selectedVideoCuts(for: key)
         
         guard !selectedCuts.isEmpty else {
             generationStatus = CinemaStrings.noCutsForSceneBundle(language: appLanguage)
@@ -1520,7 +1550,7 @@ struct ContentView: View {
         }
 
         let sceneState = document.project.sceneStates.first {
-            $0.sceneKey == title || $0.title == title
+            $0.sceneID?.uuidString == key
         }
         let validation = CinemaSceneBundleValidator.validate(
             sceneTitle: title,
@@ -1725,6 +1755,16 @@ struct ContentView: View {
     }
 
     private func formattedErrorMessage(_ error: Error) -> String {
+        if let recoveryError = error as? VideoGenerationRecovery.RecoveryError {
+            switch recoveryError {
+            case .invalidRun:
+                return localizedGenerationText("保存済みの生成記録を読み込めません。", "The saved generation run is invalid.", "保存的生成记录无效。")
+            case .incompleteRun:
+                return localizedGenerationText("未完成のカットがあります。完成済みカットは保存されています。", "Some cuts have not finished. Completed clips remain available.", "部分镜头尚未完成。已完成的镜头仍可使用。")
+            case .emptyClip:
+                return localizedGenerationText("生成された動画が空です。", "The generated clip is empty.", "生成的视频为空。")
+            }
+        }
         let rawMessage = error.localizedDescription.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let data = rawMessage.data(using: .utf8),
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
@@ -1883,7 +1923,7 @@ struct ContentView: View {
     private func generationContext(for cut: StoryboardCut) -> String {
         let section = sceneSections().first { $0.cuts.contains { $0.id == cut.id } }
         let title = section?.title ?? ""
-        let state = document.project.sceneStates.first { $0.sceneKey == title || $0.title == title }
+        let state = section.flatMap { document.project.sceneState(for: $0.id) }
         return [
             drawingPromptForGeneration(references: referencesForCut(cut)),
             AIPromptBuilder.worldStatePrompt(sceneTitle: title, state: state, cuts: [cut])
@@ -1966,7 +2006,7 @@ struct ContentView: View {
     }
 
     private func canStartAIGeneration() -> Bool {
-        guard generatingCutID == nil, generatingSceneTitle == nil else { return false }
+        guard generatingCutID == nil, generatingSceneKey == nil else { return false }
         guard !isAICostLimitExceeded else {
             generationStatus = "推定料金が上限を超えています。設定で上限を変更してください。"
             return false

@@ -106,6 +106,9 @@ Provider availability, model identifiers, supported parameters, pricing, and reg
 - Preview versions using the active project aspect ratio.
 - Identify versions as `Cut 2-1`, `Cut 2-2`, and so on.
 - Open or save generated media from the Scenario workspace.
+- Completed cuts are saved immediately, even if a later cut fails or generation is cancelled. Reopening the document restores saved clips to history.
+- If every cut finished but final assembly failed, use **Assemble Saved Cuts** to combine them without another AI request.
+- Scene UUIDs keep state and history associated through renames. Older same-name scenes are migrated independently; ambiguous legacy combined videos can be assigned from **Unassigned Legacy Videos**.
 
 ### Aspect Ratios
 
@@ -200,6 +203,8 @@ Cinema projects use the `.cinemaboard` document type. Project content, generated
 API keys are configured locally in application preferences. Scene Bundle export intentionally excludes API keys, authentication tokens, and absolute paths from the manifest.
 
 Newly generated videos are stored in the sibling `movies/` folder. Move or back up that folder together with the `.cinemaboard` document; moving or saving the document elsewhere does not currently copy external videos automatically.
+
+Generation recovery records and completed clips live in `movies/generation/<project UUID>/<run UUID>/`. Recovery does not depend on the document having autosaved after the last completed cut. These records contain no API keys.
 
 Keep backups of important project documents and generated media. Third-party API output may not be reproducible if a provider changes or retires a model.
 

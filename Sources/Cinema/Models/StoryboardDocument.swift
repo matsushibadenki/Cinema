@@ -63,6 +63,7 @@ struct StoryboardDocument: FileDocument {
     }
 
     mutating func renumberCuts() {
+        project.normalizeSceneIdentities()
         for index in project.cuts.indices {
             project.cuts[index].cutNumber = index + 1
         }

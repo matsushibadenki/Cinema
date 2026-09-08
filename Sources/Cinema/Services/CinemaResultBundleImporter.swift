@@ -129,6 +129,7 @@ enum CinemaResultBundleImporter {
             document.project.cuts[payload.cutIndex].imageFileName = payload.path
         }
         document.project.generatedCutVideos.append(contentsOf: importedVideos)
+        document.project.normalizeSceneIdentities()
         let outputWarnings = manifest.outputs.flatMap(\.warnings)
         document.project.importedGenerationResults.append(ImportedGenerationResult(
             sourceBundleID: manifest.sourceBundleID,
@@ -139,6 +140,12 @@ enum CinemaResultBundleImporter {
             warnings: manifest.warnings + outputWarnings,
             importedAt: importedAt
         ))
+        let importedSceneIDs = Set(manifest.outputs.compactMap { output in
+            document.project.cuts.first { $0.id == output.cutID }?.sceneID
+        })
+        if importedSceneIDs.count == 1 {
+            document.project.importedGenerationResults[document.project.importedGenerationResults.count - 1].sceneID = importedSceneIDs.first
+        }
 
         return CinemaResultImportSummary(
             imageCount: imagePayloads.count,

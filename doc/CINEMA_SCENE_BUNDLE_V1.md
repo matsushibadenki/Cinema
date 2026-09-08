@@ -27,6 +27,7 @@ Cinema Scene Bundleは、Cinemaと外部のGoogle Colab、GPUワーカー、オ�
 - `schemaVersion`はマニフェスト構造のSemantic Versioningです。未知のmajor versionは読み込みを停止し、未知のminor/patch fieldは無視してください。
 - `promptVersion`はプロンプト組み立て規約のversionです。生成結果の再現性を追跡する際に保存してください。
 - `bundleID`は書き出しごとに発行されるUUIDです。Result Bundleの`sourceBundleID`へそのまま記録してください。
+- `scene.id`は永続シーンUUIDです。新しい書き出しの`scene.key`にも同じUUID文字列を設定し、`scene.title`を表示名として使用します。旧Bundleでは`scene.id`がなく、`scene.key`がタイトルの場合があります。Runnerはkeyを不透明な識別子として扱い、Result Bundleへそのまま返してください。
 - マニフェスト内のasset pathとprompt pathは、すべてbundle rootからの相対pathです。
 - API key、認証token、ユーザー環境の絶対pathは書き出しません。
 - JSON consumerは未知のfieldを許容してください。既存fieldの意味変更はmajor version更新時だけ行います。

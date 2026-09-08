@@ -3,6 +3,31 @@ import XCTest
 @testable import Cinema
 
 final class CinemaSceneBundleExporterTests: XCTestCase {
+    func testSameNameScenesExportDistinctIdentityAndCorrectState() throws {
+        var project = StoryboardProject(sceneStates: [SceneState(sceneKey: "Room", title: "Room")],
+            cuts: [StoryboardCut(cutNumber: 1, situation: "First", subtitle: "Room"),
+                   StoryboardCut(cutNumber: 2, situation: "Second", subtitle: "Room")])
+        project.sceneStates[0].environmentState.summary = "Warm room"
+        project.sceneStates[1].environmentState.summary = "Cool room"
+        let root = temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        var keys: [String] = []
+        for cut in project.cuts {
+            let url = try CinemaSceneBundleExporter.export(project: project, sceneTitle: "Room", cuts: [cut],
+                imageData: [:], configuration: configuration(), to: root)
+            let manifest = try decoder.decode(CinemaSceneBundleManifest.self,
+                from: Data(contentsOf: url.appendingPathComponent("manifest.json")))
+            XCTAssertEqual(manifest.scene.id, cut.sceneID)
+            XCTAssertEqual(manifest.scene.key, cut.sceneID?.uuidString)
+            XCTAssertEqual(manifest.scene.state?.environmentState.summary,
+                           project.sceneState(for: try XCTUnwrap(cut.sceneID))?.environmentState.summary)
+            keys.append(manifest.scene.key)
+        }
+        XCTAssertNotEqual(keys[0], keys[1])
+    }
+
     func testExportCreatesVersionedPortableBundle() throws {
         let referenceID = UUID(uuidString: "00000000-0000-0000-0000-000000000901")!
         let cutID = UUID(uuidString: "00000000-0000-0000-0000-000000000902")!

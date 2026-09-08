@@ -3,10 +3,10 @@
 ## Reliability Review
 
 - [Done] Fix block metadata preservation on deletion, Scene State delivery to generation, continuity resets, storyboard reference targeting, media download validation, and invalid export durations.
-- [Next] Introduce stable scene identifiers and migrate title-based state/history associations.
+- [Done] Introduce stable scene UUIDs and migrate legacy title-based state/history associations. Preserve identity through renaming, deletion of a heading cut, and reordering; keep same-name blocks independent. Ambiguous legacy combined videos remain available for manual assignment.
 - [Done] Separate external video path validation and persistence from ContentView, and support user cancellation of scene generation.
 - [Done] Snapshot provider, model, API credential, aspect ratio, references, and prompt context when scene generation starts.
-- [Next] Preserve completed clips for recovery when a later cut fails.
+- [Done] Persist each completed clip and its generation journal atomically before proceeding to the next cut. Restore history after failure, cancellation, or reopening a document; retry assembly from a fully saved run without another AI request.
 - [Done] Migrate provider API keys from UserDefaults to the macOS Keychain, removing legacy values after a successful migration.
 - [Done] Persist project-specific aspect ratio and custom dimensions in documents, migrating legacy values from current user defaults.
 

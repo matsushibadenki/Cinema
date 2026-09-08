@@ -26,6 +26,7 @@ struct CinemaExportProject: Codable, Equatable {
 }
 
 struct CinemaExportScene: Codable, Equatable {
+    var id: UUID? = nil
     var title: String
     var key: String
     var state: SceneState?
@@ -127,7 +128,9 @@ enum CinemaSceneBundleExporter {
             drawingPrompt: drawingPrompt,
             isSingleCutGeneration: cuts.count == 1
         )
-        let sceneState = sceneState(for: sceneTitle, in: project.sceneStates)
+        let sceneID = cuts.first.flatMap { cut in project.cuts.first { $0.id == cut.id }?.sceneID }
+        let sceneState = sceneID.flatMap { project.sceneState(for: $0) }
+            ?? project.sceneStates.first { $0.sceneID == nil && ($0.sceneKey == sceneTitle || $0.title == sceneTitle) }
         let worldStatePrompt = AIPromptBuilder.worldStatePrompt(sceneTitle: sceneTitle, state: sceneState, cuts: cuts)
 
         try write(scenePrompt, to: promptsURL.appendingPathComponent("scene.txt"))
@@ -216,8 +219,9 @@ enum CinemaSceneBundleExporter {
                 drawingPreset: project.drawingSettings.selectedPreset
             ),
             scene: CinemaExportScene(
+                id: sceneID,
                 title: sceneTitle,
-                key: sceneState?.sceneKey.isEmpty == false ? sceneState?.sceneKey ?? sceneTitle : sceneTitle,
+                key: sceneID?.uuidString ?? sceneState?.sceneKey ?? sceneTitle,
                 state: sceneState,
                 scenePromptPath: "prompts/scene.txt",
                 worldStatePromptPath: "prompts/world-state.txt"
@@ -247,14 +251,6 @@ enum CinemaSceneBundleExporter {
         try write(readmeText(), to: bundleURL.appendingPathComponent("README.txt"))
 
         return bundleURL
-    }
-
-    private static func sceneState(for title: String, in states: [SceneState]) -> SceneState? {
-        let normalizedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        return states.first { state in
-            state.sceneKey.trimmingCharacters(in: .whitespacesAndNewlines) == normalizedTitle
-                || state.title.trimmingCharacters(in: .whitespacesAndNewlines) == normalizedTitle
-        }
     }
 
     private static func referencedImages(for cuts: [StoryboardCut], in references: [ReferenceImage]) -> [ReferenceImage] {
