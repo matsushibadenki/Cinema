@@ -46,7 +46,7 @@ final class CinemaSceneBundleExporterTests: XCTestCase {
         )
         let project = StoryboardProject(
             title: "Portable Project",
-            projectContext: ProjectContext(defaultFilmProfileID: "film-neutral", defaultSeed: "42"),
+            projectContext: ProjectContext(productionDirective: "Keep the recurring blue coat.", defaultFilmProfileID: "film-neutral", defaultSeed: "42"),
             referenceImages: [reference],
             sceneStates: [sceneState],
             cuts: [cut]
@@ -92,6 +92,10 @@ final class CinemaSceneBundleExporterTests: XCTestCase {
         XCTAssertEqual(manifest.cuts.first?.referenceIDs, [referenceID])
         XCTAssertEqual(manifest.references.first?.assetPath, "references/\(referenceID.uuidString).webp")
         XCTAssertTrue(manifest.warnings.isEmpty)
+
+        let videoPrompt = try String(contentsOf: bundleURL.appendingPathComponent("prompts/cut-001-video.txt"), encoding: .utf8)
+        XCTAssertTrue(videoPrompt.contains("Keep the recurring blue coat."))
+        XCTAssertTrue(videoPrompt.contains("Mika wears a blue coat."))
 
         let manifestText = String(decoding: manifestData, as: UTF8.self)
         XCTAssertFalse(manifestText.contains(root.path))

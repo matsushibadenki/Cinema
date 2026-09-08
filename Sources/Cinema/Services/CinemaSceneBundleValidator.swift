@@ -28,6 +28,12 @@ struct CinemaSceneBundleValidationReport: Equatable {
 }
 
 enum CinemaSceneBundleValidator {
+    static func validDuration(_ value: String) -> Bool {
+        guard let seconds = Double(value.trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: ",", with: ".")) else { return false }
+        return seconds.isFinite && seconds > 0
+    }
+
     static func validate(
         sceneTitle: String,
         sceneState: SceneState?,
@@ -49,7 +55,7 @@ enum CinemaSceneBundleValidator {
             items.append(.init(id: "empty-state", severity: .warning, message: localized.emptySceneState))
         }
 
-        let referenceLookup = Dictionary(uniqueKeysWithValues: references.map { ($0.id, $0) })
+        let referenceLookup = Dictionary(references.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         var referencedIDs = Set<ReferenceImage.ID>()
         var storyboardImageCount = 0
 
@@ -60,7 +66,7 @@ enum CinemaSceneBundleValidator {
             }
 
             let duration = cut.duration.trimmingCharacters(in: .whitespacesAndNewlines)
-            if duration.isEmpty || Double(duration.replacingOccurrences(of: ",", with: ".")) == nil {
+            if !validDuration(duration) {
                 items.append(.init(id: "\(prefix)-duration", severity: .warning, message: localized.invalidDuration(cut.cutNumber)))
             }
 

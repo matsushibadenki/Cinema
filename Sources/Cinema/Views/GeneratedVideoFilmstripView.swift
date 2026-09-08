@@ -21,6 +21,7 @@ struct GeneratedVideoStripVersion: Identifiable, Equatable {
 }
 
 struct GeneratedVideoFilmstripView: View {
+    @AppStorage("appLanguage") private var appLanguage = AppLanguage.japanese.rawValue
     var sceneTitle: String?
     var columns: [GeneratedVideoStripColumn]
     var currentCutID: StoryboardCut.ID?
@@ -30,7 +31,7 @@ struct GeneratedVideoFilmstripView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: isCompact ? 8 : 10) {
             HStack(spacing: 8) {
-                Text("選択シーンの動画")
+                Text(CinemaStrings.text(.selectedSceneVideos, language: appLanguage))
                     .font(.system(size: isCompact ? 12 : 13, weight: .semibold))
                     .foregroundStyle(CinemaDesign.ink)
 
@@ -53,7 +54,7 @@ struct GeneratedVideoFilmstripView: View {
                                 .stroke(CinemaDesign.strongBorder.opacity(0.88), lineWidth: 0.8)
                         }
                         .overlay {
-                            Text("このシーンの動画はまだありません")
+                            Text(CinemaStrings.text(.noSceneVideos, language: appLanguage))
                                 .font(.system(size: 12, weight: .medium))
                                 .foregroundStyle(CinemaDesign.quietInk)
                         }
@@ -86,6 +87,7 @@ struct GeneratedVideoFilmstripView: View {
 }
 
 private struct GeneratedVideoFilmstripColumnView: View {
+    @AppStorage("appLanguage") private var appLanguage = AppLanguage.japanese.rawValue
     var column: GeneratedVideoStripColumn
     var isCurrentCut: Bool
     var screenAspectRatio: CGFloat
@@ -107,7 +109,7 @@ private struct GeneratedVideoFilmstripColumnView: View {
                 Rectangle()
                     .fill(CinemaDesign.insetSurface.opacity(0.62))
                     .overlay {
-                        Text("未生成")
+                        Text(CinemaStrings.text(.notGenerated, language: appLanguage))
                             .font(.system(size: 11, weight: .medium))
                             .foregroundStyle(CinemaDesign.quietInk)
                     }

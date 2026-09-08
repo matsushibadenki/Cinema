@@ -68,6 +68,33 @@ struct StoryboardDocument: FileDocument {
         }
     }
 
+    /// Keep a surviving block's heading when its first cut is removed.
+    mutating func deleteCuts(withIDs ids: Set<StoryboardCut.ID>) {
+        var heading: StoryboardCut?
+        var survivingCuts: [StoryboardCut] = []
+        let removedImagePaths = Set(project.cuts.filter { ids.contains($0.id) }.compactMap(\.imageFileName))
+        for var cut in project.cuts {
+            if !cut.subtitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                heading = cut
+            }
+            guard !ids.contains(cut.id) else { continue }
+            if let blockHeading = heading {
+                cut.subtitle = blockHeading.subtitle
+                cut.scriptHeading = blockHeading.scriptHeading
+                cut.sceneName = blockHeading.sceneName
+                heading = nil
+            }
+            survivingCuts.append(cut)
+        }
+        project.cuts = survivingCuts.isEmpty ? [StoryboardCut(cutNumber: 1)] : survivingCuts
+        project.generatedCutVideos.removeAll { ids.contains($0.cutID) }
+        let retainedImagePaths = Set(project.cuts.compactMap(\.imageFileName) + project.referenceImages.map(\.imageFileName))
+        for path in removedImagePaths.subtracting(retainedImagePaths) {
+            imageData[path] = nil
+        }
+        renumberCuts()
+    }
+
     static func readData(from wrapper: FileWrapper, prefix: String) -> [String: Data] {
         var dataByPath: [String: Data] = [:]
         for (name, child) in wrapper.fileWrappers ?? [:] {

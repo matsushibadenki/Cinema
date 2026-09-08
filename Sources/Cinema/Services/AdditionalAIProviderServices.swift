@@ -192,8 +192,7 @@ struct DeepInfraVideoService {
             throw ServiceError.missingVideoURL
         }
 
-        let (videoData, _) = try await URLSession.shared.data(from: videoURL)
-        return videoData
+        return try await GeneratedMediaDownload.data(from: videoURL)
     }
 }
 
@@ -282,8 +281,7 @@ struct NovitaImageService {
             throw ServiceError.imageNotFound
         }
 
-        let (imageData, _) = try await URLSession.shared.data(from: imageURL)
-        return imageData
+        return try await GeneratedMediaDownload.data(from: imageURL)
     }
 
     private func pollTaskResult(taskID: String) async throws -> NovitaTaskResult {
@@ -408,8 +406,7 @@ struct NovitaVideoService {
             throw ServiceError.videoNotFound
         }
 
-        let (videoData, _) = try await URLSession.shared.data(from: videoURL)
-        return videoData
+        return try await GeneratedMediaDownload.data(from: videoURL)
     }
 
     private func pollTaskResult(taskID: String) async throws -> NovitaTaskResult {

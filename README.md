@@ -145,6 +145,8 @@ This keeps Cinema focused on production design while allowing a separate Google 
 
 See [Cinema Scene Bundle v1](doc/CINEMA_SCENE_BUNDLE_V1.md) for the compatibility contract.
 
+External runners can return generated images and videos through the versioned [Cinema Result Bundle v1](doc/CINEMA_RESULT_BUNDLE_V1.md). Cinema validates cut identities and paths, attaches images to their source cuts, adds videos to cut history, and records runner provenance and warnings.
+
 ## Requirements
 
 ### Prebuilt Release
@@ -197,6 +199,8 @@ Cinema projects use the `.cinemaboard` document type. Project content, generated
 
 API keys are configured locally in application preferences. Scene Bundle export intentionally excludes API keys, authentication tokens, and absolute paths from the manifest.
 
+Newly generated videos are stored in the sibling `movies/` folder. Move or back up that folder together with the `.cinemaboard` document; moving or saving the document elsewhere does not currently copy external videos automatically.
+
 Keep backups of important project documents and generated media. Third-party API output may not be reproducible if a provider changes or retires a model.
 
 ## Cost Controls
@@ -223,12 +227,12 @@ Release downloads are available on the [GitHub Releases page](https://github.com
 - Editor and Browser tabs are reserved for future workflows.
 - Hyperbolic video generation is not connected.
 - Local open-weight video generation is not bundled into Cinema.
-- External runner result import and round-trip attachment are not implemented yet.
+- External runner result bundles can be imported and attached to their source cuts.
 
 ## Roadmap
 
 - [Done] Project-wide production direction, continuity contracts, persistent Scene State, Scene Bundle export, and export validation.
-- [Next] Define a result bundle and round-trip import path from external inference runners.
+- [Done] Define a result bundle and round-trip import path from external inference runners.
 - [Later] Research separate film/color processing and experimental Apple Silicon local-generation backends without coupling them to the SwiftUI interface.
 
 See the full [Cinema Roadmap](doc/ROADMAP.md).

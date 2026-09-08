@@ -55,7 +55,7 @@ private struct AppCommands: Commands {
 
     var body: some Commands {
         CommandGroup(replacing: .appSettings) {
-            Button("設定...") {
+            Button(CinemaStrings.text(.preferences, language: appLanguage)) {
                 openWindow(id: settingsWindowID)
             }
             .keyboardShortcut(",", modifiers: .command)
@@ -68,12 +68,12 @@ private struct AppCommands: Commands {
         }
 
         CommandGroup(replacing: .saveItem) {
-            Button("保存") {
+            Button(CinemaStrings.text(.save, language: appLanguage)) {
                 NSDocumentController.shared.currentDocument?.save(nil)
             }
             .keyboardShortcut("s", modifiers: .command)
 
-            Button("別名で保存...") {
+            Button(CinemaStrings.text(.saveAs, language: appLanguage)) {
                 NSDocumentController.shared.currentDocument?.saveAs(nil)
             }
             .keyboardShortcut("s", modifiers: [.command, .shift])

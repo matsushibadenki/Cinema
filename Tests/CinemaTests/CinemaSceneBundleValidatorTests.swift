@@ -3,6 +3,27 @@ import XCTest
 @testable import Cinema
 
 final class CinemaSceneBundleValidatorTests: XCTestCase {
+    func testDurationMustBePositiveAndFinite() {
+        for value in ["", "0", "-1", "nan", "inf", "1e999"] {
+            XCTAssertFalse(CinemaSceneBundleValidator.validDuration(value), value)
+        }
+        for value in ["1", "0.5", "1,5", " 3 "] {
+            XCTAssertTrue(CinemaSceneBundleValidator.validDuration(value), value)
+        }
+    }
+
+    func testDuplicateReferenceIDsDoNotCrashValidation() {
+        let reference = ReferenceImage(name: "Shared", imageFileName: "image.png")
+        let cut = StoryboardCut(cutNumber: 1, situation: "Room", duration: "3",
+                                referenceImageIDs: [reference.id])
+        let report = CinemaSceneBundleValidator.validate(
+            sceneTitle: "Room", sceneState: nil, cuts: [cut],
+            references: [reference, reference], imageData: ["image.png": Data([1])],
+            language: "en"
+        )
+        XCTAssertEqual(report.referenceCount, 1)
+    }
+
     func testValidSceneIsReadyForExport() {
         let reference = ReferenceImage(name: "Wardrobe", imageFileName: "wardrobe.png")
         let cut = StoryboardCut(

@@ -40,6 +40,12 @@ enum CinemaTextKey: String {
     case hideReference
     case showReference
     case print
+    case preferences
+    case save
+    case saveAs
+    case selectedSceneVideos
+    case noSceneVideos
+    case notGenerated
     case checkForUpdates
     case title
     case block
@@ -67,7 +73,9 @@ enum CinemaTextKey: String {
     case estimatedCost
     case limit
     case exportPrompt
+    case importResultBundle
     case generating
+    case cancelGeneration
     case createSelectedSceneVideo
     case saveGeneratedVideo
     case selectScene
@@ -266,6 +274,13 @@ enum CinemaStrings {
         .showReference: "リファレンスを表示",
         .print: "プリント",
         .checkForUpdates: "ソフトウェアアップデートを確認...",
+        .preferences: "設定...",
+        .save: "保存",
+        .saveAs: "別名で保存...",
+        .selectedSceneVideos: "選択シーンの動画",
+        .noSceneVideos: "このシーンの動画はまだありません",
+        .notGenerated: "未生成",
+
         .title: "タイトル",
         .block: "ブロック",
         .sequence: "シーケンス",
@@ -292,7 +307,9 @@ enum CinemaStrings {
         .estimatedCost: "推定料金",
         .limit: "上限",
         .exportPrompt: "Scene Bundle書き出し",
+        .importResultBundle: "Result Bundle読み込み",
         .generating: "生成中...",
+        .cancelGeneration: "生成をキャンセル",
         .createSelectedSceneVideo: "選択シーンの動画作成",
         .saveGeneratedVideo: "生成動画を保存",
         .selectScene: "シーンを選択してください",
@@ -389,6 +406,13 @@ enum CinemaStrings {
         .showReference: "Show Reference",
         .print: "Print",
         .checkForUpdates: "Check for Software Updates...",
+        .preferences: "Preferences...",
+        .save: "Save",
+        .saveAs: "Save As...",
+        .selectedSceneVideos: "Selected Scene Videos",
+        .noSceneVideos: "No videos for this scene yet",
+        .notGenerated: "Not generated",
+
         .title: "Title",
         .block: "Block",
         .sequence: "Sequence",
@@ -415,7 +439,9 @@ enum CinemaStrings {
         .estimatedCost: "Estimated Cost",
         .limit: "Limit",
         .exportPrompt: "Export Scene Bundle",
+        .importResultBundle: "Import Result Bundle",
         .generating: "Generating...",
+        .cancelGeneration: "Cancel Generation",
         .createSelectedSceneVideo: "Create Video for Scene",
         .saveGeneratedVideo: "Save Generated Video",
         .selectScene: "Select a scene",
@@ -512,6 +538,13 @@ enum CinemaStrings {
         .showReference: "显示参考",
         .print: "打印",
         .checkForUpdates: "检查软件更新...",
+        .preferences: "设置...",
+        .save: "保存",
+        .saveAs: "另存为...",
+        .selectedSceneVideos: "所选场景的视频",
+        .noSceneVideos: "此场景暂无视频",
+        .notGenerated: "尚未生成",
+
         .title: "标题",
         .block: "区块",
         .sequence: "序列",
@@ -538,7 +571,9 @@ enum CinemaStrings {
         .estimatedCost: "预计费用",
         .limit: "上限",
         .exportPrompt: "导出 Scene Bundle",
+        .importResultBundle: "导入 Result Bundle",
         .generating: "生成中...",
+        .cancelGeneration: "取消生成",
         .createSelectedSceneVideo: "生成所选场景视频",
         .saveGeneratedVideo: "保存生成视频",
         .selectScene: "请选择场景",

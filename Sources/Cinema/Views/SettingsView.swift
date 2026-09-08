@@ -11,21 +11,21 @@ struct SettingsView: View {
         case display
     }
 
-    @AppStorage("geminiAPIKey") private var geminiAPIKey = ""
+    @State private var geminiAPIKey = ""
     @AppStorage("geminiModelName") private var geminiModelName = "gemini-3.1-flash-image"
     @AppStorage("geminiVideoModelName") private var geminiVideoModelName = "veo-3.1-generate-preview"
     @AppStorage("imageGenerationProvider") private var imageGenerationProvider = "gemini"
     @AppStorage("videoGenerationProvider") private var videoGenerationProvider = "gemini"
-    @AppStorage("openAIAPIKey") private var openAIAPIKey = ""
+    @State private var openAIAPIKey = ""
     @AppStorage("openAIModelName") private var openAIModelName = "gpt-image-2"
     @AppStorage("openAIVideoModelName") private var openAIVideoModelName = "sora-2"
-    @AppStorage("deepInfraAPIKey") private var deepInfraAPIKey = ""
+    @State private var deepInfraAPIKey = ""
     @AppStorage("deepInfraModelName") private var deepInfraModelName = "black-forest-labs/FLUX-1-schnell"
     @AppStorage("deepInfraVideoModelName") private var deepInfraVideoModelName = "Wan-AI/Wan2.1-T2V-14B"
-    @AppStorage("novitaAPIKey") private var novitaAPIKey = ""
+    @State private var novitaAPIKey = ""
     @AppStorage("novitaModelName") private var novitaModelName = "sd_xl_base_1.0.safetensors"
     @AppStorage("novitaVideoModelName") private var novitaVideoModelName = "darkSushiMixMix_225D_64380.safetensors"
-    @AppStorage("hyperbolicAPIKey") private var hyperbolicAPIKey = ""
+    @State private var hyperbolicAPIKey = ""
     @AppStorage("hyperbolicModelName") private var hyperbolicModelName = "SDXL1.0-base"
     @AppStorage("screenAspectRatio") private var screenAspectRatioRawValue = ScreenAspectRatio.television169.rawValue
     @AppStorage("customScreenWidth") private var customScreenWidth = 1920
@@ -320,6 +320,7 @@ struct SettingsView: View {
                     VStack(alignment: .leading, spacing: 6) {
                         APIKeyField(
                             text: $geminiAPIKey,
+                            provider: .gemini,
                             linkTitle: t(.getGoogleAIStudio),
                             linkURL: URL(string: "https://aistudio.google.com/app/apikey")!
                         )
@@ -430,6 +431,7 @@ struct SettingsView: View {
                     VStack(alignment: .leading, spacing: 6) {
                         APIKeyField(
                             text: $openAIAPIKey,
+                            provider: .openAI,
                             linkTitle: t(.getOpenAIPlatform),
                             linkURL: URL(string: "https://platform.openai.com/api-keys")!
                         )
@@ -542,6 +544,7 @@ struct SettingsView: View {
                     VStack(alignment: .leading, spacing: 6) {
                         APIKeyField(
                             text: $deepInfraAPIKey,
+                            provider: .deepInfra,
                             linkTitle: "DeepInfra Dashboard",
                             linkURL: URL(string: "https://deepinfra.com/dash/api_keys")!
                         )
@@ -604,6 +607,7 @@ struct SettingsView: View {
                 SettingsFieldRow("API Key") {
                     APIKeyField(
                         text: $novitaAPIKey,
+                        provider: .novita,
                         linkTitle: "Novita Console",
                         linkURL: URL(string: "https://novita.ai/settings")!
                     )
@@ -638,6 +642,7 @@ struct SettingsView: View {
                 SettingsFieldRow("API Key") {
                     APIKeyField(
                         text: $hyperbolicAPIKey,
+                        provider: .hyperbolic,
                         linkTitle: "Hyperbolic Settings",
                         linkURL: URL(string: "https://app.hyperbolic.xyz/settings")!
                     )
@@ -820,6 +825,12 @@ struct SettingsView: View {
     }
 
     private func handleAppear() {
+        APIKeyStore.migrateLegacyDefaults()
+        geminiAPIKey = APIKeyStore.value(for: .gemini)
+        openAIAPIKey = APIKeyStore.value(for: .openAI)
+        deepInfraAPIKey = APIKeyStore.value(for: .deepInfra)
+        novitaAPIKey = APIKeyStore.value(for: .novita)
+        hyperbolicAPIKey = APIKeyStore.value(for: .hyperbolic)
         initializeSelections()
         startLoadingAIModels()
     }
@@ -1176,6 +1187,7 @@ private struct SettingsFieldRow<Content: View>: View {
 
 private struct APIKeyField: View {
     @Binding var text: String
+    var provider: AIProviderCredential
     var linkTitle: String
     var linkURL: URL
 
@@ -1191,6 +1203,9 @@ private struct APIKeyField: View {
             }
             .buttonStyle(.link)
             .fixedSize()
+        }
+        .onChange(of: text) { _, newValue in
+            APIKeyStore.set(newValue, for: provider)
         }
     }
 }

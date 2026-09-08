@@ -2,6 +2,21 @@ import XCTest
 @testable import Cinema
 
 final class StoryboardModelMigrationTests: XCTestCase {
+    func testLegacyProjectMigratesCurrentPresentationDefaults() throws {
+        let suite = "CinemaMigrationTests-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        defaults.set(ScreenAspectRatio.cinemascope239.rawValue, forKey: "screenAspectRatio")
+        defaults.set(2048, forKey: "customScreenWidth")
+        defaults.set(858, forKey: "customScreenHeight")
+
+        let migrated = ProjectPresentationSettings.legacyDefaults(defaults)
+
+        XCTAssertEqual(migrated.screenAspectRatioID, ScreenAspectRatio.cinemascope239.rawValue)
+        XCTAssertEqual(migrated.customScreenWidth, 2048)
+        XCTAssertEqual(migrated.customScreenHeight, 858)
+    }
+
     func testProjectContextWithoutProductionDirectiveDecodesWithEmptyDefault() throws {
         let data = Data("""
         {

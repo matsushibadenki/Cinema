@@ -5,6 +5,7 @@ struct CinemaSceneBundleManifest: Codable, Equatable {
     static let schemaVersion = "1.0.0"
     static let promptVersion = "cinema.prompt.v1"
 
+    var bundleID: UUID
     var format: String
     var schemaVersion: String
     var promptVersion: String
@@ -127,7 +128,7 @@ enum CinemaSceneBundleExporter {
             isSingleCutGeneration: cuts.count == 1
         )
         let sceneState = sceneState(for: sceneTitle, in: project.sceneStates)
-        let worldStatePrompt = worldStatePrompt(sceneTitle: sceneTitle, state: sceneState, cuts: cuts)
+        let worldStatePrompt = AIPromptBuilder.worldStatePrompt(sceneTitle: sceneTitle, state: sceneState, cuts: cuts)
 
         try write(scenePrompt, to: promptsURL.appendingPathComponent("scene.txt"))
         try write(worldStatePrompt, to: promptsURL.appendingPathComponent("world-state.txt"))
@@ -155,6 +156,7 @@ enum CinemaSceneBundleExporter {
                 .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
                 .joined(separator: "\n\n")
             let videoPrompt = [
+                drawingPrompt,
                 "Scene: \(sceneTitle)",
                 durationLine(for: cut),
                 worldStatePrompt,
@@ -203,6 +205,7 @@ enum CinemaSceneBundleExporter {
         }
 
         let manifest = CinemaSceneBundleManifest(
+            bundleID: UUID(),
             format: CinemaSceneBundleManifest.format,
             schemaVersion: CinemaSceneBundleManifest.schemaVersion,
             promptVersion: CinemaSceneBundleManifest.promptVersion,
@@ -278,66 +281,6 @@ enum CinemaSceneBundleExporter {
         .joined(separator: "\n\n")
     }
 
-    private static func worldStatePrompt(sceneTitle: String, state: SceneState?, cuts: [StoryboardCut]) -> String {
-        guard let state else {
-            let continuity = cuts.flatMap(\.shotDelta.continuityRequirements).filter { !$0.isEmpty }
-            return (["Scene world state: \(sceneTitle)"] + continuity.map { "- \($0)" }).joined(separator: "\n")
-        }
-
-        let categories = [
-            state.characterState,
-            state.objectState,
-            state.environmentState,
-            state.cameraState,
-            state.lightingState,
-            state.eventState,
-            state.timelineState,
-            state.audioState
-        ]
-        .compactMap(categoryPrompt)
-
-        let rules = (state.persistenceRules + state.conservationRules + state.causalityRules)
-            .filter(\.isEnabled)
-            .map { "- [\($0.kind.rawValue)] \($0.title): \($0.rule)" }
-
-        let events = state.eventGraph.events.map { event in
-            "- \(event.title) [\(event.startTime)-\(event.endTime)]: \(event.description)"
-        }
-        let transitions = state.eventGraph.stateTransitions.map { transition in
-            "- \(transition.fromStateID) -> \(transition.toStateID): \(transition.summary)"
-        }
-        let cameraObservations = cuts.compactMap { cut -> String? in
-            let summary = cut.shotDelta.cameraObservation.framingSummary.trimmingCharacters(in: .whitespacesAndNewlines)
-            return summary.isEmpty ? nil : "- Cut \(cut.cutNumber): \(summary)"
-        }
-
-        return [
-            "Scene world state: \(sceneTitle)",
-            labeled("Initial state", state.eventGraph.initialStateSummary),
-            categories.isEmpty ? "" : "Persistent state:\n\(categories.joined(separator: "\n\n"))",
-            rules.isEmpty ? "" : "Persistent rules:\n\(rules.joined(separator: "\n"))",
-            events.isEmpty ? "" : "Event sequence:\n\(events.joined(separator: "\n"))",
-            transitions.isEmpty ? "" : "State transitions:\n\(transitions.joined(separator: "\n"))",
-            cameraObservations.isEmpty ? "" : "Camera observations:\n\(cameraObservations.joined(separator: "\n"))"
-        ]
-        .filter { !$0.isEmpty }
-        .joined(separator: "\n\n")
-    }
-
-    private static func categoryPrompt(_ category: SceneStateCategory) -> String? {
-        let summary = category.summary.trimmingCharacters(in: .whitespacesAndNewlines)
-        let fields = category.fields.compactMap { field -> String? in
-            let key = field.key.trimmingCharacters(in: .whitespacesAndNewlines)
-            let value = field.value.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !key.isEmpty || !value.isEmpty else { return nil }
-            return "- \(key.isEmpty ? "Detail" : key): \(value)"
-        }
-        guard !summary.isEmpty || !fields.isEmpty else { return nil }
-        return ["[\(category.title)]", summary, fields.joined(separator: "\n")]
-            .filter { !$0.isEmpty }
-            .joined(separator: "\n")
-    }
-
     private static func exportReference(_ reference: ReferenceImage, assetPath: String?) -> CinemaExportReference {
         CinemaExportReference(id: reference.id, name: reference.name, details: reference.details, assetPath: assetPath)
     }
@@ -348,7 +291,8 @@ enum CinemaSceneBundleExporter {
     }
 
     private static func durationSeconds(_ value: String) -> Double? {
-        Double(value.trimmingCharacters(in: .whitespacesAndNewlines).replacingOccurrences(of: ",", with: "."))
+        guard CinemaSceneBundleValidator.validDuration(value) else { return nil }
+        return Double(value.trimmingCharacters(in: .whitespacesAndNewlines).replacingOccurrences(of: ",", with: "."))
     }
 
     private static func labeled(_ label: String, _ value: String) -> String {

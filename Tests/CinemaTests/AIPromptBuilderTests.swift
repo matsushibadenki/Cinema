@@ -2,6 +2,33 @@ import XCTest
 @testable import Cinema
 
 final class AIPromptBuilderTests: XCTestCase {
+    func testSceneResetIgnoresPreviousCutInAllSupportedLanguages() {
+        let previous = StoryboardCut(cutNumber: 1, action: "UNWANTED_PREVIOUS_ACTION")
+        for marker in ["new scene", "場面転換", "场景切换"] {
+            let cut = StoryboardCut(cutNumber: 2, situation: "A different room.",
+                                    aiShotSettings: AIShotSettings(transition: marker))
+            let prompt = AIPromptBuilder.cutPrompt(for: cut, previousCut: previous)
+            XCTAssertTrue(prompt.contains("NEW-SCENE RESET CONTRACT"))
+            XCTAssertFalse(prompt.contains("UNWANTED_PREVIOUS_ACTION"))
+            XCTAssertFalse(prompt.contains("SAME-SCENE CONTINUITY CONTRACT"))
+        }
+    }
+
+    func testNewBlockResetsContinuityInScenePrompt() {
+        let first = StoryboardCut(cutNumber: 1, situation: "Station")
+        let second = StoryboardCut(cutNumber: 2, situation: "Home", subtitle: "Home")
+        let prompt = AIPromptBuilder.scenePrompt(title: "Sequence", cuts: [first, second],
+                                                drawingPrompt: "", isSingleCutGeneration: false)
+        XCTAssertFalse(prompt.contains("SAME-SCENE CONTINUITY CONTRACT"))
+    }
+
+    func testWorldStateIncludesPersistentProductionTruth() {
+        let state = SceneState(characterState: SceneStateCategory(title: "Character", summary: "Red coat"))
+        let prompt = AIPromptBuilder.worldStatePrompt(sceneTitle: "Station", state: state, cuts: [])
+        XCTAssertTrue(prompt.contains("Red coat"))
+        XCTAssertTrue(prompt.contains("Persistent state"))
+    }
+
     func testEmptyCutDoesNotBecomeGeneratableFromDefaultContinuityValue() {
         let cut = StoryboardCut(cutNumber: 1)
 

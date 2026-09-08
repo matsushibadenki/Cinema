@@ -1,5 +1,17 @@
 # Cinema Roadmap
 
+## Reliability Review
+
+- [Done] Fix block metadata preservation on deletion, Scene State delivery to generation, continuity resets, storyboard reference targeting, media download validation, and invalid export durations.
+- [Next] Introduce stable scene identifiers and migrate title-based state/history associations.
+- [Done] Separate external video path validation and persistence from ContentView, and support user cancellation of scene generation.
+- [Done] Snapshot provider, model, API credential, aspect ratio, references, and prompt context when scene generation starts.
+- [Next] Preserve completed clips for recovery when a later cut fails.
+- [Done] Migrate provider API keys from UserDefaults to the macOS Keychain, removing legacy values after a successful migration.
+- [Done] Persist project-specific aspect ratio and custom dimensions in documents, migrating legacy values from current user defaults.
+
+See [Project Review](PROJECT_REVIEW.md) for verification scope and remaining design work.
+
 ## AI / Local Generation
 
 - [Done] Strengthen Cinema as an export-first authoring tool for external open-weight inference projects.
@@ -20,7 +32,7 @@
 - [Done] Add an in-app Scene State editor and Scene Bundle validation preview.
   Let users review persistent state, rules, event transitions, referenced assets, and export warnings before handing the bundle to an external runner.
 
-- [Next] Define a result bundle and round-trip import path from external runners back into Cinema.
+- [Done] Define a result bundle and round-trip import path from external runners back into Cinema.
   Preserve the source manifest identity, model revision, effective generation parameters, output media, and runner warnings so generated results can be attached to the correct scene and cut without manual file matching.
 
 - [Later] Investigate a companion Rust-based film and color engine as a separate backend project.

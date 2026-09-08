@@ -71,40 +71,26 @@ private struct WorkspaceTabButtonStyle: ButtonStyle {
     }
 }
 
-private enum SceneVideoStorageError: LocalizedError {
-    case documentMustBeSaved
-
-    var errorDescription: String? {
-        switch self {
-        case .documentMustBeSaved:
-            return "動画を書き出す前に、ドキュメントを保存してください。"
-        }
-    }
-}
-
 struct ContentView: View {
     @Binding var document: StoryboardDocument
     var documentURL: URL?
 
-    @AppStorage("geminiAPIKey") private var geminiAPIKey = ""
+    @State private var geminiAPIKey = ""
     @AppStorage("geminiModelName") private var geminiModelName = "gemini-3.1-flash-image"
     @AppStorage("geminiVideoModelName") private var geminiVideoModelName = "veo-3.1-generate-preview"
     @AppStorage("imageGenerationProvider") private var imageGenerationProvider = "gemini"
     @AppStorage("videoGenerationProvider") private var videoGenerationProvider = "gemini"
-    @AppStorage("openAIAPIKey") private var openAIAPIKey = ""
+    @State private var openAIAPIKey = ""
     @AppStorage("openAIModelName") private var openAIModelName = "gpt-image-2"
     @AppStorage("openAIVideoModelName") private var openAIVideoModelName = "sora-2"
-    @AppStorage("deepInfraAPIKey") private var deepInfraAPIKey = ""
+    @State private var deepInfraAPIKey = ""
     @AppStorage("deepInfraModelName") private var deepInfraModelName = "black-forest-labs/FLUX-1-schnell"
     @AppStorage("deepInfraVideoModelName") private var deepInfraVideoModelName = "Wan-AI/Wan2.1-T2V-14B"
-    @AppStorage("novitaAPIKey") private var novitaAPIKey = ""
+    @State private var novitaAPIKey = ""
     @AppStorage("novitaModelName") private var novitaModelName = "sd_xl_base_1.0.safetensors"
     @AppStorage("novitaVideoModelName") private var novitaVideoModelName = "darkSushiMixMix_225D_64380.safetensors"
-    @AppStorage("hyperbolicAPIKey") private var hyperbolicAPIKey = ""
+    @State private var hyperbolicAPIKey = ""
     @AppStorage("hyperbolicModelName") private var hyperbolicModelName = "SDXL1.0-base"
-    @AppStorage("screenAspectRatio") private var screenAspectRatioRawValue = ScreenAspectRatio.television169.rawValue
-    @AppStorage("customScreenWidth") private var customScreenWidth = 1920
-    @AppStorage("customScreenHeight") private var customScreenHeight = 1080
     @AppStorage("showsGeneratePlaceholder") private var showsGeneratePlaceholder = true
     @AppStorage("showsCutActionControls") private var showsCutActionControls = true
     @AppStorage("screenBackgroundBrightness") private var screenBackgroundBrightness = 0.0
@@ -122,6 +108,7 @@ struct ContentView: View {
     @State private var generationStatus: String?
     @State private var generatingCutID: StoryboardCut.ID?
     @State private var generatingSceneTitle: String?
+    @State private var sceneGenerationTask: Task<Void, Never>?
     @State private var generationErrorAlert: GenerationErrorAlert?
     @State private var selectedVideoSceneTitle: String?
     @State private var selectedVideoCutIDs: Set<StoryboardCut.ID> = []
@@ -143,9 +130,12 @@ struct ContentView: View {
     private let pageCanvasPadding: CGFloat = 16
 
     private var currentReferenceCutID: StoryboardCut.ID? {
-        let index = displayMode == .cutFocus ? pageIndex : (focusedCutScrollPosition ?? pageIndex)
-        guard document.project.cuts.indices.contains(index) else { return nil }
-        return document.project.cuts[index].id
+        if displayMode == .cutFocus {
+            guard document.project.cuts.indices.contains(pageIndex) else { return nil }
+            return document.project.cuts[pageIndex].id
+        }
+        guard storyboardPageCutIDs.indices.contains(pageIndex) else { return nil }
+        return storyboardPageCutIDs[pageIndex].first
     }
 
     var body: some View {
@@ -259,6 +249,9 @@ struct ContentView: View {
         .onReceive(NotificationCenter.default.publisher(for: .mainWindowDidApplyInitialFrame)) { _ in
             applyInitialStoryboardFit(availableHeight: storyboardCanvasHeight, finalize: true)
         }
+        .onReceive(NotificationCenter.default.publisher(for: APIKeyStore.didChangeNotification)) { _ in
+            loadAPIKeys()
+        }
         .onChange(of: document.project.cuts.count) { _, _ in
             pageIndex = min(pageIndex, max(currentPageCount - 1, 0))
             if displayMode == .cutFocus {
@@ -283,11 +276,21 @@ struct ContentView: View {
             ensureSelectedVideoCuts(reset: true)
         }
         .onAppear {
+            APIKeyStore.migrateLegacyDefaults()
+            loadAPIKeys()
             migrateAIModelsIfNeeded()
             document.project.drawingSettings.ensureSelection()
             ensureSelectedVideoScene()
             ensureSelectedVideoCuts()
         }
+    }
+
+    private func loadAPIKeys() {
+        geminiAPIKey = APIKeyStore.value(for: .gemini)
+        openAIAPIKey = APIKeyStore.value(for: .openAI)
+        deepInfraAPIKey = APIKeyStore.value(for: .deepInfra)
+        novitaAPIKey = APIKeyStore.value(for: .novita)
+        hyperbolicAPIKey = APIKeyStore.value(for: .hyperbolic)
     }
 
     private var workspaceTabBar: some View {
@@ -505,9 +508,9 @@ struct ContentView: View {
     }
 
     private var screenAspectRatioValue: CGFloat {
-        ScreenAspectRatio.value(for: screenAspectRatioRawValue).ratio(
-            customWidth: customScreenWidth,
-            customHeight: customScreenHeight
+        ScreenAspectRatio.value(for: document.project.presentationSettings.screenAspectRatioID).ratio(
+            customWidth: document.project.presentationSettings.customScreenWidth,
+            customHeight: document.project.presentationSettings.customScreenHeight
         )
     }
 
@@ -776,7 +779,7 @@ struct ContentView: View {
                 .pickerStyle(.menu)
                 .frame(width: 150)
 
-                Picker(t(.screenSize), selection: $screenAspectRatioRawValue) {
+                Picker(t(.screenSize), selection: $document.project.presentationSettings.screenAspectRatioID) {
                     ForEach(ScreenAspectRatio.allCases) { ratio in
                         Text(ratio.label(language: appLanguage))
                             .tag(ratio.rawValue)
@@ -798,13 +801,13 @@ struct ContentView: View {
                 ))
                 .help(t(.projectSettingsHelp))
 
-                if ScreenAspectRatio.value(for: screenAspectRatioRawValue) == .custom {
+                if ScreenAspectRatio.value(for: document.project.presentationSettings.screenAspectRatioID) == .custom {
                     HStack(spacing: 4) {
-                        TextField("W", value: $customScreenWidth, format: .number)
+                        TextField("W", value: $document.project.presentationSettings.customScreenWidth, format: .number)
                             .frame(width: 58)
                         Text("×")
                             .foregroundStyle(CinemaDesign.mutedInk)
-                        TextField("H", value: $customScreenHeight, format: .number)
+                        TextField("H", value: $document.project.presentationSettings.customScreenHeight, format: .number)
                             .frame(width: 58)
                     }
                     .textFieldStyle(.roundedBorder)
@@ -834,11 +837,20 @@ struct ContentView: View {
                     }
                     .buttonStyle(CinemaToolbarButtonStyle())
 
-                    Button(generatingSceneTitle == sceneTitle ? t(.generating) : t(.createSelectedSceneVideo)) {
-                        generateSceneVideo(for: sceneTitle)
+                    Button(t(.importResultBundle)) {
+                        importResultBundle()
+                    }
+                    .buttonStyle(CinemaToolbarButtonStyle())
+
+                    Button(generatingSceneTitle == sceneTitle ? t(.cancelGeneration) : t(.createSelectedSceneVideo)) {
+                        if generatingSceneTitle == sceneTitle {
+                            sceneGenerationTask?.cancel()
+                        } else {
+                            generateSceneVideo(for: sceneTitle)
+                        }
                     }
                     .buttonStyle(CinemaPrimaryActionButtonStyle())
-                    .disabled(generatingSceneTitle != nil)
+                    .disabled(generatingSceneTitle != nil && generatingSceneTitle != sceneTitle)
 
                     if let video = document.project.sceneVideos.first(where: { $0.title == sceneTitle }) {
                         Button {
@@ -1024,57 +1036,22 @@ struct ContentView: View {
 
     private func deleteCut(_ cutID: StoryboardCut.ID) {
         guard document.project.cuts.count > 1 else { return }
-        if let cut = document.project.cuts.first(where: { $0.id == cutID }), let imageFileName = cut.imageFileName {
-            document.imageData[imageFileName] = nil
-        }
-        document.project.cuts.removeAll { $0.id == cutID }
-        document.project.generatedCutVideos.removeAll { $0.cutID == cutID }
-        document.renumberCuts()
+        document.deleteCuts(withIDs: [cutID])
     }
 
     private func deleteBlockSection(_ title: String) {
         let sections = sceneSections()
         guard sections.count > 1,
               let section = sections.first(where: { $0.title == title }) else { return }
-
-        let removedIDs = Set(section.cuts.map(\.id))
-        for cut in section.cuts {
-            if let imageFileName = cut.imageFileName {
-                document.imageData[imageFileName] = nil
-            }
-        }
-
-        document.project.cuts.removeAll { removedIDs.contains($0.id) }
-        document.project.generatedCutVideos.removeAll { removedIDs.contains($0.cutID) }
-
-        if document.project.cuts.isEmpty {
-            document.project.cuts.append(StoryboardCut(cutNumber: 1))
-        }
-
-        document.renumberCuts()
+        document.deleteCuts(withIDs: Set(section.cuts.map(\.id)))
         ensureSelectedVideoScene()
         ensureSelectedVideoCuts(reset: true)
     }
 
     private func deletePage(_ page: Int) {
-        guard displayMode == .storyboard else { return }
-        guard pageCount > 1 else { return }
-
-        guard storyboardPageCutIDs.indices.contains(page) else { return }
-        let removedCutIDs = Set(storyboardPageCutIDs[page])
-        let removedCuts = document.project.cuts.filter { removedCutIDs.contains($0.id) }
-        for cut in removedCuts {
-            if let imageFileName = cut.imageFileName {
-                document.imageData[imageFileName] = nil
-            }
-        }
-
-        document.project.cuts.removeAll { removedCutIDs.contains($0.id) }
-        document.project.generatedCutVideos.removeAll { removedCutIDs.contains($0.cutID) }
-        if document.project.cuts.isEmpty {
-            document.project.cuts.append(StoryboardCut(cutNumber: 1))
-        }
-        document.renumberCuts()
+        guard displayMode == .storyboard, pageCount > 1,
+              storyboardPageCutIDs.indices.contains(page) else { return }
+        document.deleteCuts(withIDs: Set(storyboardPageCutIDs[page]))
         pageIndex = min(page, max(pageCount - 1, 0))
     }
 
@@ -1174,10 +1151,27 @@ struct ContentView: View {
 
     private func generateSceneVideo(for title: String) {
         guard canStartAIGeneration() else { return }
+        guard documentURL != nil else {
+            generationStatus = localizedGenerationText(
+                "動画生成の前に書類を保存してください。",
+                "Save the document before generating video.",
+                "请先保存文档，再生成视频。"
+            )
+            return
+        }
 
         let cuts = selectedVideoCuts(for: title)
         guard !cuts.isEmpty else {
             generationStatus = "動画生成するカットを選択してください"
+            return
+        }
+
+        guard cuts.allSatisfy({ !AIPromptBuilder.cutPrompt(for: $0).isEmpty }) else {
+            generationStatus = localizedGenerationText(
+                "選択したすべてのカットに内容か演出指示を入力してください。",
+                "Add content or shot direction to every selected cut.",
+                "请为每个选中的镜头填写内容或拍摄说明。"
+            )
             return
         }
 
@@ -1189,20 +1183,43 @@ struct ContentView: View {
 
         generatingSceneTitle = title
         generationStatus = "シーン「\(title)」の動画を生成中..."
+        let provider = AIVideoGenerationProvider.value(for: videoGenerationProvider)
+        let providerAPIKey: String
+        let providerModel: String
+        switch provider {
+        case .gemini:
+            providerAPIKey = geminiAPIKey
+            providerModel = geminiVideoModelName
+        case .openAI:
+            providerAPIKey = openAIAPIKey
+            providerModel = openAIVideoModelName
+        case .deepInfra:
+            providerAPIKey = deepInfraAPIKey
+            providerModel = deepInfraVideoModelName
+        case .novita:
+            providerAPIKey = novitaAPIKey
+            providerModel = novitaVideoModelName
+        }
+        let generationAspectRatio = videoAspectRatio
+        let referenceSnapshots = Dictionary(uniqueKeysWithValues: cuts.map { ($0.id, sceneReferenceImages(for: [$0])) })
+        let contextSnapshots = Dictionary(uniqueKeysWithValues: cuts.map { ($0.id, generationContext(for: $0)) })
 
-        Task {
+        sceneGenerationTask = Task {
             do {
-                let provider = AIVideoGenerationProvider.value(for: videoGenerationProvider)
                 var clips: [Data] = []
                 var previousLastFrame: GeminiReferenceImage?
                 var totalDurationSeconds = 0
 
                 for (index, cut) in cuts.enumerated() {
+                    try Task.checkCancellation()
                     await MainActor.run {
                         generationStatus = "シーン「\(title)」のカット \(index + 1)/\(cuts.count) を生成中..."
                     }
 
-                    let cutReferences = sceneReferenceImages(for: [cut])
+                    if AIPromptBuilder.requestsContinuityReset(cut) {
+                        previousLastFrame = nil
+                    }
+                    let cutReferences = referenceSnapshots[cut.id] ?? []
                     let orderedReferences = ([previousLastFrame].compactMap { $0 } + cutReferences)
                     let capabilities = AIProviderCapabilities.video(
                         provider: provider,
@@ -1217,7 +1234,7 @@ struct ContentView: View {
                     let cutPrompt = AIPromptBuilder.scenePrompt(
                         title: title,
                         cuts: [cut],
-                        drawingPrompt: drawingPromptForGeneration(references: referencesForCut(cut)),
+                        drawingPrompt: contextSnapshots[cut.id] ?? "",
                         isSingleCutGeneration: true,
                         previousCut: index > 0 ? cuts[index - 1] : nil
                     )
@@ -1225,40 +1242,42 @@ struct ContentView: View {
 
                     switch provider {
                     case .gemini:
-                        let service = GeminiVideoService(apiKey: geminiAPIKey, model: geminiVideoModelName)
+                        let service = GeminiVideoService(apiKey: providerAPIKey, model: providerModel)
                         clip = try await service.generateSceneVideo(
                             prompt: cutPrompt,
                             durationSeconds: durationSeconds,
-                            aspectRatio: videoAspectRatio,
+                            aspectRatio: generationAspectRatio,
                             referenceImages: references,
                             negativePrompt: cut.aiShotSettings.negativePrompt,
                             seed: cut.aiShotSettings.seed
                         )
                     case .openAI:
-                        let service = OpenAIVideoService(apiKey: openAIAPIKey, model: openAIVideoModelName)
+                        let service = OpenAIVideoService(apiKey: providerAPIKey, model: providerModel)
                         clip = try await service.generateSceneVideo(
                             prompt: cutPrompt,
                             durationSeconds: durationSeconds,
-                            aspectRatio: videoAspectRatio,
+                            aspectRatio: generationAspectRatio,
                             inputReference: openAIVideoReferenceImage(
                                 from: references.first,
-                                aspectRatio: videoAspectRatio
+                                aspectRatio: generationAspectRatio
                             )
                         )
                     case .deepInfra:
-                        let service = DeepInfraVideoService(apiKey: deepInfraAPIKey, model: deepInfraVideoModelName)
+                        let service = DeepInfraVideoService(apiKey: providerAPIKey, model: providerModel)
                         clip = try await service.generateSceneVideo(prompt: cutPrompt)
                     case .novita:
-                        let service = NovitaVideoService(apiKey: novitaAPIKey, model: novitaVideoModelName)
+                        let service = NovitaVideoService(apiKey: providerAPIKey, model: providerModel)
                         clip = try await service.generateSceneVideo(
                             prompt: cutPrompt,
                             durationSeconds: durationSeconds,
-                            aspectRatio: videoAspectRatio
+                            aspectRatio: generationAspectRatio
                         )
                     }
 
                     clips.append(clip)
+                    try Task.checkCancellation()
                     totalDurationSeconds += durationSeconds
+                    previousLastFrame = nil
                     if index < cuts.count - 1,
                        let frameData = try? await VideoAssemblyService.lastFramePNG(from: clip) {
                         previousLastFrame = GeminiReferenceImage(mimeType: "image/png", data: frameData)
@@ -1266,12 +1285,13 @@ struct ContentView: View {
                 }
                 let videoData = try await VideoAssemblyService.concatenate(clips)
                 let generatedAt = Date()
-                let storedVideos = try persistGeneratedSceneVideos(
+                let storedVideos = try GeneratedVideoStorageService.persist(
                     sceneTitle: title,
                     cuts: cuts,
                     clips: clips,
                     combinedVideoData: videoData,
-                    generatedAt: generatedAt
+                    generatedAt: generatedAt,
+                    documentURL: documentURL
                 )
 
                 await MainActor.run {
@@ -1288,18 +1308,26 @@ struct ContentView: View {
                         prompt: prompt,
                         kind: .video(
                             provider: provider.rawValue,
-                            model: currentVideoModelName(for: provider),
+                            model: providerModel,
                             seconds: totalDurationSeconds
                         )
                     )
                     generationStatus = "シーン「\(title)」の動画を生成しました"
                     generatingSceneTitle = nil
+                    sceneGenerationTask = nil
+                }
+            } catch is CancellationError {
+                await MainActor.run {
+                    generationStatus = localizedGenerationText("動画生成をキャンセルしました", "Video generation cancelled.", "视频生成已取消。")
+                    generatingSceneTitle = nil
+                    sceneGenerationTask = nil
                 }
             } catch {
                 await MainActor.run {
                     generationStatus = "動画生成に失敗しました"
                     generationErrorAlert = GenerationErrorAlert(title: "動画生成エラー", message: formattedErrorMessage(error))
                     generatingSceneTitle = nil
+                    sceneGenerationTask = nil
                 }
             }
         }
@@ -1427,7 +1455,7 @@ struct ContentView: View {
                 .filter { $0.sceneTitle == selectedVideoSceneTitle && $0.cutID == cut.id }
                 .sorted { $0.generatedAt > $1.generatedAt }
                 .compactMap { video -> GeneratedVideoStripVersion? in
-                    guard let fileURL = movieFileURL(for: video.videoFileName),
+                    guard let fileURL = GeneratedVideoStorageService.fileURL(for: video.videoFileName, documentURL: documentURL),
                           FileManager.default.fileExists(atPath: fileURL.path) else {
                         return nil
                     }
@@ -1457,88 +1485,9 @@ struct ContentView: View {
         )
     }
 
-    private func safeFileComponent(_ value: String) -> String {
-        let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-_"))
-        let scalars = value.unicodeScalars.map { allowed.contains($0) ? Character($0) : "-" }
-        let result = String(scalars).trimmingCharacters(in: CharacterSet(charactersIn: "-"))
-        return result.isEmpty ? "scene" : result
-    }
-
-    private func sanitizedPathComponent(_ value: String, fallback: String) -> String {
-        let invalidCharacters = CharacterSet(charactersIn: "\\/:*?\"<>|")
-        let sanitized = value
-            .components(separatedBy: invalidCharacters)
-            .joined(separator: "-")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        return sanitized.isEmpty ? fallback : sanitized
-    }
-
-    private func timestampFileComponent(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.calendar = Calendar(identifier: .gregorian)
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = TimeZone(secondsFromGMT: 0)
-        formatter.dateFormat = "yyyyMMdd-HHmmss"
-        return formatter.string(from: date)
-    }
-
-    private func moviesDirectoryURL() -> URL? {
-        guard let documentURL else { return nil }
-        return documentURL.deletingLastPathComponent().appendingPathComponent("movies", isDirectory: true)
-    }
-
-    private func movieFileURL(for storedPath: String) -> URL? {
-        let moviePath = storedPath.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !moviePath.isEmpty else { return nil }
-        guard let moviesDirectoryURL = moviesDirectoryURL() else { return nil }
-        return moviesDirectoryURL.appendingPathComponent(moviePath)
-    }
-
-    private func persistGeneratedSceneVideos(
-        sceneTitle: String,
-        cuts: [StoryboardCut],
-        clips: [Data],
-        combinedVideoData: Data,
-        generatedAt: Date
-    ) throws -> (sceneVideoPath: String, cutVideos: [GeneratedCutVideo]) {
-        guard let moviesDirectoryURL = moviesDirectoryURL() else {
-            throw SceneVideoStorageError.documentMustBeSaved
-        }
-
-        let fileManager = FileManager.default
-        try fileManager.createDirectory(at: moviesDirectoryURL, withIntermediateDirectories: true)
-
-        let sceneFolderName = sanitizedPathComponent(sceneTitle, fallback: "scene")
-        let sceneDirectoryURL = moviesDirectoryURL.appendingPathComponent(sceneFolderName, isDirectory: true)
-        try fileManager.createDirectory(at: sceneDirectoryURL, withIntermediateDirectories: true)
-
-        let timestamp = timestampFileComponent(generatedAt)
-        var cutVideos: [GeneratedCutVideo] = []
-
-        for (cut, clip) in zip(cuts, clips) {
-            let fileName = "cut-\(String(format: "%03d", cut.cutNumber))-\(timestamp)-\(UUID().uuidString).mp4"
-            let fileURL = sceneDirectoryURL.appendingPathComponent(fileName)
-            try clip.write(to: fileURL, options: .atomic)
-            cutVideos.append(
-                GeneratedCutVideo(
-                    sceneTitle: sceneTitle,
-                    cutID: cut.id,
-                    videoFileName: "\(sceneFolderName)/\(fileName)",
-                    generatedAt: generatedAt
-                )
-            )
-        }
-
-        let sceneFileName = "scene-\(timestamp)-\(UUID().uuidString).mp4"
-        let sceneFileURL = sceneDirectoryURL.appendingPathComponent(sceneFileName)
-        try combinedVideoData.write(to: sceneFileURL, options: .atomic)
-
-        return ("\(sceneFolderName)/\(sceneFileName)", cutVideos)
-    }
-
     private func saveSceneVideo(_ video: SceneVideo) {
         let data: Data
-        if let externalURL = movieFileURL(for: video.videoFileName),
+        if let externalURL = GeneratedVideoStorageService.fileURL(for: video.videoFileName, documentURL: documentURL),
            let externalData = try? Data(contentsOf: externalURL) {
             data = externalData
         } else if let embeddedData = document.videoData[video.videoFileName] {
@@ -1602,7 +1551,7 @@ struct ContentView: View {
         do {
             let videoProvider = AIVideoGenerationProvider.value(for: videoGenerationProvider)
             let configuration = CinemaSceneExportConfiguration(
-                aspectRatio: ScreenAspectRatio.value(for: screenAspectRatioRawValue),
+                aspectRatio: ScreenAspectRatio.value(for: document.project.presentationSettings.screenAspectRatioID),
                 aspectRatioLanguage: appLanguage,
                 imageProvider: AIImageGenerationProvider.value(for: imageGenerationProvider).rawValue,
                 imageModel: currentImageModelName(),
@@ -1631,6 +1580,33 @@ struct ContentView: View {
         }
     }
 
+    private func importResultBundle() {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.allowsMultipleSelection = false
+        panel.prompt = CinemaStrings.text(.importResultBundle, language: appLanguage)
+        guard panel.runModal() == .OK, let bundleURL = panel.url else { return }
+
+        do {
+            let summary = try CinemaResultBundleImporter.importBundle(
+                at: bundleURL,
+                into: &document,
+                documentURL: documentURL
+            )
+            generationStatus = localizedGenerationText(
+                "Result Bundleを読み込みました（画像 \(summary.imageCount)、動画 \(summary.videoCount)、警告 \(summary.warningCount)）",
+                "Imported Result Bundle (\(summary.imageCount) images, \(summary.videoCount) videos, \(summary.warningCount) warnings).",
+                "已导入 Result Bundle（\(summary.imageCount) 张图像、\(summary.videoCount) 个视频、\(summary.warningCount) 条警告）。"
+            )
+        } catch {
+            generationErrorAlert = GenerationErrorAlert(
+                title: localizedGenerationText("Result Bundle読み込みエラー", "Result Bundle Import Error", "Result Bundle 导入错误"),
+                message: error.localizedDescription
+            )
+        }
+    }
+
     private func generateImage(for cutID: StoryboardCut.ID) {
         guard canStartAIGeneration() else { return }
 
@@ -1654,7 +1630,7 @@ struct ContentView: View {
                 case .openAI:
                     let service = OpenAIImageService(apiKey: openAIAPIKey, model: openAIModelName)
                     data = try await service.generateStoryboardImage(
-                        drawingPrompt: drawingPromptForGeneration(references: referencesForCut(cut)),
+                        drawingPrompt: generationContext(for: cut),
                         cutPrompt: prompt,
                         aspectRatio: aspectRatio,
                         referenceImages: openAIImageReferencesForGeneration(for: cut)
@@ -1662,7 +1638,7 @@ struct ContentView: View {
                 case .gemini:
                     let service = GeminiImageService(apiKey: geminiAPIKey, model: geminiModelName)
                     data = try await service.generateStoryboardImage(
-                        drawingPrompt: drawingPromptForGeneration(references: referencesForCut(cut)),
+                        drawingPrompt: generationContext(for: cut),
                         cutPrompt: prompt,
                         aspectRatio: aspectRatio,
                         referenceImages: referenceImagesForGeneration(for: cut)
@@ -1675,21 +1651,21 @@ struct ContentView: View {
                         baseURL: "https://api.deepinfra.com/v1/openai"
                     )
                     data = try await service.generateStoryboardImage(
-                        drawingPrompt: drawingPromptForGeneration(references: referencesForCut(cut)),
+                        drawingPrompt: generationContext(for: cut),
                         cutPrompt: prompt,
                         aspectRatio: aspectRatio
                     )
                 case .novita:
                     let service = NovitaImageService(apiKey: novitaAPIKey, model: novitaModelName)
                     data = try await service.generateStoryboardImage(
-                        drawingPrompt: drawingPromptForGeneration(references: referencesForCut(cut)),
+                        drawingPrompt: generationContext(for: cut),
                         cutPrompt: prompt,
                         aspectRatio: aspectRatio
                     )
                 case .hyperbolic:
                     let service = HyperbolicImageService(apiKey: hyperbolicAPIKey, model: hyperbolicModelName)
                     data = try await service.generateStoryboardImage(
-                        drawingPrompt: drawingPromptForGeneration(references: referencesForCut(cut)),
+                        drawingPrompt: generationContext(for: cut),
                         cutPrompt: prompt,
                         aspectRatio: aspectRatio
                     )
@@ -1697,8 +1673,8 @@ struct ContentView: View {
                 let fittedData = ImageHelpers.pngDataByCropping(data, toAspectRatio: aspectRatio)
                 await MainActor.run {
                     let fileName = "Images/\(cutID.uuidString).png"
-                    document.imageData[fileName] = fittedData
                     if let updateIndex = document.project.cuts.firstIndex(where: { $0.id == cutID }) {
+                        document.imageData[fileName] = fittedData
                         document.project.cuts[updateIndex].imageFileName = fileName
                     }
                     recordAIUsage(
@@ -1892,25 +1868,33 @@ struct ContentView: View {
         guard cut.subtitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
               let index = document.project.cuts.firstIndex(where: { $0.id == cut.id }),
               index > 0,
-              !requestsContinuityReset(cut) else {
+              !AIPromptBuilder.requestsContinuityReset(cut) else {
             return nil
         }
         return document.project.cuts[index - 1]
     }
 
-    private func requestsContinuityReset(_ cut: StoryboardCut) -> Bool {
-        let transition = cut.aiShotSettings.transition.lowercased()
-        let resetMarkers = [
-            "scene change", "new scene", "hard cut to", "time jump", "location change",
-            "場面転換", "新しい場面", "別の場所", "場所転換", "時間経過", "タイムジャンプ",
-            "场景切换", "新场景", "地点切换", "时间跳跃"
-        ]
-        return resetMarkers.contains { transition.contains($0) }
-    }
-
     private func referencesForCut(_ cut: StoryboardCut) -> [ReferenceImage] {
         cut.enabledReferenceImageIDs.compactMap { id in
             document.project.referenceImages.first { $0.id == id }
+        }
+    }
+
+    private func generationContext(for cut: StoryboardCut) -> String {
+        let section = sceneSections().first { $0.cuts.contains { $0.id == cut.id } }
+        let title = section?.title ?? ""
+        let state = document.project.sceneStates.first { $0.sceneKey == title || $0.title == title }
+        return [
+            drawingPromptForGeneration(references: referencesForCut(cut)),
+            AIPromptBuilder.worldStatePrompt(sceneTitle: title, state: state, cuts: [cut])
+        ].filter { !$0.isEmpty }.joined(separator: "\n\n")
+    }
+
+    private func localizedGenerationText(_ ja: String, _ en: String, _ zh: String) -> String {
+        switch AppLanguage.value(for: appLanguage) {
+        case .japanese: return ja
+        case .english: return en
+        case .simplifiedChinese: return zh
         }
     }
 
@@ -1982,6 +1966,7 @@ struct ContentView: View {
     }
 
     private func canStartAIGeneration() -> Bool {
+        guard generatingCutID == nil, generatingSceneTitle == nil else { return false }
         guard !isAICostLimitExceeded else {
             generationStatus = "推定料金が上限を超えています。設定で上限を変更してください。"
             return false

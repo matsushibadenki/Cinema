@@ -12,7 +12,7 @@ enum AIPromptBuilder {
 
         let hasCutContent = sections.contains { !$0.isEmpty }
 
-        if let previousCut {
+        if let previousCut, !requestsContinuityReset(cut) {
             let handoff = [
                 labeled("Previous cut ending state", previousCut.aiShotSettings.endState),
                 labeled("Previous cut action", previousCut.action),
@@ -31,6 +31,17 @@ enum AIPromptBuilder {
         }
 
         return sections.filter { !$0.isEmpty }.joined(separator: "\n\n")
+    }
+
+    static func requestsContinuityReset(_ cut: StoryboardCut) -> Bool {
+        if !cut.subtitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return true }
+        let transition = cut.aiShotSettings.transition.lowercased()
+        let markers = [
+            "scene change", "new scene", "hard cut to", "time jump", "location change",
+            "場面転換", "新しい場面", "別の場所", "場所転換", "時間経過", "タイムジャンプ",
+            "场景切换", "新场景", "地点切换", "时间跳跃"
+        ]
+        return markers.contains { transition.contains($0) }
     }
 
     private static func sameSceneContinuityContract(for cut: StoryboardCut) -> String {
@@ -124,6 +135,66 @@ enum AIPromptBuilder {
         .joined(separator: "\n")
 
         return dialogue.isEmpty ? cut.action.trimmingCharacters(in: .whitespacesAndNewlines) : dialogue
+    }
+
+    static func worldStatePrompt(sceneTitle: String, state: SceneState?, cuts: [StoryboardCut]) -> String {
+        guard let state else {
+            let continuity = cuts.flatMap(\.shotDelta.continuityRequirements).filter { !$0.isEmpty }
+            return (["Scene world state: \(sceneTitle)"] + continuity.map { "- \($0)" }).joined(separator: "\n")
+        }
+
+        let categories = [
+            state.characterState,
+            state.objectState,
+            state.environmentState,
+            state.cameraState,
+            state.lightingState,
+            state.eventState,
+            state.timelineState,
+            state.audioState
+        ]
+        .compactMap(categoryPrompt)
+
+        let rules = (state.persistenceRules + state.conservationRules + state.causalityRules)
+            .filter(\.isEnabled)
+            .map { "- [\($0.kind.rawValue)] \($0.title): \($0.rule)" }
+
+        let events = state.eventGraph.events.map { event in
+            "- \(event.title) [\(event.startTime)-\(event.endTime)]: \(event.description)"
+        }
+        let transitions = state.eventGraph.stateTransitions.map { transition in
+            "- \(transition.fromStateID) -> \(transition.toStateID): \(transition.summary)"
+        }
+        let cameraObservations = cuts.compactMap { cut -> String? in
+            let summary = cut.shotDelta.cameraObservation.framingSummary.trimmingCharacters(in: .whitespacesAndNewlines)
+            return summary.isEmpty ? nil : "- Cut \(cut.cutNumber): \(summary)"
+        }
+
+        return [
+            "Scene world state: \(sceneTitle)",
+            labeled("Initial state", state.eventGraph.initialStateSummary),
+            categories.isEmpty ? "" : "Persistent state:\n\(categories.joined(separator: "\n\n"))",
+            rules.isEmpty ? "" : "Persistent rules:\n\(rules.joined(separator: "\n"))",
+            events.isEmpty ? "" : "Event sequence:\n\(events.joined(separator: "\n"))",
+            transitions.isEmpty ? "" : "State transitions:\n\(transitions.joined(separator: "\n"))",
+            cameraObservations.isEmpty ? "" : "Camera observations:\n\(cameraObservations.joined(separator: "\n"))"
+        ]
+        .filter { !$0.isEmpty }
+        .joined(separator: "\n\n")
+    }
+
+    private static func categoryPrompt(_ category: SceneStateCategory) -> String? {
+        let summary = category.summary.trimmingCharacters(in: .whitespacesAndNewlines)
+        let fields = category.fields.compactMap { field -> String? in
+            let key = field.key.trimmingCharacters(in: .whitespacesAndNewlines)
+            let value = field.value.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !key.isEmpty || !value.isEmpty else { return nil }
+            return "- \(key.isEmpty ? "Detail" : key): \(value)"
+        }
+        guard !summary.isEmpty || !fields.isEmpty else { return nil }
+        return ["[\(category.title)]", summary, fields.joined(separator: "\n")]
+            .filter { !$0.isEmpty }
+            .joined(separator: "\n")
     }
 
     private static func labeled(_ label: String, _ value: String) -> String {

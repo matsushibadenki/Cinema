@@ -11,6 +11,8 @@ struct StoryboardProject: Codable, Equatable {
     var referenceImages: [ReferenceImage]
     var sceneVideos: [SceneVideo]
     var generatedCutVideos: [GeneratedCutVideo]
+    var importedGenerationResults: [ImportedGenerationResult]
+    var presentationSettings: ProjectPresentationSettings
     var sceneStates: [SceneState]
     var cuts: [StoryboardCut]
 
@@ -21,6 +23,8 @@ struct StoryboardProject: Codable, Equatable {
         referenceImages: [ReferenceImage] = [],
         sceneVideos: [SceneVideo] = [],
         generatedCutVideos: [GeneratedCutVideo] = [],
+        importedGenerationResults: [ImportedGenerationResult] = [],
+        presentationSettings: ProjectPresentationSettings = .legacyDefaults(),
         sceneStates: [SceneState] = [],
         cuts: [StoryboardCut] = StoryboardProject.defaultCuts()
     ) {
@@ -30,6 +34,8 @@ struct StoryboardProject: Codable, Equatable {
         self.referenceImages = referenceImages
         self.sceneVideos = sceneVideos
         self.generatedCutVideos = generatedCutVideos
+        self.importedGenerationResults = importedGenerationResults
+        self.presentationSettings = presentationSettings
         self.sceneStates = sceneStates
         self.cuts = cuts
     }
@@ -41,6 +47,8 @@ struct StoryboardProject: Codable, Equatable {
         case referenceImages
         case sceneVideos
         case generatedCutVideos
+        case importedGenerationResults
+        case presentationSettings
         case sceneStates
         case cuts
     }
@@ -53,6 +61,8 @@ struct StoryboardProject: Codable, Equatable {
         referenceImages = try container.decodeIfPresent([ReferenceImage].self, forKey: .referenceImages) ?? []
         sceneVideos = try container.decodeIfPresent([SceneVideo].self, forKey: .sceneVideos) ?? []
         generatedCutVideos = try container.decodeIfPresent([GeneratedCutVideo].self, forKey: .generatedCutVideos) ?? []
+        importedGenerationResults = try container.decodeIfPresent([ImportedGenerationResult].self, forKey: .importedGenerationResults) ?? []
+        presentationSettings = try container.decodeIfPresent(ProjectPresentationSettings.self, forKey: .presentationSettings) ?? .legacyDefaults()
         sceneStates = try container.decodeIfPresent([SceneState].self, forKey: .sceneStates) ?? []
         cuts = try container.decode([StoryboardCut].self, forKey: .cuts)
     }
@@ -61,6 +71,32 @@ struct StoryboardProject: Codable, Equatable {
         (1...5).map { index in
             StoryboardCut(cutNumber: index)
         }
+    }
+}
+
+struct ProjectPresentationSettings: Codable, Equatable {
+    var screenAspectRatioID: String
+    var customScreenWidth: Int
+    var customScreenHeight: Int
+
+    init(
+        screenAspectRatioID: String = ScreenAspectRatio.television169.rawValue,
+        customScreenWidth: Int = 1920,
+        customScreenHeight: Int = 1080
+    ) {
+        self.screenAspectRatioID = screenAspectRatioID
+        self.customScreenWidth = max(customScreenWidth, 1)
+        self.customScreenHeight = max(customScreenHeight, 1)
+    }
+
+    static func legacyDefaults(_ defaults: UserDefaults = .standard) -> ProjectPresentationSettings {
+        let width = defaults.object(forKey: "customScreenWidth") == nil ? 1920 : defaults.integer(forKey: "customScreenWidth")
+        let height = defaults.object(forKey: "customScreenHeight") == nil ? 1080 : defaults.integer(forKey: "customScreenHeight")
+        return ProjectPresentationSettings(
+            screenAspectRatioID: defaults.string(forKey: "screenAspectRatio") ?? ScreenAspectRatio.television169.rawValue,
+            customScreenWidth: width,
+            customScreenHeight: height
+        )
     }
 }
 
@@ -847,6 +883,37 @@ struct GeneratedCutVideo: Codable, Identifiable, Equatable {
         self.cutID = cutID
         self.videoFileName = videoFileName
         self.generatedAt = generatedAt
+    }
+}
+
+struct ImportedGenerationResult: Codable, Identifiable, Equatable {
+    var id: UUID
+    var sourceBundleID: UUID
+    var sceneTitle: String
+    var runner: String
+    var modelRevision: String
+    var effectiveParameters: [String: String]
+    var warnings: [String]
+    var importedAt: Date
+
+    init(
+        id: UUID = UUID(),
+        sourceBundleID: UUID,
+        sceneTitle: String,
+        runner: String,
+        modelRevision: String = "",
+        effectiveParameters: [String: String] = [:],
+        warnings: [String] = [],
+        importedAt: Date = Date()
+    ) {
+        self.id = id
+        self.sourceBundleID = sourceBundleID
+        self.sceneTitle = sceneTitle
+        self.runner = runner
+        self.modelRevision = modelRevision
+        self.effectiveParameters = effectiveParameters
+        self.warnings = warnings
+        self.importedAt = importedAt
     }
 }
 
