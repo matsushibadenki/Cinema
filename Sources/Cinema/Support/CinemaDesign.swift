@@ -110,7 +110,7 @@ enum CinemaDesign {
         dark: (0.46, 0.47, 0.52, 1.0)
     )
 
-    static let controlInactiveInk = dynamicColor(
+    static let disabledControlInk = dynamicColor(
         light: (0.52, 0.53, 0.57, 1.0),
         dark: (0.34, 0.35, 0.39, 1.0)
     )
@@ -258,19 +258,20 @@ extension View {
 }
 
 struct CinemaToolbarButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled
     var isActive: Bool = false
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.system(size: 12.5, weight: .medium))
-            .foregroundStyle(isActive ? CinemaDesign.ink : CinemaDesign.controlInactiveInk)
+            .foregroundStyle(isEnabled ? CinemaDesign.ink : CinemaDesign.disabledControlInk)
             .lineLimit(1)
             .fixedSize(horizontal: true, vertical: false)
             .padding(.horizontal, 10)
             .padding(.vertical, 5.5)
             .background {
                 RoundedRectangle(cornerRadius: 9, style: .continuous)
-                    .fill(CinemaDesign.insetSurface.opacity(configuration.isPressed ? 0.98 : 0.72))
+                    .fill(isEnabled && isActive ? CinemaDesign.keyColorSoft : CinemaDesign.insetSurface.opacity(configuration.isPressed ? 0.98 : 0.72))
             }
             .overlay {
                 RoundedRectangle(cornerRadius: 9, style: .continuous)
@@ -285,12 +286,13 @@ struct CinemaToolbarButtonStyle: ButtonStyle {
 }
 
 struct CinemaActionButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled
     var isActive: Bool = true
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.system(size: 12.5, weight: isActive ? .semibold : .medium))
-            .foregroundStyle(isActive ? CinemaDesign.ink : CinemaDesign.controlInactiveInk)
+            .foregroundStyle(isEnabled ? CinemaDesign.ink : CinemaDesign.disabledControlInk)
             .lineLimit(1)
             .padding(.horizontal, 12)
             .padding(.vertical, 7)
@@ -306,36 +308,38 @@ struct CinemaActionButtonStyle: ButtonStyle {
 }
 
 struct CinemaPrimaryActionButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.system(size: 12.5, weight: .semibold))
-            .foregroundStyle(Color.white)
+            .foregroundStyle(isEnabled ? Color.white : CinemaDesign.disabledControlInk)
             .lineLimit(1)
             .padding(.horizontal, 14)
             .padding(.vertical, 7)
             .frame(minHeight: 30)
             .background {
                 RoundedRectangle(cornerRadius: 9, style: .continuous)
-                    .fill(configuration.isPressed ? CinemaDesign.primaryActionPressed : CinemaDesign.primaryAction)
+                    .fill(isEnabled ? (configuration.isPressed ? CinemaDesign.primaryActionPressed : CinemaDesign.primaryAction) : CinemaDesign.insetSurface)
             }
             .overlay {
                 RoundedRectangle(cornerRadius: 9, style: .continuous)
                     .stroke(Color.white.opacity(0.16), lineWidth: 0.8)
             }
-            .shadow(color: CinemaDesign.primaryAction.opacity(0.22), radius: 6, x: 0, y: 2)
+            .shadow(color: isEnabled ? CinemaDesign.primaryAction.opacity(0.22) : .clear, radius: 6, x: 0, y: 2)
             .scaleEffect(configuration.isPressed ? 0.98 : 1)
             .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
     }
 }
 
 struct CinemaStateButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled
     var isActive: Bool
     var expands: Bool = false
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.system(size: 12, weight: isActive ? .semibold : .medium))
-            .foregroundStyle(isActive ? CinemaDesign.ink : CinemaDesign.controlInactiveInk)
+            .foregroundStyle(isEnabled ? CinemaDesign.ink : CinemaDesign.disabledControlInk)
             .lineLimit(1)
             .padding(.horizontal, 10)
             .frame(minHeight: 28)

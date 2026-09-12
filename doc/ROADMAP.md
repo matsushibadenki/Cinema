@@ -2,6 +2,13 @@
 
 ## Reliability Review
 
+- [Done] Add a portable project copy workflow that embeds referenced videos, includes recovered completed clips, detects missing media, and assigns an independent project identity. Verify reopening without the original movies folder.
+- [Done] Keep usage metrics and the generation action fixed while scrolling central controls; distinguish enabled buttons from disabled buttons in both appearance modes.
+- [Done] Observe document location changes and copy referenced media and project recovery records to the new sibling movies folder. Preserve original files, reject conflicting destination files, and copy clips completed after relocation when generation finishes.
+- [Done] Add media-copy retry and original movies-folder selection for recovery after reopening. Add the standard Move To command to the File menu.
+- [Done] Verify native Save As with a disposable document and confirm byte-identical media at the destination while preserving originals.
+- [Next] Expand multilingual UI regression coverage, including the Move To dialog and recovery-menu interactions.
+
 - [Done] Fix block metadata preservation on deletion, Scene State delivery to generation, continuity resets, storyboard reference targeting, media download validation, and invalid export durations.
 - [Done] Introduce stable scene UUIDs and migrate legacy title-based state/history associations. Preserve identity through renaming, deletion of a heading cut, and reordering; keep same-name blocks independent. Ambiguous legacy combined videos remain available for manual assignment.
 - [Done] Separate external video path validation and persistence from ContentView, and support user cancellation of scene generation.

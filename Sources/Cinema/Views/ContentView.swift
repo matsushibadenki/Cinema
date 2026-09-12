@@ -46,12 +46,13 @@ private struct GenerationErrorAlert: Identifiable {
 }
 
 private struct WorkspaceTabButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled
     var isSelected: Bool
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.system(size: 12, weight: isSelected ? .semibold : .medium))
-            .foregroundStyle(isSelected ? CinemaDesign.ink : CinemaDesign.controlInactiveInk)
+            .foregroundStyle(isEnabled ? CinemaDesign.ink : CinemaDesign.disabledControlInk)
             .lineLimit(1)
             .padding(.horizontal, 18)
             .frame(height: 42)
@@ -110,6 +111,7 @@ struct ContentView: View {
     @State private var generatingSceneKey: String?
     @State private var sceneGenerationTask: Task<Void, Never>?
     @State private var recoverableRuns: [RecoveredVideoRun] = []
+    @State private var pendingMediaSource: URL?
     @State private var generationErrorAlert: GenerationErrorAlert?
     @State private var selectedVideoSceneKey: String?
     @State private var selectedVideoCutIDs: Set<StoryboardCut.ID> = []
@@ -288,6 +290,10 @@ struct ContentView: View {
             ensureSelectedVideoScene()
             ensureSelectedVideoCuts()
             restoreGeneratedVideos()
+        }
+        .onChange(of: documentURL) { previous, current in
+            guard let previous, let current else { return }
+            restoreGeneratedVideos(from: previous, destination: current)
         }
     }
 
@@ -759,15 +765,46 @@ struct ContentView: View {
     }
 
     private var aiControlBar: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
+        HStack(spacing: 12) {
             HStack(spacing: 12) {
                 Label(t(.ai), systemImage: "sparkles")
                     .font(.system(size: 13, weight: .bold))
                     .foregroundStyle(CinemaDesign.ink)
-
                 aiMetric(title: t(.estimatedTokens), value: "\(aiEstimatedTokensUsed)")
                 aiMetric(title: t(.estimatedCost), value: aiCostText(aiEstimatedCostUSD))
+            }
+            .fixedSize(horizontal: true, vertical: false)
 
+            Divider().frame(height: 24)
+
+            aiScrollableControls
+                .frame(minWidth: 0)
+
+            if let sceneKey = selectedVideoSceneKey {
+                Button(generatingSceneKey == sceneKey ? t(.cancelGeneration) : t(.createSelectedSceneVideo)) {
+                    if generatingSceneKey == sceneKey {
+                        sceneGenerationTask?.cancel()
+                    } else {
+                        generateSceneVideo(for: sceneKey)
+                    }
+                }
+                .buttonStyle(CinemaPrimaryActionButtonStyle())
+                .fixedSize(horizontal: true, vertical: false)
+                .disabled(generatingSceneKey != nil && generatingSceneKey != sceneKey)
+            }
+        }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 8)
+        .background(
+            isAICostLimitExceeded
+                ? AnyShapeStyle(Color.red.opacity(0.05))
+                : AnyShapeStyle(CinemaDesign.toolbarBackground)
+        )
+    }
+
+    private var aiScrollableControls: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 12) {
                 if isAICostLimitExceeded {
                     Label(t(.costLimitExceeded), systemImage: "exclamationmark.triangle.fill")
                         .font(.system(size: 11, weight: .semibold))
@@ -806,6 +843,24 @@ struct ContentView: View {
                         .trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                 ))
                 .help(t(.projectSettingsHelp))
+
+                Menu(localizedGenerationText("動画の保存先を復旧", "Recover Video Files", "恢复视频文件")) {
+                    if let source = pendingMediaSource {
+                        Button(localizedGenerationText("動画のコピーを再試行", "Retry Media Copy", "重试视频复制")) {
+                            restoreGeneratedVideos(from: source)
+                        }
+                    }
+                    Button(localizedGenerationText("元のmoviesフォルダを選択…", "Choose Original movies Folder…", "选择原movies文件夹…")) {
+                        chooseOriginalMoviesFolder()
+                    }
+                }
+                .disabled(documentURL == nil || generatingCutID != nil || generatingSceneKey != nil)
+
+                Button(localizedGenerationText("動画込みで作品コピーを保存", "Save Portable Project Copy", "保存含视频的项目副本")) {
+                    savePortableProject()
+                }
+                .buttonStyle(CinemaToolbarButtonStyle())
+                .disabled(generatingCutID != nil || generatingSceneKey != nil)
 
                 if ScreenAspectRatio.value(for: document.project.presentationSettings.screenAspectRatioID) == .custom {
                     HStack(spacing: 4) {
@@ -848,16 +903,6 @@ struct ContentView: View {
                     }
                     .buttonStyle(CinemaToolbarButtonStyle())
 
-                    Button(generatingSceneKey == sceneTitle ? t(.cancelGeneration) : t(.createSelectedSceneVideo)) {
-                        if generatingSceneKey == sceneTitle {
-                            sceneGenerationTask?.cancel()
-                        } else {
-                            generateSceneVideo(for: sceneTitle)
-                        }
-                    }
-                    .buttonStyle(CinemaPrimaryActionButtonStyle())
-                    .disabled(generatingSceneKey != nil && generatingSceneKey != sceneTitle)
-
                     if let run = recoverableRuns.last(where: { $0.run.sceneID.uuidString == sceneTitle && $0.canAssemble && $0.sceneVideo == nil }) {
                         Button(localizedGenerationText("保存済みカットを結合", "Assemble Saved Cuts", "合并已保存镜头")) {
                             assembleRecoveredRun(run)
@@ -895,14 +940,8 @@ struct ContentView: View {
                         .foregroundStyle(CinemaDesign.mutedInk)
                 }
             }
-            .padding(.horizontal, 18)
-            .padding(.vertical, 8)
+            .padding(.vertical, 2)
         }
-        .background(
-            isAICostLimitExceeded
-                ? AnyShapeStyle(Color.red.opacity(0.05))
-                : AnyShapeStyle(CinemaDesign.toolbarBackground)
-        )
     }
 
     private func aiMetric(title: String, value: String) -> some View {
@@ -1326,21 +1365,21 @@ struct ContentView: View {
                         document.project.sceneVideos.removeAll { $0.sceneID == generationSceneID }
                         document.project.sceneVideos.append(sceneVideo)
                     }
-                    restoreGeneratedVideos()
+                    restoreGeneratedVideos(from: generationDocumentURL)
                     generationStatus = localizedGenerationText("シーン「\(title)」の動画を生成しました", "Generated video for “\(title)”.", "已为场景“\(title)”生成视频。")
                     generatingSceneKey = nil
                     sceneGenerationTask = nil
                 }
             } catch is CancellationError {
                 await MainActor.run {
-                    restoreGeneratedVideos()
+                    restoreGeneratedVideos(from: generationDocumentURL)
                     generationStatus = localizedGenerationText("生成を中止しました。完成済みカットは保存されています。", "Generation stopped. Completed cuts are saved.", "生成已停止。已完成的镜头已保存。")
                     generatingSceneKey = nil
                     sceneGenerationTask = nil
                 }
             } catch {
                 await MainActor.run {
-                    restoreGeneratedVideos()
+                    restoreGeneratedVideos(from: generationDocumentURL)
                     generationStatus = localizedGenerationText("生成が停止しました。保存済みカットは動画一覧から利用できます。", "Generation stopped. Saved cuts are available in video history.", "生成已停止。可在视频历史中使用已保存的镜头。")
                     if !Task.isCancelled {
                         generationErrorAlert = GenerationErrorAlert(title: localizedGenerationText("動画生成エラー", "Video Generation Error", "视频生成错误"), message: formattedErrorMessage(error))
@@ -1352,8 +1391,19 @@ struct ContentView: View {
         }
     }
 
-    private func restoreGeneratedVideos() {
-        guard let documentURL else { return }
+    private func restoreGeneratedVideos(from source: URL? = nil, destination: URL? = nil) {
+        guard let documentURL = destination ?? documentURL else { return }
+        if let source {
+            do {
+                try ProjectMediaRelocation.copyMedia(for: document, from: source, to: documentURL)
+                pendingMediaSource = nil
+                generationStatus = localizedGenerationText("動画の保存先を復旧しました。", "Video files recovered.", "视频文件已恢复。")
+            } catch {
+                pendingMediaSource = source
+                generationErrorAlert = GenerationErrorAlert(title: t(.save), message: localizedGenerationText("動画のコピーを完了できませんでした。元のmoviesフォルダは保持されています。\n", "Media copying could not finish. The original movies folder was preserved.\n", "视频复制未完成。原movies文件夹已保留。\n") + error.localizedDescription)
+                return
+            }
+        }
         let report = VideoGenerationRecovery.scan(projectID: document.project.id, documentURL: documentURL)
         VideoGenerationRecovery.restore(report, into: &document.project)
         recoverableRuns = report.runs
@@ -1369,11 +1419,34 @@ struct ContentView: View {
             defer { generatingSceneKey = nil; sceneGenerationTask = nil }
             do {
                 _ = try await VideoGenerationRecovery.assemble(recovered, documentURL: documentURL)
-                restoreGeneratedVideos()
+                restoreGeneratedVideos(from: documentURL)
                 generationStatus = localizedGenerationText("保存済みカットから動画を復旧しました。", "Recovered video from saved cuts.", "已从保存的镜头恢复视频。")
             } catch {
                 generationStatus = localizedGenerationText("結合を完了できませんでした。保存済みカットは保持されています。", "Assembly could not finish. Saved cuts were preserved.", "合并未完成。已保存的镜头已保留。")
                 if !Task.isCancelled { generationErrorAlert = GenerationErrorAlert(title: t(.video), message: formattedErrorMessage(error)) }
+            }
+        }
+    }
+
+    private func chooseOriginalMoviesFolder() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.message = localizedGenerationText("元の動画があるmoviesフォルダを選んでください。現在の保存先へコピーし、元ファイルは保持します。", "Choose the original movies folder. Videos will be copied to the current location; originals are preserved.", "选择原movies文件夹。视频将复制到当前位置，原文件将保留。")
+        panel.begin { response in
+            guard response == .OK, let folder = panel.url else { return }
+            guard folder.lastPathComponent == "movies" else {
+                generationStatus = localizedGenerationText("moviesという名前のフォルダを選んでください。", "Choose the folder named movies.", "请选择名为movies的文件夹。")
+                return
+            }
+            if let documentURL, folder.resolvingSymlinksInPath() == documentURL.deletingLastPathComponent().appendingPathComponent("movies").resolvingSymlinksInPath() {
+                generationStatus = localizedGenerationText("現在の保存先ではなく、元のmoviesフォルダを選んでください。", "Choose the original movies folder, not the current destination.", "请选择原movies文件夹，而不是当前目标文件夹。")
+                return
+            }
+            restoreGeneratedVideos(from: folder.deletingLastPathComponent().appendingPathComponent("recovery.cinemaboard"))
+            if pendingMediaSource == nil {
+                generationStatus = localizedGenerationText("動画の保存先を復旧しました。", "Video files recovered.", "视频文件已恢复。")
             }
         }
     }
@@ -1536,6 +1609,29 @@ struct ContentView: View {
                 try data.write(to: url)
             } catch {
                 NSSound.beep()
+            }
+        }
+    }
+
+    private func savePortableProject() {
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.cinemaStoryboard]
+        panel.canCreateDirectories = true
+        panel.nameFieldStringValue = (documentURL?.deletingPathExtension().lastPathComponent ?? "Cinema") + "-portable.cinemaboard"
+        panel.begin { response in
+            guard response == .OK, let url = panel.url else { return }
+            guard url.resolvingSymlinksInPath().standardizedFileURL != documentURL?.resolvingSymlinksInPath().standardizedFileURL else {
+                generationStatus = localizedGenerationText("元の書類とは別の保存先を選んでください。", "Choose a destination different from the original document.", "请选择与原文档不同的保存位置。")
+                return
+            }
+            do {
+                let copy = try PortableProjectService.prepare(document, documentURL: documentURL)
+                try copy.packageWrapper().write(to: url, options: .atomic, originalContentsURL: nil)
+                generationStatus = localizedGenerationText("動画を含む作品コピーを保存しました。", "Saved a project copy with its videos included.", "已保存包含视频的项目副本。")
+            } catch PortableProjectService.ExportError.unavailableVideo(let path) {
+                generationErrorAlert = GenerationErrorAlert(title: t(.save), message: localizedGenerationText("動画が見つからないため保存できません：\(path)", "Cannot save because a video is unavailable: \(path)", "无法保存，视频不可用：\(path)"))
+            } catch {
+                generationErrorAlert = GenerationErrorAlert(title: t(.save), message: formattedErrorMessage(error))
             }
         }
     }

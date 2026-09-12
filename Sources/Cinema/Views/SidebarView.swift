@@ -159,7 +159,7 @@ struct SidebarView: View {
                 } label: {
                     Image(systemName: mode.symbolName)
                         .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(selectedThemeMode == mode ? CinemaDesign.ink : CinemaDesign.controlInactiveInk)
+                        .foregroundStyle(CinemaDesign.ink)
                         .frame(width: 34, height: 34)
                         .background {
                             RoundedRectangle(cornerRadius: 10, style: .continuous)
@@ -694,6 +694,7 @@ private struct CutSidebarSection: Identifiable {
 }
 
 private struct SidebarRailButton: View {
+    @Environment(\.isEnabled) private var isEnabled
     var systemName: String
     var help: String
     var isProminent = false
@@ -706,7 +707,7 @@ private struct SidebarRailButton: View {
         Button(action: action) {
             Image(systemName: systemName)
                 .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(isProminent || isActive || isHovered ? CinemaDesign.ink : CinemaDesign.controlInactiveInk)
+                .foregroundStyle(isEnabled ? CinemaDesign.ink : CinemaDesign.disabledControlInk)
                 .frame(width: 38, height: 38)
                 .background {
                     RoundedRectangle(cornerRadius: 12, style: .continuous)

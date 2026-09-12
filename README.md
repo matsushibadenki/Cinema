@@ -202,9 +202,13 @@ Cinema projects use the `.cinemaboard` document type. Project content, generated
 
 API keys are configured locally in application preferences. Scene Bundle export intentionally excludes API keys, authentication tokens, and absolute paths from the manifest.
 
-Newly generated videos are stored in the sibling `movies/` folder. Move or back up that folder together with the `.cinemaboard` document; moving or saving the document elsewhere does not currently copy external videos automatically.
+Newly generated videos are stored in the sibling `movies/` folder. When an open document's location changes in Cinema, the app copies its referenced videos and recovery records to the new sibling folder, preserving the originals. Conflicting destination files are not overwritten. Moving documents outside Cinema still requires moving or backing up the `movies/` folder with them. A copy failure is reported after the document location changes; retain the original movies folder until the transfer succeeds.
+
+For a self-contained backup or handoff, choose **Save Portable Project Copy** in the top control bar. The new `.cinemaboard` contains the project's images and all referenced scene/cut videos, including completed clips recovered from generation records. It can be moved without the original `movies/` folder. Missing videos stop the export with a file-specific error. The original document stays open and unchanged; the copy receives its own project identity. Future videos generated after opening the copy still use its sibling `movies/` folder. Exporting large video histories temporarily requires memory for those videos.
 
 Generation recovery records and completed clips live in `movies/generation/<project UUID>/<run UUID>/`. Recovery does not depend on the document having autosaved after the last completed cut. These records contain no API keys.
+
+If media copying fails, use **Recover Video Files → Retry Media Copy** after correcting the problem. After reopening Cinema, use **Choose Original movies Folder…** to select the original folder and copy the media again. Originals and conflicting destination files are preserved. The File menu also provides the standard **Move To…** action.
 
 Keep backups of important project documents and generated media. Third-party API output may not be reproducible if a provider changes or retires a model.
 

@@ -42,6 +42,10 @@ struct StoryboardDocument: FileDocument {
     }
 
     func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper {
+        try packageWrapper()
+    }
+
+    func packageWrapper() throws -> FileWrapper {
         let root = FileWrapper(directoryWithFileWrappers: [:])
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]

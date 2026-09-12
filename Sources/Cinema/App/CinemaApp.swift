@@ -77,6 +77,10 @@ private struct AppCommands: Commands {
                 NSDocumentController.shared.currentDocument?.saveAs(nil)
             }
             .keyboardShortcut("s", modifiers: [.command, .shift])
+
+            Button(appLanguage == "ja" ? "移動…" : appLanguage == "zh-Hans" ? "移到…" : "Move To…") {
+                NSDocumentController.shared.currentDocument?.move(nil)
+            }
         }
 
         CommandGroup(replacing: .printItem) {
