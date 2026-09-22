@@ -934,9 +934,9 @@ struct SettingsView: View {
             }
 
             if showsScriptSettings {
-            SettingsSection("台本表示") {
+            SettingsSection(AppLanguage.value(for: appLanguage) == .japanese ? "台本表示" : AppLanguage.value(for: appLanguage) == .english ? "Script Display" : "剧本显示") {
                 SettingsSliderRow(
-                    title: "話者名",
+                    title: AppLanguage.value(for: appLanguage) == .japanese ? "話者名" : AppLanguage.value(for: appLanguage) == .english ? "Speaker" : "说话人",
                     value: $scriptSpeakerFontSize,
                     range: 8...18,
                     step: 0.5,
@@ -944,7 +944,7 @@ struct SettingsView: View {
                 )
 
                 SettingsSliderRow(
-                    title: "本文",
+                    title: AppLanguage.value(for: appLanguage) == .japanese ? "本文" : AppLanguage.value(for: appLanguage) == .english ? "Body Text" : "正文",
                     value: $scriptBodyFontSize,
                     range: 8...18,
                     step: 0.5,
@@ -952,7 +952,7 @@ struct SettingsView: View {
                 )
 
                 SettingsSliderRow(
-                    title: "本文の行間",
+                    title: AppLanguage.value(for: appLanguage) == .japanese ? "本文の行間" : AppLanguage.value(for: appLanguage) == .english ? "Line Spacing" : "正文行距",
                     value: $scriptBodyLineAdvance,
                     range: 14...28,
                     step: 0.5,
@@ -960,7 +960,7 @@ struct SettingsView: View {
                 )
 
                 SettingsSliderRow(
-                    title: "内容",
+                    title: t(.content),
                     value: $scriptContentLabelFontSize,
                     range: 7...16,
                     step: 0.5,
@@ -968,14 +968,14 @@ struct SettingsView: View {
                 )
 
                 SettingsSliderRow(
-                    title: "シーン名",
+                    title: AppLanguage.value(for: appLanguage) == .japanese ? "シーン名" : AppLanguage.value(for: appLanguage) == .english ? "Scene Name" : "场景名称",
                     value: $scriptSceneFontSize,
                     range: 8...18,
                     step: 0.5,
                     suffix: "pt"
                 )
 
-                Button("標準に戻す") {
+                Button(AppLanguage.value(for: appLanguage) == .japanese ? "標準に戻す" : AppLanguage.value(for: appLanguage) == .english ? "Restore Defaults" : "恢复默认") {
                     scriptSpeakerFontSize = Double(ScriptPageLayout.speakerFontSize)
                     scriptBodyFontSize = Double(ScriptPageLayout.bodyFontSize)
                     scriptBodyLineAdvance = Double(ScriptPageLayout.bodyLineAdvance)

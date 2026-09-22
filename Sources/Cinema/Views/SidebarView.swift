@@ -373,7 +373,7 @@ struct SidebarView: View {
 
                 let selectedCuts = selectedSection.cuts.filter { selectedVideoCutIDs.contains($0.id) }
 
-                Text("対象: Cut \(selectedCuts.map(\.cutNumber).map(String.init).joined(separator: ", "))")
+                Text((AppLanguage.value(for: appLanguage) == .japanese ? "対象: Cut " : AppLanguage.value(for: appLanguage) == .english ? "Selected: Cut " : "目标：镜头 ") + selectedCuts.map(\.cutNumber).map(String.init).joined(separator: ", "))
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
@@ -555,6 +555,7 @@ struct SidebarView: View {
                         SceneSelectionRow(
                             title: section.title,
                             cutCount: section.cuts.count,
+                            language: appLanguage,
                             rangeText: section.rangeText,
                             isSelected: selectedVideoSceneKey == section.key,
                             isGenerating: generatingSceneKey == section.key,
@@ -960,6 +961,7 @@ private struct CutDropDelegate: DropDelegate {
 private struct SceneSelectionRow: View {
     var title: String
     var cutCount: Int
+    var language: String
     var rangeText: String
     var isSelected: Bool
     var isGenerating: Bool
@@ -985,7 +987,7 @@ private struct SceneSelectionRow: View {
                     HStack(spacing: 6) {
                         Text(rangeText)
                             .font(.caption.weight(.medium))
-                        Text("\(cutCount)カット")
+                        Text(AppLanguage.value(for: language) == .japanese ? "\(cutCount)カット" : AppLanguage.value(for: language) == .english ? "\(cutCount) cuts" : "\(cutCount)个镜头")
                             .font(.caption)
                     }
                     .foregroundStyle(.secondary)

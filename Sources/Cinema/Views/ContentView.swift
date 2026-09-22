@@ -345,7 +345,7 @@ struct ContentView: View {
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundStyle(CinemaDesign.ink)
 
-            Text("このワークスペースは準備中です。")
+            Text(localizedGenerationText("このワークスペースは準備中です。", "This workspace is coming soon.", "此工作区即将推出。"))
                 .font(.system(size: 12))
                 .foregroundStyle(CinemaDesign.mutedInk)
         }
@@ -881,7 +881,7 @@ struct ContentView: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(self.sceneTitle(for: sceneTitle))
                             .font(.system(size: 11, weight: .semibold))
-                        Text("対象: Cut \(selectedAISceneCuts.map(\.cutNumber).map(String.init).joined(separator: ", "))")
+                        Text(localizedGenerationText("対象: Cut ", "Selected: Cut ", "目标：镜头 ") + selectedAISceneCuts.map(\.cutNumber).map(String.init).joined(separator: ", "))
                             .font(.system(size: 9))
                             .foregroundStyle(CinemaDesign.mutedInk)
                     }
@@ -1221,7 +1221,7 @@ struct ContentView: View {
 
         let cuts = selectedVideoCuts(for: key)
         guard !cuts.isEmpty else {
-            generationStatus = "動画生成するカットを選択してください"
+            generationStatus = localizedGenerationText("動画生成するカットを選択してください", "Select cuts to generate video.", "请选择要生成视频的镜头。")
             return
         }
 
@@ -1236,12 +1236,12 @@ struct ContentView: View {
 
         let prompt = sceneVideoPrompt(title: title, cuts: cuts)
         guard !prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            generationStatus = "シーンに内容かセリフを入力してください"
+            generationStatus = localizedGenerationText("シーンに内容かセリフを入力してください", "Add scene content or dialogue.", "请添加场景内容或对白。")
             return
         }
 
         generatingSceneKey = key
-        generationStatus = "シーン「\(title)」の動画を生成中..."
+        generationStatus = localizedGenerationText("シーン「\(title)」の動画を生成中…", "Generating video for “\(title)”…", "正在为场景“\(title)”生成视频…")
         let provider = AIVideoGenerationProvider.value(for: videoGenerationProvider)
         let providerAPIKey: String
         let providerModel: String
@@ -1279,7 +1279,7 @@ struct ContentView: View {
                 for (index, cut) in cuts.enumerated() {
                     try Task.checkCancellation()
                     await MainActor.run {
-                        generationStatus = "シーン「\(title)」のカット \(index + 1)/\(cuts.count) を生成中..."
+                        generationStatus = localizedGenerationText("シーン「\(title)」のカット \(index + 1)/\(cuts.count) を生成中…", "Generating cut \(index + 1)/\(cuts.count) for “\(title)”…", "正在为场景“\(title)”生成镜头 \(index + 1)/\(cuts.count)…")
                     }
 
                     if AIPromptBuilder.requestsContinuityReset(cut) {
@@ -1595,7 +1595,7 @@ struct ContentView: View {
         } else if let embeddedData = document.videoData[video.videoFileName] {
             data = embeddedData
         } else {
-            generationStatus = "動画データが見つかりません"
+            generationStatus = localizedGenerationText("動画データが見つかりません", "Video data was not found.", "找不到视频数据。")
             return
         }
 
@@ -1742,12 +1742,12 @@ struct ContentView: View {
         let aspectRatio = screenAspectRatioValue
 
         guard !prompt.isEmpty else {
-            generationStatus = "内容かセリフを入力してください"
+            generationStatus = localizedGenerationText("内容かセリフを入力してください", "Add content or dialogue.", "请添加内容或对白。")
             return
         }
 
         generatingCutID = cutID
-        generationStatus = "カット\(cut.cutNumber)を生成中..."
+        generationStatus = localizedGenerationText("カット\(cut.cutNumber)を生成中…", "Generating cut \(cut.cutNumber)…", "正在生成镜头\(cut.cutNumber)…")
 
         Task {
             do {
@@ -1814,13 +1814,13 @@ struct ContentView: View {
                             referenceCount: referencesForCut(cut).count
                         )
                     )
-                    generationStatus = "カット\(cut.cutNumber)を生成しました"
+                    generationStatus = localizedGenerationText("カット\(cut.cutNumber)を生成しました", "Generated cut \(cut.cutNumber).", "已生成镜头\(cut.cutNumber)。")
                     generatingCutID = nil
                 }
             } catch {
                 await MainActor.run {
-                    generationStatus = "画像生成に失敗しました"
-                    generationErrorAlert = GenerationErrorAlert(title: "画像生成エラー", message: formattedErrorMessage(error))
+                    generationStatus = localizedGenerationText("画像生成に失敗しました", "Image generation failed.", "图像生成失败。")
+                    generationErrorAlert = GenerationErrorAlert(title: localizedGenerationText("画像生成エラー", "Image Generation Error", "图像生成错误"), message: formattedErrorMessage(error))
                     generatingCutID = nil
                 }
             }
@@ -1838,7 +1838,7 @@ struct ContentView: View {
 
         guard panel.runModal() == .OK, let url = panel.url else { return }
         guard let data = try? Data(contentsOf: url) else {
-            generationStatus = "画像の読み込みに失敗しました"
+            generationStatus = localizedGenerationText("画像の読み込みに失敗しました", "Could not load the image.", "无法加载图像。")
             return
         }
 
@@ -1847,7 +1847,7 @@ struct ContentView: View {
         let fileName = "Images/\(cutID.uuidString).png"
         document.imageData[fileName] = croppedData
         document.project.cuts[cutIndex].imageFileName = fileName
-        generationStatus = "カット\(document.project.cuts[cutIndex].cutNumber)に画像を読み込みました"
+        generationStatus = localizedGenerationText("カット\(document.project.cuts[cutIndex].cutNumber)に画像を読み込みました", "Loaded image for cut \(document.project.cuts[cutIndex].cutNumber).", "已为镜头\(document.project.cuts[cutIndex].cutNumber)加载图像。")
     }
 
     private func formattedErrorMessage(_ error: Error) -> String {
@@ -2104,7 +2104,7 @@ struct ContentView: View {
     private func canStartAIGeneration() -> Bool {
         guard generatingCutID == nil, generatingSceneKey == nil else { return false }
         guard !isAICostLimitExceeded else {
-            generationStatus = "推定料金が上限を超えています。設定で上限を変更してください。"
+            generationStatus = localizedGenerationText("推定料金が上限を超えています。設定で上限を変更してください。", "Estimated cost exceeds the limit. Change the limit in Settings.", "预计费用超出上限。请在设置中更改上限。")
             return false
         }
         return true
