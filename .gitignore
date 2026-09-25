@@ -38,6 +38,7 @@ docs-private/
 *.swo
 
 # website
+website/
 website/*
 !website/jp/
 !website/jp/**
