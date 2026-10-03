@@ -93,7 +93,7 @@ struct StoryboardDocument: FileDocument {
         }
         project.cuts = survivingCuts.isEmpty ? [StoryboardCut(cutNumber: 1)] : survivingCuts
         project.generatedCutVideos.removeAll { ids.contains($0.cutID) }
-        let retainedImagePaths = Set(project.cuts.compactMap(\.imageFileName) + project.referenceImages.map(\.imageFileName))
+        let retainedImagePaths = Set(project.cuts.compactMap(\.imageFileName) + project.referenceImages.map(\.imageFileName) + project.generatedImages.map(\.imageFileName))
         for path in removedImagePaths.subtracting(retainedImagePaths) {
             imageData[path] = nil
         }

@@ -48,3 +48,9 @@ See [Project Review](PROJECT_REVIEW.md) for verification scope and remaining des
 
 - [Later] Investigate experimental local generation support for `DiffSynth-Studio/MiniMax-H3-NF4` on Apple Silicon Macs.
   Official ModelScope materials indicate that Apple M-series inference is supported but not recommended, and low-VRAM operation is described around 7GB-class VRAM budgets. Treat this as a research candidate only until a standalone PoC confirms real-world speed, stability, memory pressure, and output quality on a 16GB Apple Silicon Mac.
+
+## Media Browser
+
+- [Done] Add Files / Generated Images / Generated Videos tabs to the Browser workspace, with folder tree navigation, adaptive thumbnail grids, search, and file/video opening.
+- [Done] Persist new image generation history with immutable prompts, context, provider, model, aspect ratio, and timestamps; retain history assets when cuts are deleted and support legacy documents.
+- [Next] Verify populated image history and video previews across all languages, light/dark appearance, and narrow windows.

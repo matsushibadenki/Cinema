@@ -11,6 +11,7 @@ struct StoryboardProject: Codable, Equatable {
     var drawingSettings: DrawingSettings
     var referenceImages: [ReferenceImage]
     var sceneVideos: [SceneVideo]
+    var generatedImages: [GeneratedImage] = []
     var generatedCutVideos: [GeneratedCutVideo]
     var importedGenerationResults: [ImportedGenerationResult]
     var presentationSettings: ProjectPresentationSettings
@@ -50,6 +51,7 @@ struct StoryboardProject: Codable, Equatable {
         case drawingSettings
         case referenceImages
         case sceneVideos
+        case generatedImages
         case generatedCutVideos
         case importedGenerationResults
         case presentationSettings
@@ -64,6 +66,7 @@ struct StoryboardProject: Codable, Equatable {
         projectContext = try container.decodeIfPresent(ProjectContext.self, forKey: .projectContext) ?? ProjectContext()
         drawingSettings = try container.decodeIfPresent(DrawingSettings.self, forKey: .drawingSettings) ?? DrawingSettings()
         referenceImages = try container.decodeIfPresent([ReferenceImage].self, forKey: .referenceImages) ?? []
+        generatedImages = try container.decodeIfPresent([GeneratedImage].self, forKey: .generatedImages) ?? []
         sceneVideos = try container.decodeIfPresent([SceneVideo].self, forKey: .sceneVideos) ?? []
         generatedCutVideos = try container.decodeIfPresent([GeneratedCutVideo].self, forKey: .generatedCutVideos) ?? []
         importedGenerationResults = try container.decodeIfPresent([ImportedGenerationResult].self, forKey: .importedGenerationResults) ?? []
@@ -1073,4 +1076,18 @@ struct StoryboardCut: Codable, Identifiable, Equatable {
     var enabledReferenceImageIDs: [ReferenceImage.ID] {
         referenceImageIDs.filter { !disabledReferenceImageIDs.contains($0) }
     }
+}
+
+/// Immutable metadata captured when an image request completes.
+struct GeneratedImage: Codable, Identifiable, Equatable {
+    var id: UUID = UUID()
+    var cutID: UUID
+    var title: String
+    var imageFileName: String
+    var prompt: String
+    var context: String
+    var provider: String
+    var model: String
+    var aspectRatio: Double
+    var generatedAt: Date = Date()
 }

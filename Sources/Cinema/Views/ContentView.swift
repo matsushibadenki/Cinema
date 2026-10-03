@@ -212,6 +212,8 @@ struct ContentView: View {
             .background(CinemaDesign.canvasBackground)
             .animation(.easeInOut(duration: 0.18), value: showsReferenceSidebar)
                     }
+                } else if selectedWorkspace == .browser {
+                    MediaBrowserView(document: document, documentURL: documentURL)
                 } else {
                     workspacePlaceholder
                 }
@@ -1740,6 +1742,9 @@ struct ContentView: View {
         let cut = document.project.cuts[index]
         let prompt = cutPrompt(for: cut)
         let aspectRatio = screenAspectRatioValue
+        let capturedContext = generationContext(for: cut)
+        let capturedProvider = imageGenerationProvider
+        let capturedModel = currentImageModelName()
 
         guard !prompt.isEmpty else {
             generationStatus = localizedGenerationText("内容かセリフを入力してください", "Add content or dialogue.", "请添加内容或对白。")
@@ -1798,10 +1803,11 @@ struct ContentView: View {
                 }
                 let fittedData = ImageHelpers.pngDataByCropping(data, toAspectRatio: aspectRatio)
                 await MainActor.run {
-                    let fileName = "Images/\(cutID.uuidString).png"
+                    let fileName = "Images/generated-\(UUID().uuidString).png"
                     if let updateIndex = document.project.cuts.firstIndex(where: { $0.id == cutID }) {
                         document.imageData[fileName] = fittedData
                         document.project.cuts[updateIndex].imageFileName = fileName
+                        document.project.generatedImages.append(GeneratedImage(cutID: cutID, title: cut.cutName.isEmpty ? "\(cut.cutNumber)" : cut.cutName, imageFileName: fileName, prompt: prompt, context: capturedContext, provider: capturedProvider, model: capturedModel, aspectRatio: Double(aspectRatio)))
                     }
                     recordAIUsage(
                         prompt: [
