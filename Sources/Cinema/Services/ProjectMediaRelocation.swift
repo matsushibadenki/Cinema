@@ -5,12 +5,16 @@ enum ProjectMediaRelocation {
     enum RelocationError: LocalizedError {
         case unavailable(String)
         case conflict(String)
-        var errorDescription: String? {
+        var errorDescription: String? { message(language: "en") }
+        func message(language: String) -> String {
             switch self {
-            case .unavailable(let path): "Media unavailable: \(path)"
-            case .conflict(let path): "A different file already exists: \(path)"
+            case .unavailable(let path):
+                language == "ja" ? "動画ファイルを読み込めません：\(path)" : language == "zh-Hans" ? "无法读取视频文件：\(path)" : "Media unavailable: \(path)"
+            case .conflict(let path):
+                language == "ja" ? "保存先に内容の異なるファイルがあります：\(path)" : language == "zh-Hans" ? "目标位置已有内容不同的文件：\(path)" : "A different file already exists: \(path)"
             }
         }
+
     }
 
     static func copyMedia(for document: StoryboardDocument, from source: URL, to destination: URL) throws {

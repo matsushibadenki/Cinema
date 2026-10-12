@@ -2,6 +2,31 @@ import XCTest
 @testable import Cinema
 
 final class ProjectMediaRelocationTests: XCTestCase {
+    @MainActor func testRealVideoRelocationAndReopenedProject() async throws {
+        let fixturePath = ProcessInfo.processInfo.environment["CINEMA_RELOCATION_UI_FIXTURE"]
+        let root = fixturePath.map { URL(fileURLWithPath: $0) } ?? FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { if fixturePath == nil { try? FileManager.default.removeItem(at: root) } }
+        let source = root.appendingPathComponent("original/Relocation QA.cinemaboard")
+        let destination = root.appendingPathComponent("copied/Relocation QA.cinemaboard")
+        let media = source.deletingLastPathComponent().appendingPathComponent("movies/scene.mp4")
+        try FileManager.default.createDirectory(at: media.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try await LocalVideoFixture.write(to: media)
+        var project = StoryboardProject(cuts: [StoryboardCut(cutNumber: 1, subtitle: "Relocation QA")])
+        var video = SceneVideo(title: "Relocation QA", videoFileName: "scene.mp4"); video.sceneID = project.cuts[0].sceneID
+        project.sceneVideos = [video]
+        let document = StoryboardDocument(project: project)
+        try document.packageWrapper().write(to: source, options: .atomic, originalContentsURL: nil)
+        try FileManager.default.createDirectory(at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try document.packageWrapper().write(to: destination, options: .atomic, originalContentsURL: nil)
+        try ProjectMediaRelocation.copyMedia(for: document, from: source, to: destination)
+        let reopened = try StoryboardDocument(package: FileWrapper(url: destination, options: .immediate))
+        let playback = PerformancePreviewPlayer()
+        defer { playback.invalidate() }
+        try await playback.prepare(project: reopened.project, sceneID: try XCTUnwrap(video.sceneID), audioData: [:], documentURL: destination, includeVideo: true)
+        XCTAssertEqual(playback.duration, 1, accuracy: 0.01)
+        XCTAssertTrue(FileManager.default.contentsEqual(atPath: media.path, andPath: destination.deletingLastPathComponent().appendingPathComponent("movies/scene.mp4").path))
+    }
+
     func testCopyPreservesSourceAndSkipsOtherProjects() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }

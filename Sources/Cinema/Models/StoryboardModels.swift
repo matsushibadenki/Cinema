@@ -8,6 +8,8 @@ struct StoryboardProject: Codable, Equatable {
     var id: UUID
     var title: String
     var projectContext: ProjectContext
+    var performancePlan = PerformancePlan()
+    var performanceBundleReceipts: [PerformanceBundleReceipt] = []
     var drawingSettings: DrawingSettings
     var referenceImages: [ReferenceImage]
     var sceneVideos: [SceneVideo]
@@ -48,6 +50,8 @@ struct StoryboardProject: Codable, Equatable {
         case id
         case title
         case projectContext
+        case performancePlan
+        case performanceBundleReceipts
         case drawingSettings
         case referenceImages
         case sceneVideos
@@ -63,6 +67,8 @@ struct StoryboardProject: Codable, Equatable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
         title = try container.decode(String.self, forKey: .title)
+        performanceBundleReceipts = try container.decodeIfPresent([PerformanceBundleReceipt].self, forKey: .performanceBundleReceipts) ?? []
+        performancePlan = try container.decodeIfPresent(PerformancePlan.self, forKey: .performancePlan) ?? PerformancePlan()
         projectContext = try container.decodeIfPresent(ProjectContext.self, forKey: .projectContext) ?? ProjectContext()
         drawingSettings = try container.decodeIfPresent(DrawingSettings.self, forKey: .drawingSettings) ?? DrawingSettings()
         referenceImages = try container.decodeIfPresent([ReferenceImage].self, forKey: .referenceImages) ?? []

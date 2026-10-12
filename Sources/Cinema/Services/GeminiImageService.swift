@@ -27,6 +27,7 @@ struct GeminiImageService {
 
     var apiKey: String
     var model: String
+    var session: URLSession = .shared
 
     func generateStoryboardImage(
         drawingPrompt: String,
@@ -36,6 +37,10 @@ struct GeminiImageService {
     ) async throws -> Data {
         guard !apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             throw ServiceError.missingAPIKey
+        }
+
+        if usesInteractions {
+            return try await generateInteraction(drawingPrompt: drawingPrompt, cutPrompt: cutPrompt, aspectRatio: aspectRatio, referenceImages: referenceImages)
         }
 
         let encodedModel = model.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? model
@@ -65,7 +70,7 @@ struct GeminiImageService {
             )
         ))
 
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await session.data(for: request)
         if let httpResponse = response as? HTTPURLResponse, !(200..<300).contains(httpResponse.statusCode) {
             let message = String(data: data, encoding: .utf8) ?? "Gemini API request failed."
             throw ServiceError.requestFailed(message)
@@ -80,6 +85,54 @@ struct GeminiImageService {
             }
         }
 
+        throw ServiceError.imageNotFound
+    }
+
+    private var usesInteractions: Bool {
+        model == "gemini-nano-banana-2.1" || model == "gemini-3.1-flash-lite-image"
+    }
+
+    func interactionRequest(drawingPrompt: String, cutPrompt: String, aspectRatio: CGFloat,
+                            referenceImages: [GeminiReferenceImage]) throws -> URLRequest {
+        var request = URLRequest(url: URL(string: "https://generativelanguage.googleapis.com/v1beta/interactions")!)
+        request.httpMethod = "POST"
+        request.setValue(apiKey, forHTTPHeaderField: "x-goog-api-key")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        var input: [[String: String]] = [["type": "text", "text": composedPrompt(
+            drawingPrompt: drawingPrompt, cutPrompt: cutPrompt, aspectRatio: aspectRatio,
+            hasReferenceImages: !referenceImages.isEmpty)]]
+        input += referenceImages.map { ["type": "image", "mime_type": $0.mimeType, "data": $0.data.base64EncodedString()] }
+        request.httpBody = try JSONSerialization.data(withJSONObject: [
+            "model": model,
+            "input": input,
+            "store": false,
+            "response_format": ["type": "image", "mime_type": "image/png", "delivery": "inline",
+                                "aspect_ratio": aspectRatioName(for: aspectRatio), "image_size": "1K"]
+        ])
+        return request
+    }
+
+    private func generateInteraction(drawingPrompt: String, cutPrompt: String, aspectRatio: CGFloat,
+                                     referenceImages: [GeminiReferenceImage]) async throws -> Data {
+        let request = try interactionRequest(drawingPrompt: drawingPrompt, cutPrompt: cutPrompt,
+                                             aspectRatio: aspectRatio, referenceImages: referenceImages)
+        let (data, response) = try await session.data(for: request)
+        if let response = response as? HTTPURLResponse, !(200..<300).contains(response.statusCode) {
+            throw ServiceError.requestFailed(String(data: data, encoding: .utf8) ?? "Gemini API request failed.")
+        }
+        return try Self.interactionImage(from: data)
+    }
+
+    static func interactionImage(from data: Data) throws -> Data {
+        let decoded = try JSONDecoder().decode(GeminiInteractionResponse.self, from: data)
+        // Only model output is generated media; user input and thought images are excluded.
+        for step in (decoded.steps ?? []).reversed() where step.type == "model_output" {
+            for part in (step.content ?? []).reversed() where part.type == "image" {
+                if let base64 = part.data, let image = Data(base64Encoded: base64), !image.isEmpty {
+                    return image
+                }
+            }
+        }
         throw ServiceError.imageNotFound
     }
 
@@ -111,6 +164,7 @@ struct GeminiImageService {
 
     private func aspectRatioName(for ratio: CGFloat) -> String {
         let options: [(String, CGFloat)] = [
+            ("1:1", 1),
             ("9:16", 9.0 / 16.0),
             ("3:4", 3.0 / 4.0),
             ("4:3", 4.0 / 3.0),
@@ -194,4 +248,16 @@ private struct GeminiModelListResponse: Decodable {
         let name: String
     }
     let models: [Model]?
+}
+
+private struct GeminiInteractionResponse: Decodable {
+    struct Step: Decodable {
+        struct Content: Decodable {
+            var type: String
+            var data: String?
+        }
+        var type: String
+        var content: [Content]?
+    }
+    var steps: [Step]?
 }

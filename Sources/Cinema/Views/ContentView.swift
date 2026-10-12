@@ -120,6 +120,7 @@ struct ContentView: View {
     @State private var displayMode: DocumentDisplayMode = .cutFocus
     @State private var showsDrawingSettings = false
     @State private var showsSceneStateEditor = false
+    @State private var showsStoryGraphEditor = false
     @State private var showsProjectSettings = false
     @State private var showsFullCanvas = false
     @State private var isInitialStoryboardFitPending = true
@@ -221,6 +222,17 @@ struct ContentView: View {
 
             workspaceTabBar
         }
+        .focusedSceneValue(\.projectFileActions, ProjectFileActions(
+            editStoryGraph: { showsStoryGraphEditor = true },
+            hasStoryGraph: document.storyGraphSource != nil,
+            exportStoryGraph: { exportStoryGraph(asNewGraph: $0) },
+            savePortableProject: savePortableProject,
+            isSaved: documentURL != nil,
+            isGenerating: generatingCutID != nil || generatingSceneKey != nil,
+            canRetryMediaCopy: pendingMediaSource != nil,
+            retryMediaCopy: { if let source = pendingMediaSource { restoreGeneratedVideos(from: source) } },
+            chooseOriginalMoviesFolder: chooseOriginalMoviesFolder
+        ))
         .navigationTitle(documentTitle)
         .background(MainWindowConfigurator())
         .alert(item: $generationErrorAlert) { alert in
@@ -242,10 +254,16 @@ struct ContentView: View {
                 )
             }
         }
+        .sheet(isPresented: $showsStoryGraphEditor) {
+            StoryGraphEditorView(document: $document, language: appLanguage)
+        }
         .sheet(isPresented: $showsProjectSettings) {
-            ProjectSettingsView(
-                context: $document.project.projectContext,
-                appLanguage: appLanguage
+            ProjectWorkspaceView(
+                project: $document.project,
+                audioData: $document.audioData,
+                videoData: $document.videoData,
+                documentURL: documentURL,
+                language: appLanguage
             )
         }
         .onReceive(NotificationCenter.default.publisher(for: .printCurrentStoryboardPage)) { _ in
@@ -767,36 +785,45 @@ struct ContentView: View {
     }
 
     private var aiControlBar: some View {
-        HStack(spacing: 12) {
+        VStack(spacing: 0) {
             HStack(spacing: 12) {
-                Label(t(.ai), systemImage: "sparkles")
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(CinemaDesign.ink)
-                aiMetric(title: t(.estimatedTokens), value: "\(aiEstimatedTokensUsed)")
-                aiMetric(title: t(.estimatedCost), value: aiCostText(aiEstimatedCostUSD))
-            }
-            .fixedSize(horizontal: true, vertical: false)
-
-            Divider().frame(height: 24)
-
-            aiScrollableControls
-                .frame(minWidth: 0)
-
-            if let sceneKey = selectedVideoSceneKey {
-                Button(generatingSceneKey == sceneKey ? t(.cancelGeneration) : t(.createSelectedSceneVideo)) {
-                    if generatingSceneKey == sceneKey {
-                        sceneGenerationTask?.cancel()
-                    } else {
-                        generateSceneVideo(for: sceneKey)
-                    }
+                HStack(spacing: 12) {
+                    Label(t(.ai), systemImage: "sparkles")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(CinemaDesign.ink)
+                    aiMetric(title: t(.estimatedTokens), value: "\(aiEstimatedTokensUsed)")
+                    aiMetric(title: t(.estimatedCost), value: aiCostText(aiEstimatedCostUSD))
                 }
-                .buttonStyle(CinemaPrimaryActionButtonStyle())
                 .fixedSize(horizontal: true, vertical: false)
-                .disabled(generatingSceneKey != nil && generatingSceneKey != sceneKey)
+
+                Divider().frame(height: 24)
+                aiScrollableControls
+                    .frame(minWidth: 0)
             }
+            .padding(.horizontal, 18)
+            .padding(.vertical, 8)
+
+            CinemaDesign.toolbarSeparator.frame(height: 1)
+
+            HStack(spacing: 12) {
+                aiBlockControls
+                    .frame(minWidth: 0)
+                if let sceneKey = selectedVideoSceneKey {
+                    Button(generatingSceneKey == sceneKey ? t(.cancelGeneration) : t(.createSelectedSceneVideo)) {
+                        if generatingSceneKey == sceneKey {
+                            sceneGenerationTask?.cancel()
+                        } else {
+                            generateSceneVideo(for: sceneKey)
+                        }
+                    }
+                    .buttonStyle(CinemaPrimaryActionButtonStyle())
+                    .fixedSize(horizontal: true, vertical: false)
+                    .disabled(generatingSceneKey != nil && generatingSceneKey != sceneKey)
+                }
+            }
+            .padding(.horizontal, 18)
+            .padding(.vertical, 8)
         }
-        .padding(.horizontal, 18)
-        .padding(.vertical, 8)
         .background(
             isAICostLimitExceeded
                 ? AnyShapeStyle(Color.red.opacity(0.05))
@@ -812,8 +839,6 @@ struct ContentView: View {
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(.red)
                 }
-
-                Divider().frame(height: 24)
 
                 Picker(t(.drawingPreset), selection: $document.project.drawingSettings.selectedPresetID) {
                     ForEach(document.project.drawingSettings.presets) { preset in
@@ -846,24 +871,6 @@ struct ContentView: View {
                 ))
                 .help(t(.projectSettingsHelp))
 
-                Menu(localizedGenerationText("動画の保存先を復旧", "Recover Video Files", "恢复视频文件")) {
-                    if let source = pendingMediaSource {
-                        Button(localizedGenerationText("動画のコピーを再試行", "Retry Media Copy", "重试视频复制")) {
-                            restoreGeneratedVideos(from: source)
-                        }
-                    }
-                    Button(localizedGenerationText("元のmoviesフォルダを選択…", "Choose Original movies Folder…", "选择原movies文件夹…")) {
-                        chooseOriginalMoviesFolder()
-                    }
-                }
-                .disabled(documentURL == nil || generatingCutID != nil || generatingSceneKey != nil)
-
-                Button(localizedGenerationText("動画込みで作品コピーを保存", "Save Portable Project Copy", "保存含视频的项目副本")) {
-                    savePortableProject()
-                }
-                .buttonStyle(CinemaToolbarButtonStyle())
-                .disabled(generatingCutID != nil || generatingSceneKey != nil)
-
                 if ScreenAspectRatio.value(for: document.project.presentationSettings.screenAspectRatioID) == .custom {
                     HStack(spacing: 4) {
                         TextField("W", value: $document.project.presentationSettings.customScreenWidth, format: .number)
@@ -877,8 +884,15 @@ struct ContentView: View {
                     .help(ScreenAspectRatio.custom.detail(language: appLanguage))
                 }
 
-                Divider().frame(height: 24)
 
+            }
+            .padding(.vertical, 2)
+        }
+    }
+
+    private var aiBlockControls: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 12) {
                 if let sceneTitle = selectedVideoSceneKey {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(self.sceneTitle(for: sceneTitle))
@@ -1402,7 +1416,7 @@ struct ContentView: View {
                 generationStatus = localizedGenerationText("動画の保存先を復旧しました。", "Video files recovered.", "视频文件已恢复。")
             } catch {
                 pendingMediaSource = source
-                generationErrorAlert = GenerationErrorAlert(title: t(.save), message: localizedGenerationText("動画のコピーを完了できませんでした。元のmoviesフォルダは保持されています。\n", "Media copying could not finish. The original movies folder was preserved.\n", "视频复制未完成。原movies文件夹已保留。\n") + error.localizedDescription)
+                generationErrorAlert = GenerationErrorAlert(title: t(.save), message: localizedGenerationText("動画のコピーを完了できませんでした。元のmoviesフォルダは保持されています。\n", "Media copying could not finish. The original movies folder was preserved.\n", "视频复制未完成。原movies文件夹已保留。\n") + ((error as? ProjectMediaRelocation.RelocationError)?.message(language: appLanguage) ?? error.localizedDescription))
                 return
             }
         }
@@ -1446,6 +1460,8 @@ struct ContentView: View {
                 generationStatus = localizedGenerationText("現在の保存先ではなく、元のmoviesフォルダを選んでください。", "Choose the original movies folder, not the current destination.", "请选择原movies文件夹，而不是当前目标文件夹。")
                 return
             }
+            let scoped = folder.startAccessingSecurityScopedResource()
+            defer { if scoped { folder.stopAccessingSecurityScopedResource() } }
             restoreGeneratedVideos(from: folder.deletingLastPathComponent().appendingPathComponent("recovery.cinemaboard"))
             if pendingMediaSource == nil {
                 generationStatus = localizedGenerationText("動画の保存先を復旧しました。", "Video files recovered.", "视频文件已恢复。")
@@ -1613,6 +1629,24 @@ struct ContentView: View {
                 NSSound.beep()
             }
         }
+    }
+
+    private func exportStoryGraph(asNewGraph: Bool) {
+        do {
+            let data = try StoryGraphService.write(document, asNewGraph: asNewGraph)
+            let panel = NSSavePanel()
+            panel.allowedContentTypes = [.json]
+            panel.nameFieldStringValue = "Cinema.story.json"
+            panel.canCreateDirectories = true
+            guard panel.runModal() == .OK, let url = panel.url else { return }
+            try data.write(to: url, options: .atomic)
+            generationStatus = localizedGenerationText("Story Graphファイルを書き出しました。", "Exported the Story Graph file.", "已导出Story Graph文件。")
+        } catch { showStoryGraphError(error) }
+    }
+
+    private func showStoryGraphError(_ error: Error) {
+        let message = (error as? StoryGraphService.BridgeError)?.message(language: appLanguage) ?? formattedErrorMessage(error)
+        generationErrorAlert = GenerationErrorAlert(title: "Story Graph", message: message)
     }
 
     private func savePortableProject() {
@@ -2028,6 +2062,7 @@ struct ContentView: View {
         let state = section.flatMap { document.project.sceneState(for: $0.id) }
         return [
             drawingPromptForGeneration(references: referencesForCut(cut)),
+            document.project.performancePlan.prompt(for: [cut]),
             AIPromptBuilder.worldStatePrompt(sceneTitle: title, state: state, cuts: [cut])
         ].filter { !$0.isEmpty }.joined(separator: "\n\n")
     }
@@ -2137,6 +2172,11 @@ struct ContentView: View {
                 let referenceInputCost = Double(referenceCount) * 0.012
                 return (Double(tokens) / 1_000_000.0) * 5.0 + referenceInputCost + outputCost
             }
+            if provider == "gemini", ["gemini-nano-banana-2.1", "gemini-3.1-flash-lite-image"].contains(model) {
+                let inputRate = model == "gemini-nano-banana-2.1" ? 1.50 : 0.25
+                // 1K output is 1,120 image tokens at $30/M; reference token count is approximate.
+                return (Double(tokens + referenceCount * 1120) / 1_000_000.0) * inputRate + 0.0336
+            }
             return (Double(tokens) / 1_000_000.0) * 0.30 + (Double(referenceCount) * 0.0004) + 0.039
         case .video(let provider, let model, let seconds):
             if provider == AIVideoGenerationProvider.openAI.rawValue {
@@ -2170,6 +2210,7 @@ private struct MainWindowConfigurator: NSViewRepresentable {
 
     private func configure(window: NSWindow?, coordinator: Coordinator) {
         guard let window, !coordinator.didConfigure else { return }
+        window.toolbarStyle = .unifiedCompact
         let visibleFrame = (window.screen ?? NSScreen.main)?.visibleFrame
         guard let visibleFrame else { return }
         window.setFrame(visibleFrame, display: true, animate: false)

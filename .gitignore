@@ -42,3 +42,7 @@ website/
 website/*
 !website/jp/
 !website/jp/**
+
+
+# story-graph
+story-graph/

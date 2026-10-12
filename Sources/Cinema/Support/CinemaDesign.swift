@@ -5,118 +5,130 @@
 import AppKit
 import SwiftUI
 
+// Hallmark · existing native workbench · neutral four-surface palette / indigo action accent.
+// Pre-emit critique: philosophy 4, hierarchy 4, execution 4, specificity 4, restraint 5, variety 3.
 enum CinemaDesign {
+    private typealias RGBA = (CGFloat, CGFloat, CGFloat, CGFloat)
+
+    // Shared hierarchy for every light-mode block; colors are sRGB.
+    private enum LightSurface {
+        static let canvas: RGBA = (239 / 255, 240 / 255, 240 / 255, 1) // #eff0f0
+        static let inset: RGBA = (245 / 255, 245 / 255, 245 / 255, 1) // #f5f5f5
+        static let panel: RGBA = (252 / 255, 252 / 255, 252 / 255, 1) // #fcfcfc
+        static let editor: RGBA = (1, 1, 1, 1) // #ffffff
+    }
+
     // MARK: - Base Theme
 
     static let keyColor = dynamicColor(
-        light: (0.19, 0.19, 0.21, 1.0),
+        light: (0.321569, 0.388235, 0.788235, 1.0),
         dark: (0.78, 0.78, 0.81, 1.0)
     )
 
     static let keyColorSoft = dynamicColor(
-        light: (0.19, 0.19, 0.21, 0.08),
+        light: LightSurface.canvas,
         dark: (0.78, 0.78, 0.81, 0.12)
     )
 
     static let canvasBackground = dynamicColor(
-        light: (0.955, 0.955, 0.958, 1.0),
+        light: LightSurface.canvas,
         dark: (0.082, 0.082, 0.086, 1.0)
     )
 
     static let panelBackground = dynamicColor(
-        light: (0.975, 0.975, 0.978, 0.99),
+        light: LightSurface.panel,
         dark: (0.102, 0.102, 0.108, 0.99)
     )
 
     static let railBackground = dynamicColor(
-        light: (0.968, 0.968, 0.972, 0.99),
+        light: LightSurface.canvas,
         dark: (0.094, 0.094, 0.100, 1.0)
     )
 
     static let cardSurface = dynamicColor(
-        light: (0.992, 0.992, 0.994, 1.0),
+        light: LightSurface.editor,
         dark: (0.126, 0.126, 0.132, 1.0)
     )
 
     static let mainBlockSurface = dynamicColor(
-        light: (0.966, 0.966, 0.970, 1.0),
+        light: LightSurface.inset,
         dark: (0.116, 0.116, 0.122, 1.0)
     )
 
     static let editorSurface = dynamicColor(
-        light: (0.970, 0.970, 0.974, 1.0),
+        light: LightSurface.editor,
         dark: (0.120, 0.120, 0.126, 1.0)
     )
 
     static let focusedCutShellSurface = dynamicColor(
-        light: (0.905, 0.910, 0.920, 1.0),
+        light: LightSurface.panel,
         dark: (0.154, 0.154, 0.162, 1.0)
     )
 
     static let focusedCutPanelSurface = dynamicColor(
-        light: (0.868, 0.875, 0.888, 1.0),
+        light: LightSurface.inset,
         dark: (0.166, 0.166, 0.174, 1.0)
     )
 
     static let focusedCutEditorSurface = dynamicColor(
-        light: (0.844, 0.852, 0.868, 1.0),
+        light: LightSurface.editor,
         dark: (0.178, 0.178, 0.186, 1.0)
     )
 
     static let insetSurface = dynamicColor(
-        light: (0.944, 0.944, 0.950, 1.0),
+        light: LightSurface.inset,
         dark: (0.136, 0.136, 0.142, 1.0)
     )
 
     // MARK: - Semantic Colors
 
     static let pageShadow = dynamicColor(
-        light: (0.18, 0.18, 0.22, 0.10),
+        light: (0.18, 0.19, 0.19, 0.10),
         dark: (0.0, 0.0, 0.0, 0.32)
     )
 
     static let fineBorder = dynamicColor(
-        light: (0.36, 0.37, 0.41, 0.14),
+        light: (0.870588, 0.874510, 0.874510, 1.0),
         dark: (1.0, 1.0, 1.0, 0.07)
     )
 
     static let strongBorder = dynamicColor(
-        light: (0.32, 0.33, 0.38, 0.20),
+        light: (0.788235, 0.800000, 0.800000, 1.0),
         dark: (1.0, 1.0, 1.0, 0.13)
     )
 
     static let focusedCutBorder = dynamicColor(
-        light: (0.24, 0.25, 0.30, 0.40),
+        light: (0.721569, 0.741176, 0.741176, 1.0),
         dark: (1.0, 1.0, 1.0, 0.18)
     )
 
     static let warmBorder = dynamicColor(
-        light: (0.19, 0.19, 0.21, 0.24),
+        light: (0.745098, 0.764706, 0.764706, 1.0),
         dark: (0.78, 0.78, 0.81, 0.28)
     )
 
     static let ink = dynamicColor(
-        light: (0.07, 0.08, 0.11, 1.0),
+        light: (0.149020, 0.160784, 0.160784, 1.0),
         dark: (0.95, 0.96, 0.99, 1.0)
     )
 
     static let mutedInk = dynamicColor(
-        light: (0.36, 0.37, 0.41, 1.0),
+        light: (0.345098, 0.364706, 0.364706, 1.0),
         dark: (0.67, 0.68, 0.72, 1.0)
     )
 
     static let quietInk = dynamicColor(
-        light: (0.56, 0.57, 0.61, 1.0),
+        light: (0.407843, 0.431373, 0.431373, 1.0),
         dark: (0.46, 0.47, 0.52, 1.0)
     )
 
     static let disabledControlInk = dynamicColor(
-        light: (0.52, 0.53, 0.57, 1.0),
+        light: (0.576471, 0.592157, 0.592157, 1.0),
         dark: (0.34, 0.35, 0.39, 1.0)
     )
 
     static let placeholderInk = dynamicColor(
-        light: (0.58, 0.59, 0.63, 1.0),
+        light: (0.423529, 0.447059, 0.447059, 1.0),
         dark: (0.38, 0.39, 0.43, 1.0)
     )
 
@@ -131,8 +143,8 @@ enum CinemaDesign {
 
     static let toolbarBackground = LinearGradient(
         colors: [
-            dynamicColor(light: (0.988, 0.988, 0.990, 0.96), dark: (0.104, 0.104, 0.110, 0.98)),
-            dynamicColor(light: (0.974, 0.974, 0.978, 0.96), dark: (0.094, 0.094, 0.100, 0.98))
+            dynamicColor(light: LightSurface.panel, dark: (0.104, 0.104, 0.110, 0.98)),
+            dynamicColor(light: LightSurface.panel, dark: (0.094, 0.094, 0.100, 0.98))
         ],
         startPoint: .top,
         endPoint: .bottom
@@ -150,7 +162,7 @@ enum CinemaDesign {
     )
 
     static let raisedShadow = dynamicColor(
-        light: (0.20, 0.24, 0.32, 0.06),
+        light: (0.20, 0.21, 0.21, 0.06),
         dark: (0.0, 0.0, 0.0, 0.22)
     )
 
@@ -160,39 +172,61 @@ enum CinemaDesign {
     )
 
     static let railIconBackground = dynamicColor(
-        light: (0.948, 0.948, 0.954, 0.94),
+        light: LightSurface.panel,
         dark: (1.0, 1.0, 1.0, 0.06)
     )
 
     static let railIconStroke = dynamicColor(
-        light: (0.34, 0.35, 0.40, 0.10),
+        light: (0.854902, 0.866667, 0.866667, 1.0),
         dark: (1.0, 1.0, 1.0, 0.10)
     )
 
     static let selectedRowSurface = dynamicColor(
-        light: (0.19, 0.19, 0.21, 0.055),
+        light: LightSurface.canvas,
         dark: (0.78, 0.78, 0.81, 0.09)
     )
 
-    // The structure rail is the single colored wayfinding mark in the interface.
+    // Active navigation and primary actions share the same restrained accent.
     static let sidebarStructureAccent = dynamicColor(
-        light: (0.42, 0.34, 0.74, 1.0),
+        light: (0.321569, 0.388235, 0.788235, 1.0),
         dark: (0.55, 0.50, 0.84, 1.0)
     )
 
     static let primaryAction = dynamicColor(
-        light: (0.38, 0.29, 0.72, 1.0),
+        light: (0.321569, 0.388235, 0.788235, 1.0),
         dark: (0.50, 0.42, 0.82, 1.0)
     )
 
     static let primaryActionPressed = dynamicColor(
-        light: (0.32, 0.24, 0.64, 1.0),
+        light: (0.247059, 0.305882, 0.666667, 1.0),
         dark: (0.43, 0.35, 0.74, 1.0)
     )
 
     static let cardStroke = dynamicColor(
-        light: (0.35, 0.36, 0.40, 0.12),
+        light: (0.870588, 0.874510, 0.874510, 1.0),
         dark: (1.0, 1.0, 1.0, 0.08)
+    )
+
+    // Empty media slots use light surfaces; actual thumbnails retain their dark scrims.
+    static let emptyThumbnailSurface = dynamicColor(
+        light: LightSurface.inset,
+        dark: (0.0, 0.0, 0.0, 0.72)
+    )
+    static let emptyThumbnailHeader = dynamicColor(
+        light: LightSurface.panel,
+        dark: (0.0, 0.0, 0.0, 0.82)
+    )
+    static let emptyThumbnailInk = dynamicColor(
+        light: (0.149020, 0.160784, 0.160784, 1.0),
+        dark: (1.0, 1.0, 1.0, 1.0)
+    )
+    static let emptyThumbnailIcon = dynamicColor(
+        light: (0.407843, 0.431373, 0.431373, 1.0),
+        dark: (1.0, 1.0, 1.0, 0.28)
+    )
+    static let emptyThumbnailCaption = dynamicColor(
+        light: LightSurface.panel,
+        dark: (0.0, 0.0, 0.0, 0.58)
     )
 
     static let storyboardPaper = Color(red: 0.996, green: 0.994, blue: 0.986)
@@ -213,6 +247,10 @@ enum CinemaDesign {
             nsColor: NSColor(name: nil) { appearance in
                 let isDark = appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
                 let components = isDark ? dark : light
+                if !isDark {
+                    // Light palette values are sRGB so the specified hex colors and contrast are stable.
+                    return NSColor(srgbRed: components.0, green: components.1, blue: components.2, alpha: components.3)
+                }
                 return NSColor(
                     calibratedRed: components.0,
                     green: components.1,

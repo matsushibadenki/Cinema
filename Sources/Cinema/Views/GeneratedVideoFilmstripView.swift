@@ -168,19 +168,20 @@ private struct GeneratedVideoFilmstripColumnView: View {
         HStack(spacing: 5) {
             Text("\(column.cutNumber)")
                 .font(.system(size: isCompact ? 9 : 10, weight: .bold, design: .rounded))
-            Text(column.cutName.isEmpty ? "カット \(column.cutNumber)" : column.cutName)
+            Text(column.cutName.isEmpty ? "\(CinemaStrings.text(.cut, language: appLanguage)) \(column.cutNumber)" : column.cutName)
                 .font(.system(size: isCompact ? 10 : 11, weight: .semibold))
                 .lineLimit(1)
         }
-        .foregroundStyle(Color.white)
+        .foregroundStyle(CinemaDesign.emptyThumbnailInk)
         .padding(.horizontal, 7)
         .padding(.vertical, 6)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.black.opacity(0.58))
+        .background(CinemaDesign.emptyThumbnailCaption)
     }
 }
 
 private struct GeneratedVideoVersionCard: View {
+    @AppStorage("appLanguage") private var appLanguage = AppLanguage.japanese.rawValue
     var version: GeneratedVideoStripVersion
     var cutNumber: Int
     var versionNumber: Int
@@ -232,11 +233,11 @@ private struct GeneratedVideoVersionCard: View {
 
                 VStack(alignment: .leading, spacing: 1) {
                     HStack(spacing: 5) {
-                        Text("カット\(cutNumber)-\(versionNumber)")
+                        Text("\(CinemaStrings.text(.cut, language: appLanguage)) \(cutNumber)-\(versionNumber)")
                             .font(.system(size: isCompact ? 10 : 11, weight: .semibold))
                             .lineLimit(1)
                     }
-                    Text(version.generatedAt.formatted(date: .abbreviated, time: .shortened))
+                    Text(version.generatedAt.formatted(Date.FormatStyle(date: .abbreviated, time: .shortened).locale(Locale(identifier: appLanguage))))
                         .font(.system(size: isCompact ? 8 : 9, weight: .medium))
                         .opacity(0.82)
                         .lineLimit(1)

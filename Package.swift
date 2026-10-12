@@ -40,7 +40,8 @@ let package = Package(
         .testTarget(
             name: "CinemaTests",
             dependencies: ["Cinema"],
-            path: "Tests/CinemaTests"
+            path: "Tests/CinemaTests",
+            resources: [.copy("Fixtures")]
         )
     ]
 )

@@ -46,9 +46,17 @@ struct SettingsView: View {
 
     @State private var selection: SettingsTab = .ai
 
-    private let geminiImagePresets = ["gemini-3.1-flash-image"]
+    private func geminiImageModelLabel(_ model: String) -> String {
+        switch model {
+        case "gemini-nano-banana-2.1": return "Nano Banana 2.1 (\(model))"
+        case "gemini-3.1-flash-lite-image": return "Nano Banana 2 Lite (\(model))"
+        default: return model
+        }
+    }
+
+    private let geminiImagePresets = ["gemini-nano-banana-2.1", "gemini-3.1-flash-lite-image", "gemini-3.1-flash-image"]
     private let geminiVideoPresets = ["veo-3.1-generate-preview"]
-    private let openAIImagePresets = ["gpt-image-2", "gpt-image-1.5", "gpt-image-1-mini"]
+    private let openAIImagePresets = ["gpt-image-2.5-sunburst", "gpt-image-2.5-flare", "gpt-image-2", "gpt-image-1.5", "gpt-image-1-mini"]
     private let openAIVideoPresets = ["sora-2", "sora-2-pro"]
     private let deepInfraImagePresets = ["black-forest-labs/FLUX-1-schnell", "black-forest-labs/FLUX-1-dev"]
     private let deepInfraVideoPresets = ["Wan-AI/Wan2.1-T2V-14B"]
@@ -364,7 +372,7 @@ struct SettingsView: View {
                         Picker("", selection: $geminiImageSelection) {
                             Section(header: Text(t(.recommendedModels))) {
                                 ForEach(geminiImagePresets, id: \.self) { preset in
-                                    Text(preset).tag(preset)
+                                    Text(geminiImageModelLabel(preset)).tag(preset)
                                 }
                             }
                             

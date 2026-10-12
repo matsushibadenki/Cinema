@@ -6,9 +6,12 @@ struct StoryboardDocument: FileDocument {
     static var readableContentTypes: [UTType] { [.cinemaStoryboard] }
     static var writableContentTypes: [UTType] { [.cinemaStoryboard] }
 
+    var storyGraphSource: Data? = nil
+
     var project: StoryboardProject
     var imageData: [String: Data]
     var videoData: [String: Data]
+    var audioData: [String: Data] = [:]
 
     init(project: StoryboardProject = StoryboardProject(), imageData: [String: Data] = [:], videoData: [String: Data] = [:]) {
         self.project = project
@@ -17,11 +20,16 @@ struct StoryboardDocument: FileDocument {
     }
 
     init(configuration: ReadConfiguration) throws {
-        guard configuration.file.isDirectory else {
+        try self.init(package: configuration.file)
+    }
+
+    init(package: FileWrapper) throws {
+        guard package.isDirectory else {
             throw CocoaError(.fileReadCorruptFile)
         }
 
-        let wrappers = configuration.file.fileWrappers ?? [:]
+        let wrappers = package.fileWrappers ?? [:]
+        storyGraphSource = wrappers["story-graph-source.json"]?.regularFileContents
         guard let jsonWrapper = wrappers["storyboard.json"],
               jsonWrapper.isRegularFile,
               let jsonData = jsonWrapper.regularFileContents else {
@@ -31,6 +39,8 @@ struct StoryboardDocument: FileDocument {
         project = try JSONDecoder().decode(StoryboardProject.self, from: jsonData)
         imageData = [:]
         videoData = [:]
+        audioData = [:]
+        if let audioWrapper = wrappers["Audio"] { audioData = Self.readData(from: audioWrapper, prefix: "Audio") }
 
         if let imageWrapper = wrappers["Images"] {
             imageData = StoryboardDocument.readData(from: imageWrapper, prefix: "Images")
@@ -47,6 +57,11 @@ struct StoryboardDocument: FileDocument {
 
     func packageWrapper() throws -> FileWrapper {
         let root = FileWrapper(directoryWithFileWrappers: [:])
+        if let storyGraphSource {
+            let source = FileWrapper(regularFileWithContents: storyGraphSource)
+            source.preferredFilename = "story-graph-source.json"
+            root.addFileWrapper(source)
+        }
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
 
@@ -63,6 +78,9 @@ struct StoryboardDocument: FileDocument {
         videoDirectory.preferredFilename = "Videos"
         root.addFileWrapper(videoDirectory)
 
+        let audioDirectory = Self.makeDirectory(from: audioData, rootFolderName: "Audio")
+        audioDirectory.preferredFilename = "Audio"
+        root.addFileWrapper(audioDirectory)
         return root
     }
 

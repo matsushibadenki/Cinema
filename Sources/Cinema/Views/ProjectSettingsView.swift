@@ -3,30 +3,34 @@ import SwiftUI
 struct ProjectSettingsView: View {
     @Binding var context: ProjectContext
     var appLanguage: String
+    var isEmbedded = false
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 12) {
-                Image(systemName: "slider.horizontal.3")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(CinemaDesign.ink)
+            if !isEmbedded {
+                HStack(spacing: 12) {
+                    Image(systemName: "slider.horizontal.3")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(CinemaDesign.ink)
 
-                Text(t(.projectSettings))
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(CinemaDesign.ink)
+                    Text(t(.projectSettings))
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(CinemaDesign.ink)
 
-                Spacer()
+                    Spacer()
 
-                Button(t(.close)) { dismiss() }
-                    .keyboardShortcut(.defaultAction)
+                    Button(t(.close)) { dismiss() }
+                        .keyboardShortcut(.defaultAction)
+                }
+                .padding(.horizontal, 20)
+                .frame(height: 52)
+
+                Rectangle()
+                    .fill(CinemaDesign.strongBorder)
+                    .frame(height: 1)
+
             }
-            .padding(.horizontal, 20)
-            .frame(height: 52)
-
-            Rectangle()
-                .fill(CinemaDesign.strongBorder)
-                .frame(height: 1)
 
             VStack(alignment: .leading, spacing: 10) {
                 Text(t(.projectDirective))
@@ -60,7 +64,7 @@ struct ProjectSettingsView: View {
             }
             .padding(20)
         }
-        .frame(minWidth: 620, idealWidth: 720, minHeight: 420, idealHeight: 520)
+        .frame(minWidth: isEmbedded ? nil : 620, idealWidth: isEmbedded ? nil : 720, minHeight: isEmbedded ? nil : 420, idealHeight: isEmbedded ? nil : 520)
         .background(CinemaDesign.panelBackground)
     }
 

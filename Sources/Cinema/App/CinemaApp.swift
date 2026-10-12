@@ -28,6 +28,7 @@ struct CinemaApp: App {
                 .tint(CinemaDesign.keyColor)
                 .preferredColorScheme(themeMode.preferredColorScheme)
         }
+        .windowToolbarStyle(.unifiedCompact)
         .commands {
             AppCommands(
                 showsCutActionControls: $showsCutActionControls,
@@ -54,6 +55,8 @@ private struct AppCommands: Commands {
     var settingsWindowID: String
 
     var body: some Commands {
+        ProjectFileCommands(language: appLanguage)
+
         CommandGroup(replacing: .appSettings) {
             Button(CinemaStrings.text(.preferences, language: appLanguage)) {
                 openWindow(id: settingsWindowID)
@@ -79,7 +82,7 @@ private struct AppCommands: Commands {
             .keyboardShortcut("s", modifiers: [.command, .shift])
 
             Button(appLanguage == "ja" ? "移動…" : appLanguage == "zh-Hans" ? "移到…" : "Move To…") {
-                NSDocumentController.shared.currentDocument?.move(nil)
+                DocumentMoveService.chooseDestination(for: NSDocumentController.shared.currentDocument, language: appLanguage)
             }
         }
 

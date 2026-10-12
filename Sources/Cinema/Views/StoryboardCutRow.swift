@@ -189,7 +189,7 @@ private struct StoryboardTextView: NSViewRepresentable {
     var isSingleLine = false
 
     func makeNSView(context: Context) -> NSScrollView {
-        let scrollView = NSScrollView()
+        let scrollView = StoryboardEditorScrollView()
         scrollView.drawsBackground = false
         scrollView.borderType = .noBorder
         scrollView.hasVerticalScroller = false
@@ -210,6 +210,7 @@ private struct StoryboardTextView: NSViewRepresentable {
         textView.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
         textView.isVerticallyResizable = true
         textView.isHorizontallyResizable = false
+        textView.autoresizingMask = [.width]
         textView.delegate = context.coordinator
 
         scrollView.documentView = textView
@@ -222,7 +223,8 @@ private struct StoryboardTextView: NSViewRepresentable {
 
     func updateNSView(_ nsView: NSScrollView, context: Context) {
         guard let textView = context.coordinator.textView else { return }
-        if textView.string != text {
+        context.coordinator.text = $text
+        if !textView.hasMarkedText(), textView.string != text {
             textView.string = text
         }
         context.coordinator.contextMenuActions = contextMenuActions
@@ -255,13 +257,13 @@ private struct StoryboardTextView: NSViewRepresentable {
     }
 
     final class Coordinator: NSObject, NSTextViewDelegate, StoryboardTextContextMenuHandling {
-        @Binding var text: String
+        var text: Binding<String>
         weak var textView: ContextMenuTextView?
         var contextMenuActions: StoryboardTextContextMenuActions?
         var isSingleLine: Bool
 
         init(text: Binding<String>, contextMenuActions: StoryboardTextContextMenuActions?, isSingleLine: Bool) {
-            _text = text
+            self.text = text
             self.contextMenuActions = contextMenuActions
             self.isSingleLine = isSingleLine
         }
@@ -278,14 +280,14 @@ private struct StoryboardTextView: NSViewRepresentable {
                 .components(separatedBy: .newlines)
                 .joined(separator: " ")
             textView.textStorage?.replaceCharacters(in: affectedCharRange, with: singleLineReplacement)
-            text = textView.string
+            text.wrappedValue = textView.string
             return false
         }
 
         func textDidChange(_ notification: Notification) {
             guard let textView = notification.object as? NSTextView else { return }
             TextSelectionStyleApplicator.activeTextView = textView
-            text = textView.string
+            text.wrappedValue = textView.string
         }
 
         func textViewDidChangeSelection(_ notification: Notification) {
@@ -915,14 +917,14 @@ private struct FocusedStoryboardCutView: View {
 
                     Group {
                         if isVeryCompactWidth {
-                            VStack(spacing: sectionSpacing) {
-                                previewPanel
-                                    .frame(maxWidth: .infinity)
-                                    .frame(height: max(contentHeight * 0.54, 300))
-
-                                inspectorPanel(contentHeight: max(contentHeight * 0.46, 260))
-                                    .frame(maxWidth: .infinity)
-                                    .frame(maxHeight: .infinity)
+                            ScrollView(.vertical) {
+                                VStack(spacing: sectionSpacing) {
+                                    previewPanel
+                                        .frame(height: max(contentHeight * 0.54, 300))
+                                    inspectorPanel(contentHeight: 420)
+                                        .frame(height: 420)
+                                }
+                                .padding(.horizontal, 2)
                             }
                         } else {
                             HStack(spacing: sectionSpacing) {
@@ -997,9 +999,10 @@ private struct FocusedStoryboardCutView: View {
                     metaField(text: cutNumberText, placeholder: t(.cut), minWidth: 52, alignment: .center, fontSize: 18)
                     metaField(text: $cut.cutName, placeholder: t(.cutName), minWidth: 140, alignment: .left, fontSize: 16)
                     metaField(text: $cut.duration, placeholder: t(.seconds), minWidth: 68, alignment: .center, fontSize: 14)
-                    Spacer(minLength: 8)
-                    actionToolbar
-                        .fixedSize()
+                }
+                HStack {
+                    Spacer(minLength: 0)
+                    actionToolbar.fixedSize()
                 }
 
                 HStack(spacing: 8) {
@@ -1373,14 +1376,14 @@ private struct FocusedStoryboardCutView: View {
                 Image(systemName: isGenerating ? "sparkles.square.filled.on.square" : "sparkles")
                     .font(.system(size: 14, weight: .bold))
 
-                Text("AIで画面を作成")
+                Text(appLanguage == "en" ? "Generate Image" : appLanguage == "zh-Hans" ? "AI生成画面" : "AIで画面を作成")
                     .font(.system(size: 13, weight: .bold))
                     .lineLimit(1)
             }
         }
         .buttonStyle(CinemaPrimaryActionButtonStyle())
         .disabled(isGenerating)
-        .help(isGenerating ? "AIで画面を生成中" : "AIで画面を生成")
+        .help(isGenerating ? (appLanguage == "en" ? "Generating image with AI" : appLanguage == "zh-Hans" ? "正在生成画面" : "AIで画面を生成中") : (appLanguage == "en" ? "Generate image with AI" : appLanguage == "zh-Hans" ? "使用AI生成画面" : "AIで画面を生成"))
         .pointingHandCursor(isEnabled: !isGenerating)
     }
 
@@ -1875,6 +1878,7 @@ private struct DialogueColumnSplitHandle: View {
 }
 
 private struct StoryboardScreenFrame: View {
+    @Environment(\.colorScheme) private var colorScheme
     private let horizontalPadding: CGFloat = 5
 
     var imageData: Data?
@@ -1900,7 +1904,10 @@ private struct StoryboardScreenFrame: View {
     private let imageScaleStep: CGFloat = 0.25
 
     private var backgroundColor: Color {
-        Color(white: min(max(backgroundBrightness, 0), 1))
+        if image == nil && colorScheme == .light {
+            return CinemaDesign.insetSurface
+        }
+        return Color(white: min(max(backgroundBrightness, 0), 1))
     }
 
     var body: some View {
@@ -2547,6 +2554,7 @@ private struct AutoSizingStoryboardTextEditor: View {
                                 .foregroundStyle(Color(nsColor: textColor).opacity(0.42))
                                 .padding(.leading, horizontalInset)
                                 .padding(.top, verticalInset)
+                                .allowsHitTesting(false)
                         }
                     }
             }

@@ -729,6 +729,7 @@ private struct SidebarRailButton: View {
 }
 
 private struct CutSidebarRow: View {
+    @Environment(\.colorScheme) private var colorScheme
     var cut: StoryboardCut
     var title: String
     @Binding var cutName: String
@@ -747,7 +748,9 @@ private struct CutSidebarRow: View {
             previewThumbnail
 
             LinearGradient(
-                colors: [Color.black.opacity(0.82), Color.black.opacity(0.28), Color.clear],
+                colors: previewImage == nil && colorScheme == .light
+                    ? [CinemaDesign.emptyThumbnailHeader, .clear]
+                    : [Color.black.opacity(0.82), Color.black.opacity(0.28), Color.clear],
                 startPoint: .top,
                 endPoint: .bottom
             )
@@ -760,12 +763,12 @@ private struct CutSidebarRow: View {
                     Text(title)
                         .lineLimit(1)
                         .font(.system(size: 12, weight: .bold, design: .rounded).monospacedDigit())
-                        .foregroundStyle(Color.white)
+                        .foregroundStyle(previewImage == nil ? CinemaDesign.emptyThumbnailInk : Color.white)
 
                     TextField(cutNamePlaceholder, text: $cutName)
                         .textFieldStyle(.plain)
                         .font(.system(size: 10.5, weight: .medium))
-                        .foregroundStyle(Color.white.opacity(cutName.isEmpty ? 0.68 : 0.94))
+                        .foregroundStyle(previewImage == nil && colorScheme == .light ? CinemaDesign.mutedInk : Color.white.opacity(cutName.isEmpty ? 0.68 : 0.94))
                         .lineLimit(1)
                         .frame(maxWidth: .infinity, minHeight: 16, alignment: .leading)
                 }
@@ -883,7 +886,7 @@ private struct CutSidebarRow: View {
                 ZStack {
                     LinearGradient(
                         colors: [
-                            Color.black.opacity(0.72),
+                            CinemaDesign.emptyThumbnailSurface,
                             CinemaDesign.insetSurface.opacity(0.96)
                         ],
                         startPoint: .topLeading,
@@ -892,7 +895,7 @@ private struct CutSidebarRow: View {
 
                     Image(systemName: "photo")
                         .font(.system(size: 18, weight: .medium))
-                        .foregroundStyle(Color.white.opacity(0.28))
+                        .foregroundStyle(CinemaDesign.emptyThumbnailIcon)
                 }
             }
         }

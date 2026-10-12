@@ -121,7 +121,7 @@ enum CinemaSceneBundleExporter {
         try fileManager.createDirectory(at: referencesURL, withIntermediateDirectories: true)
 
         let references = referencedImages(for: cuts, in: project.referenceImages)
-        let drawingPrompt = drawingPrompt(project: project, references: references)
+        let drawingPrompt = [drawingPrompt(project: project, references: references), project.performancePlan.prompt(for: cuts)].filter { !$0.isEmpty }.joined(separator: "\n\n")
         let scenePrompt = AIPromptBuilder.scenePrompt(
             title: sceneTitle,
             cuts: cuts,
