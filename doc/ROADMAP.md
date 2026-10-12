@@ -8,6 +8,11 @@
 
 References: [Google image generation](https://ai.google.dev/gemini-api/docs/image-generation), [Google pricing](https://ai.google.dev/gemini-api/docs/pricing), [OpenAI Images API](https://developers.openai.com/api/reference/resources/images/methods/generate), [OpenAI pricing](https://developers.openai.com/api/docs/pricing).
 
+## Camera and transition direction
+
+- 🟢 [Done] Add the supplied 24-technique reference as three preset groups: camera movement, shooting/time direction, and next-cut transitions. Provide Japanese, English and Simplified Chinese labels, editable free text, and hover-only information. Preserve existing camera/transition text; decode older projects without the optional shooting-technique field. Include directions in generation prompts and structured Scene Bundle shot settings; verify project save/reopen and narrow light/dark rendering.
+- ⭕️ [Pending] Evaluate actual generated camera movements, timing effects and audio transitions with selected providers or external workers. Presets are generation instructions, not automatic post-production effects.
+
 ## Story Graph interoperability
 
 - 🟢 [Done] Place Story Graph commands under File → Import / Export and media recovery under File → Manage Project Files; scope export and recovery to the active document and allow import without an open document.

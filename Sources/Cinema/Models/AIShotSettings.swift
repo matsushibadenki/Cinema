@@ -4,6 +4,7 @@ struct AIShotSettings: Codable, Equatable {
     var shotSize: String
     var cameraAngle: String
     var lens: String
+    var shootingTechnique: String? = nil
     var cameraMovement: String
     var subjectMovement: String
     var startState: String
@@ -48,6 +49,7 @@ struct AIShotSettings: Codable, Equatable {
             line("Camera angle", cameraAngle),
             line("Lens", lens),
             line("Camera movement", cameraMovement),
+            line("Shooting / time direction", shootingTechnique ?? ""),
             line("Subject movement", subjectMovement),
             line("Opening state", startState),
             line("Ending state", endState),

@@ -2295,6 +2295,7 @@ private struct PromptEditorPopover: View {
 }
 
 private struct PromptEditorContent: View {
+    @AppStorage("appLanguage") private var language = "ja"
     @Binding var prompt: String
     @Binding var shotSettings: AIShotSettings
 
@@ -2345,11 +2346,10 @@ private struct PromptEditorContent: View {
                     shotField("ショットサイズ", text: $shotSettings.shotSize, prompt: "例: クローズアップ、ミディアム、ワイド")
                     shotField("カメラアングル", text: $shotSettings.cameraAngle, prompt: "例: 目線の高さ、ローアングル")
                     shotField("レンズ", text: $shotSettings.lens, prompt: "例: 50mm、広角、浅い被写界深度")
-                    shotField("カメラ移動", text: $shotSettings.cameraMovement, prompt: "例: ゆっくりドリーイン")
+                    ShotDirectionView(settings: $shotSettings, language: language)
                     shotField("被写体の動き", text: $shotSettings.subjectMovement, prompt: "例: 画面左から右へ歩く")
                     shotField("開始状態", text: $shotSettings.startState, prompt: "人物位置、視線、姿勢、小道具")
                     shotField("終了状態", text: $shotSettings.endState, prompt: "次のカットへ渡す状態")
-                    shotField("次への接続", text: $shotSettings.transition, prompt: "例: 動作つなぎ、カット、ディゾルブ")
                     shotField("音・環境音", text: $shotSettings.soundDirection, prompt: "例: 雨音、遠くの電車")
                     shotField("避ける要素", text: $shotSettings.negativePrompt, prompt: "例: 顔の変化、余分な人物、文字")
 
@@ -2390,7 +2390,7 @@ private struct PromptEditorContent: View {
                         .frame(minHeight: 220)
                 }
             }
-            .padding(8)
+            .padding(16)
         }
     }
 
