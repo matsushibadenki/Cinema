@@ -105,7 +105,11 @@ final class StoryGraphEditingTests: XCTestCase {
                 let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 480, height: 600), styleMask: [.titled], backing: .buffered, defer: false)
                 window.isReleasedWhenClosed = false; window.contentView = host
                 window.appearance = NSAppearance(named: dark ? .darkAqua : .aqua)
-                host.layoutSubtreeIfNeeded(); try await Task.sleep(nanoseconds: 150_000_000); host.layoutSubtreeIfNeeded()
+                host.layoutSubtreeIfNeeded(); try await Task.sleep(nanoseconds: 350_000_000); host.layoutSubtreeIfNeeded()
+                func textViews(_ view: NSView) -> [NSTextView] {
+                    (view as? NSTextView).map { [$0] } ?? view.subviews.flatMap(textViews)
+                }
+                XCTAssertTrue(textViews(host).contains { $0.string == document.project.cuts[0].action }, "The manuscript must remain visible alongside paragraph controls")
                 let bitmap = try XCTUnwrap(host.bitmapImageRepForCachingDisplay(in: host.bounds))
                 host.cacheDisplay(in: host.bounds, to: bitmap)
                 try XCTUnwrap(bitmap.representation(using: .png, properties: [:])).write(to: folder.appendingPathComponent("\(language)-\(dark ? "dark" : "light").png"))
